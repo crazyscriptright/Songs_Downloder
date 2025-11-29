@@ -1506,9 +1506,12 @@
           return window.API.baseUrl;
         }
         // Fallback if config.js hasn't loaded yet
-        return window.location.hostname === "localhost"
-          ? "http://localhost:5000"
-          : "https://song-download-9889cf8e8f85.herokuapp.com";
+        const hostname = window.location.hostname;
+        if (hostname === "localhost" || hostname === "127.0.0.1") {
+          return "http://localhost:5000";
+        }
+        // Production fallback
+        return "https://song-download-9889cf8e8f85.herokuapp.com";
       }
 
       let currentSearchId = null;
@@ -3997,7 +4000,7 @@
         };
 
         imageLoader.onerror = () => {
-          console.warn('Image failed to load:', src);
+          console.warn("Image failed to load:", src);
           // Handle image load error - use professional music placeholder
           const musicPlaceholder =
             "data:image/svg+xml;base64," +
@@ -4066,12 +4069,19 @@
           !actualSrc.startsWith("data:")
         ) {
           // Only proxy if not on localhost (production environment)
-          if (window.location.hostname !== "localhost") {
+          const hostname = window.location.hostname;
+          if (hostname !== "localhost" && hostname !== "127.0.0.1") {
             const apiBase = getApiBaseUrl();
+            console.log("Image proxy debug:", {
+              hostname,
+              apiBase,
+              originalSrc: actualSrc.substring(0, 100),
+              windowAPI: window.API,
+            });
             actualSrc = `${apiBase}/proxy_image?url=${encodeURIComponent(
               actualSrc
             )}`;
-            console.log('Final proxied image URL:', actualSrc);
+            console.log("Final proxied URL:", actualSrc.substring(0, 150));
           }
         }
 
