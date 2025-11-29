@@ -3,6 +3,7 @@ Universal Music Downloader - Flask Web Interface
 """
 
 from flask import Flask, render_template, request, jsonify, send_file
+from flask_cors import CORS
 import threading
 import os
 import json
@@ -26,6 +27,16 @@ except ImportError as e:
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
+
+# Configure CORS
+allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5000').split(',')
+CORS(app, resources={
+    r"/*": {
+        "origins": allowed_origins,
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 # Use /tmp for Heroku (ephemeral storage)
 if os.getenv('DYNO'):  # Running on Heroku
