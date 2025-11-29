@@ -4040,7 +4040,7 @@
         const fallback = fallbackSrc || musicPlaceholder;
 
         // Check if src is empty, null, or invalid
-        const actualSrc =
+        let actualSrc =
           src &&
           src.trim() &&
           src !== "" &&
@@ -4048,6 +4048,20 @@
           src !== "undefined"
             ? src
             : fallback;
+
+        // Proxy external images through backend to avoid CORS issues in production
+        if (
+          actualSrc &&
+          actualSrc.startsWith("http") &&
+          !actualSrc.startsWith("data:")
+        ) {
+          // Only proxy if not on localhost (production environment)
+          if (window.location.hostname !== "localhost") {
+            actualSrc = `${getApiBaseUrl()}/proxy_image?url=${encodeURIComponent(
+              actualSrc
+            )}`;
+          }
+        }
 
         return `<img 
                 data-src="${actualSrc}" 
