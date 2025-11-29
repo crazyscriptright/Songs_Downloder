@@ -1,0 +1,7 @@
+# Netlify Configuration
+[build]
+  command = "node build.js"
+  publish = "."
+
+# Environment variables (set in Netlify dashboard)
+# API_URL = your backend URL
