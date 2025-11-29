@@ -3997,6 +3997,7 @@
         };
 
         imageLoader.onerror = () => {
+          console.warn('Image failed to load:', src);
           // Handle image load error - use professional music placeholder
           const musicPlaceholder =
             "data:image/svg+xml;base64," +
