@@ -1208,7 +1208,39 @@ def download_song(url, title, download_id, advanced_options=None):
                     'advanced_options': advanced_options
                 }
         elif process.returncode == 0 and not has_progress:
-            # yt-dlp returned 0 but no download progress - likely an error
+            # yt-dlp returned 0 but no download progress - check if file was actually created
+            download_folder = app.config['DOWNLOAD_FOLDER']
+            try:
+                files = os.listdir(download_folder)
+                if files:
+                    # Get the most recently created file
+                    latest_file = max(
+                        [os.path.join(download_folder, f) for f in files],
+                        key=os.path.getctime,
+                        default=None
+                    )
+                    
+                    # Check if file was created recently (within last 10 seconds)
+                    if latest_file and (datetime.now().timestamp() - os.path.getctime(latest_file)) < 10:
+                        filename = os.path.basename(latest_file)
+                        download_status[download_id] = {
+                            'status': 'complete',
+                            'progress': 100,
+                            'title': title,
+                            'url': url,
+                            'file': filename,
+                            'speed': 'Complete',
+                            'eta': '0:00',
+                            'timestamp': download_status[download_id]['timestamp'],
+                            'completed_at': datetime.now().isoformat(),
+                            'advanced_options': advanced_options
+                        }
+                        save_download_status()
+                        return
+            except Exception:
+                pass
+            
+            # No file found - likely an error
             download_status[download_id] = {
                 'status': 'error',
                 'progress': 0,

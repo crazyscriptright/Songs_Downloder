@@ -11,3 +11,14 @@ venv/
 env/
 frontend/.env
 backend/.env
+backend/venv/
+backend/env/
+node_modules/
+dist/
+backend/schedulestart.bat
+frontend/schedulestart.bat
+frontend/node_modules/
+frontend/dist/
+frontend/.DS_Store
+backend/.DS_Store
+backend/__pycache__/

@@ -1645,7 +1645,10 @@
               download.status === "complete" &&
               download.download_url
             ) {
-              actions = `<button onclick="window.open('${download.download_url}', '_blank')">Download</button>`;
+              const fullUrl = download.download_url.startsWith("http")
+                ? download.download_url
+                : `${getApiBaseUrl()}${download.download_url}`;
+              actions = `<button onclick="window.open('${fullUrl}', '_blank')">Download</button>`;
             }
 
             let timeInfo;
@@ -3798,7 +3801,10 @@
               // Trigger browser download
               if (data.download_url) {
                 const link = document.createElement("a");
-                link.href = data.download_url;
+                // Ensure full URL for download
+                link.href = data.download_url.startsWith("http")
+                  ? data.download_url
+                  : `${getApiBaseUrl()}${data.download_url}`;
                 link.download = data.file;
                 document.body.appendChild(link);
                 link.click();
@@ -3923,7 +3929,7 @@
                 max-width: 400px;
                 font-size: 14px;
             `;
-        notification.textContent = message;
+        notification.innerHTML = message;
         document.body.appendChild(notification);
 
         setTimeout(() => {
