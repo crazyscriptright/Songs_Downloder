@@ -4049,6 +4049,15 @@
             ? src
             : fallback;
 
+        // Convert HTTP to HTTPS to avoid mixed content issues
+        if (
+          actualSrc &&
+          actualSrc.startsWith("http://") &&
+          !actualSrc.includes("localhost")
+        ) {
+          actualSrc = actualSrc.replace("http://", "https://");
+        }
+
         // Proxy external images through backend to avoid CORS issues in production
         if (
           actualSrc &&
