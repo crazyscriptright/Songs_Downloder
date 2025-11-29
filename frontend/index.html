@@ -1500,6 +1500,17 @@
 
     <script src="config.js"></script>
     <script>
+      // Helper to get API base URL with fallback
+      function getApiBaseUrl() {
+        if (window.API && window.API.baseUrl) {
+          return window.API.baseUrl;
+        }
+        // Fallback if config.js hasn't loaded yet
+        return window.location.hostname === "localhost"
+          ? "http://localhost:5000"
+          : "https://song-download-9889cf8e8f85.herokuapp.com";
+      }
+
       let currentSearchId = null;
       let selectedSongs = new Set();
       let searchType = "music"; // Default search type
@@ -1702,7 +1713,7 @@
       async function cancelDownload(downloadId) {
         try {
           const response = await fetch(
-            `${window.API.baseUrl}/cancel_download/${downloadId}`,
+            `${getApiBaseUrl()}/cancel_download/${downloadId}`,
             {
               method: "POST",
             }
@@ -1745,12 +1756,9 @@
       // Clear finished downloads
       async function clearFinishedDownloads() {
         try {
-          const response = await fetch(
-            `${window.API.baseUrl}/clear_downloads`,
-            {
-              method: "POST",
-            }
-          );
+          const response = await fetch(`${getApiBaseUrl()}/clear_downloads`, {
+            method: "POST",
+          });
           const result = await response.json();
 
           showNotification(result.message, "success");
@@ -1857,7 +1865,7 @@
 
         try {
           const response = await fetch(
-            `${window.API.baseUrl}/suggestions?q=${encodeURIComponent(query)}`
+            `${getApiBaseUrl()}/suggestions?q=${encodeURIComponent(query)}`
           );
           const data = await response.json();
           showSuggestions(data.suggestions || []);
@@ -1953,7 +1961,7 @@
 
         try {
           const response = await fetch(
-            `${window.API.baseUrl}/jiosaavn_suggestions/${pid}?language=${language}`
+            `${getApiBaseUrl()}/jiosaavn_suggestions/${pid}?language=${language}`
           );
 
           if (!response.ok) {
@@ -2342,7 +2350,7 @@
 
           // For URLs, use the original single endpoint approach
           try {
-            const response = await fetch(`${window.API.baseUrl}/search`, {
+            const response = await fetch(`${getApiBaseUrl()}/search`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -2481,7 +2489,7 @@
           const promises = endpoints.map(async (source) => {
             try {
               const response = await fetch(
-                `${window.API.baseUrl}/search/${source}`,
+                `${getApiBaseUrl()}/search/${source}`,
                 {
                   method: "POST",
                   headers: {
@@ -2514,7 +2522,7 @@
 
         try {
           const response = await fetch(
-            `${window.API.baseUrl}/search_status/${currentSearchId}`
+            `${getApiBaseUrl()}/search_status/${currentSearchId}`
           );
           const data = await response.json();
 
@@ -2777,7 +2785,7 @@
         let previewData = null;
         try {
           const previewResponse = await fetch(
-            `${window.API.baseUrl}/preview_url`,
+            `${getApiBaseUrl()}/preview_url`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -3705,7 +3713,7 @@
             }
           }
 
-          const response = await fetch(`${window.API.baseUrl}/download`, {
+          const response = await fetch(`${getApiBaseUrl()}/download`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -3766,7 +3774,7 @@
 
         try {
           const response = await fetch(
-            `${window.API.baseUrl}/download_status/${downloadId}`
+            `${getApiBaseUrl()}/download_status/${downloadId}`
           );
 
           // Check if response is ok
