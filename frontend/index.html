@@ -4067,9 +4067,11 @@
         ) {
           // Only proxy if not on localhost (production environment)
           if (window.location.hostname !== "localhost") {
-            actualSrc = `${getApiBaseUrl()}/proxy_image?url=${encodeURIComponent(
+            const apiBase = getApiBaseUrl();
+            actualSrc = `${apiBase}/proxy_image?url=${encodeURIComponent(
               actualSrc
             )}`;
+            console.log('Final proxied image URL:', actualSrc);
           }
         }
 
