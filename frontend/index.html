@@ -3610,9 +3610,9 @@
                 <div class="song-artist">${artistDisplay}</div>
                 ${metadataHTML}
                 <div class="song-actions" style="display: flex; gap: 5px;">
-                    <button id="${buttonId}" class="download-btn" style="flex: 1;" onclick="downloadSong('${
+                    <button id="${buttonId}" class="download-btn" style="flex: 1;" data-song-url="${
           song.url
-        }', '${song.title.replace(/'/g, "\\'")}', this)">
+        }" data-song-title="${song.title}">
                         Download
                     </button>
                     <button 
@@ -3626,6 +3626,18 @@
                     </button>
                 </div>
             `;
+
+        // Add event listener for download button
+        setTimeout(() => {
+          const downloadBtn = document.getElementById(buttonId);
+          if (downloadBtn) {
+            downloadBtn.addEventListener("click", function () {
+              const url = this.getAttribute("data-song-url");
+              const title = this.getAttribute("data-song-title");
+              downloadSong(url, title, this);
+            });
+          }
+        }, 0);
 
         return card;
       }
@@ -3807,7 +3819,7 @@
 
           // Poll download status with timeout tracking
           if (button) {
-            pollDownloadStatus(downloadId, button, title, 0); // Start with attempt 0
+            pollDownloadStatus(downloadId, button, title, url, 0); // Start with attempt 0
           }
         } catch (error) {
           console.error("❌ Download start error:", error);
@@ -3828,6 +3840,7 @@
         downloadId,
         button,
         title,
+        url,
         attemptCount = 0
       ) {
         const MAX_ATTEMPTS = 120; // Maximum 2 minutes of polling with exponential backoff
@@ -3870,7 +3883,7 @@
           allDownloads[downloadId] = {
             id: downloadId,
             title: data.title || title,
-            url: url,
+            url: data.url || url,
             status: data.status,
             progress: data.progress || 0,
             error: data.error || null,
@@ -3965,7 +3978,13 @@
             // Keep polling with incremented attempt count
             setTimeout(
               () =>
-                pollDownloadStatus(downloadId, button, title, attemptCount + 1),
+                pollDownloadStatus(
+                  downloadId,
+                  button,
+                  title,
+                  url,
+                  attemptCount + 1
+                ),
               pollInterval
             );
           } else {
@@ -3981,7 +4000,13 @@
 
             setTimeout(
               () =>
-                pollDownloadStatus(downloadId, button, title, attemptCount + 1),
+                pollDownloadStatus(
+                  downloadId,
+                  button,
+                  title,
+                  url,
+                  attemptCount + 1
+                ),
               pollInterval
             );
           }
