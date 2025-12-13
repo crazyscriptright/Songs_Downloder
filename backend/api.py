@@ -2285,7 +2285,7 @@ def preview_url():
 
 @app.route('/jiosaavn_suggestions/<pid>')
 def get_jiosaavn_suggestions_by_pid(pid):
-    """Get JioSaavn recommendations using PID"""
+    """Get JioSaavn recommendations using PID with Selenium fallback"""
     try:
         # Validate PID (alphanumeric, reasonable length)
         if not pid or not re.match(r'^[a-zA-Z0-9_-]{1,20}$', pid):
@@ -2299,70 +2299,114 @@ def get_jiosaavn_suggestions_by_pid(pid):
         if language not in allowed_languages:
             language = 'english'
         
-        # Build JioSaavn API URL
-        api_url = f"https://www.jiosaavn.com/api.php?__call=reco.getreco&api_version=4&_format=json&_marker=0&ctx=wap6dot0&pid={pid}&language={language}"
+        # Force Selenium mode if requested
+        use_selenium = request.args.get('selenium', 'false').lower() == 'true'
         
-        # Make request to JioSaavn API
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Referer": "https://www.jiosaavn.com/"
-        }
+        suggestions = []
+        method_used = 'api'
         
-        response = requests.get(api_url, headers=headers, timeout=10)
-        
-        if response.status_code == 200:
+        # Try API first (unless forced to use Selenium)
+        if not use_selenium:
             try:
-                data = response.json()
+                print(f"🔄 Fetching suggestions via API for PID: {pid}")
                 
-                # Parse and format the response
-                suggestions = []
+                # Build JioSaavn API URL
+                api_url = f"https://www.jiosaavn.com/api.php?__call=reco.getreco&api_version=4&_format=json&_marker=0&ctx=wap6dot0&pid={pid}&language={language}"
                 
-                # Check if data is a direct list (which it is based on our test)
-                if isinstance(data, list):
-                    items_to_process = data
-                # Fallback: check for results key (in case API structure varies)
-                elif 'results' in data and isinstance(data['results'], list):
-                    items_to_process = data['results']
-                else:
-                    items_to_process = []
+                # Make request to JioSaavn API
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                    "Referer": "https://www.jiosaavn.com/",
+                    "Accept": "application/json",
+                    "Accept-Language": "en-IN,en-US;q=0.9,en;q=0.8"
+                }
                 
-                for item in items_to_process:
-                    if isinstance(item, dict):
-                        # Extract artist from subtitle (format: "Artist - Album")
-                        subtitle = item.get('subtitle', '')
-                        artist = subtitle.split(' - ')[0] if ' - ' in subtitle else 'Unknown Artist'
+                response = requests.get(api_url, headers=headers, timeout=10)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # Parse and format the response
+                    # Check if data is a direct list
+                    if isinstance(data, list):
+                        items_to_process = data
+                    # Fallback: check for results key
+                    elif 'results' in data and isinstance(data['results'], list):
+                        items_to_process = data['results']
+                    else:
+                        items_to_process = []
+                    
+                    for item in items_to_process:
+                        if isinstance(item, dict):
+                            # Extract artist from subtitle (format: "Artist - Album")
+                            subtitle = item.get('subtitle', '')
+                            artist = subtitle.split(' - ')[0] if ' - ' in subtitle else 'Unknown Artist'
+                            
+                            suggestion = {
+                                'id': item.get('id', ''),
+                                'title': item.get('title', ''),
+                                'artist': artist,
+                                'subtitle': subtitle,
+                                'thumbnail': item.get('image', ''),
+                                'url': item.get('perma_url', ''),
+                                'duration': str(item.get('duration', 0)) if item.get('duration') else '0:00',
+                                'language': item.get('language', ''),
+                                'type': item.get('type', 'song'),
+                                'year': item.get('year', ''),
+                                'play_count': item.get('play_count', 0)
+                            }
+                            suggestions.append(suggestion)
+                    
+                    if suggestions:
+                        print(f"✅ API returned {len(suggestions)} suggestions")
+                        method_used = 'api'
+                    else:
+                        print(f"⚠️ API returned empty results, will try Selenium")
                         
-                        suggestion = {
-                            'id': item.get('id', ''),
-                            'title': item.get('title', ''),
-                            'artist': artist,
-                            'subtitle': subtitle,
-                            'thumbnail': item.get('image', ''),
-                            'url': item.get('perma_url', ''),
-                            'duration': str(item.get('duration', 0)) if item.get('duration') else '0:00',
-                            'language': item.get('language', ''),
-                            'type': item.get('type', 'song'),
-                            'year': item.get('year', ''),
-                            'play_count': item.get('play_count', 0)
-                        }
-                        suggestions.append(suggestion)
+            except Exception as e:
+                print(f"⚠️ API method failed: {e}, falling back to Selenium")
+        
+        # Fallback to Selenium if API failed or returned no results
+        if not suggestions or use_selenium:
+            try:
+                print(f"🌐 Fetching suggestions via Selenium for PID: {pid}")
                 
-                return jsonify({
-                    'success': True,
-                    'pid': pid,
-                    'language': language,
-                    'suggestions': suggestions,
-                    'count': len(suggestions)
-                })
+                from jiosaavn_selenium_suggestions import get_jiosaavn_suggestions_selenium
                 
-            except json.JSONDecodeError:
-                return jsonify({'error': 'Invalid JSON response from JioSaavn API'}), 500
-        else:
-            return jsonify({'error': f'JioSaavn API returned status {response.status_code}'}), 500
-            
-    except requests.RequestException as e:
-        return jsonify({'error': f'Request failed: {str(e)}'}), 500
+                # Use headless mode
+                selenium_suggestions = get_jiosaavn_suggestions_selenium(
+                    pid=pid,
+                    language=language,
+                    max_results=10,
+                    headless=True
+                )
+                
+                if selenium_suggestions:
+                    suggestions = selenium_suggestions
+                    method_used = 'selenium'
+                    print(f"✅ Selenium returned {len(suggestions)} suggestions")
+                else:
+                    print(f"⚠️ Selenium returned no results")
+                    
+            except Exception as e:
+                print(f"❌ Selenium fallback also failed: {e}")
+                if not suggestions:
+                    return jsonify({'error': f'Both API and Selenium methods failed: {str(e)}'}), 500
+        
+        # Return results
+        return jsonify({
+            'success': True,
+            'pid': pid,
+            'language': language,
+            'suggestions': suggestions,
+            'count': len(suggestions),
+            'method': method_used  # 'api' or 'selenium'
+        })
+        
     except Exception as e:
+        print(f"❌ Server error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 
