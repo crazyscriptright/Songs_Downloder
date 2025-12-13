@@ -1882,7 +1882,7 @@ def preview_url():
 
 @app.route('/jiosaavn_suggestions/<pid>')
 def get_jiosaavn_suggestions_by_pid(pid):
-    """Get JioSaavn recommendations using PID with Selenium fallback"""
+    """Get JioSaavn recommendations using PID with India geo-location and Selenium fallback"""
     try:
         # Validate PID (alphanumeric, reasonable length)
         if not pid or not re.match(r'^[a-zA-Z0-9_-]{1,20}$', pid):
@@ -1896,46 +1896,46 @@ def get_jiosaavn_suggestions_by_pid(pid):
         if language not in allowed_languages:
             language = 'english'
         
-        # Force Selenium mode if requested
-        use_selenium = request.args.get('selenium', 'false').lower() == 'true'
+        # Check if running on Heroku (more likely to be geo-blocked)
+        is_heroku = os.getenv('DYNO') is not None
         
         suggestions = []
         method_used = 'api'
         
-        # Try API first (unless forced to use Selenium)
-        if not use_selenium:
-            try:
-                print(f"🔄 Fetching suggestions via API for PID: {pid}")
+        # METHOD 1: Try API first with India geo-location headers (same as search)
+        try:
+            print(f"🔄 Fetching suggestions via API for PID: {pid}")
+            
+            # Build JioSaavn API URL
+            api_url = f"https://www.jiosaavn.com/api.php?__call=reco.getreco&api_version=4&_format=json&_marker=0&ctx=wap6dot0&pid={pid}&language={language}"
+            
+            # India geo-location headers (same as search)
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "en-IN,en-US;q=0.9,en;q=0.8",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Origin": "https://www.jiosaavn.com",
+                "Referer": "https://www.jiosaavn.com/",
+                "X-Requested-With": "XMLHttpRequest",
+                "X-Forwarded-For": "103.21.124.0",  # Indian IP range
+                "CF-IPCountry": "IN"  # Cloudflare country header
+            }
+            
+            print(f"   🌍 Using India geo-location headers")
+            response = requests.get(api_url, headers=headers, timeout=10)
+            
+            print(f"   📊 Status: {response.status_code}, Size: {len(response.content)} bytes")
+            
+            if response.status_code == 200 and len(response.content) > 10:
+                data = response.json()
                 
-                # Build JioSaavn API URL
-                api_url = f"https://www.jiosaavn.com/api.php?__call=reco.getreco&api_version=4&_format=json&_marker=0&ctx=wap6dot0&pid={pid}&language={language}"
-                
-                # Make request to JioSaavn API
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-                    "Referer": "https://www.jiosaavn.com/",
-                    "Accept": "application/json",
-                    "Accept-Language": "en-IN,en-US;q=0.9,en;q=0.8"
-                }
-                
-                response = requests.get(api_url, headers=headers, timeout=10)
-                
-                if response.status_code == 200:
-                    data = response.json()
+                if isinstance(data, list) and len(data) > 0:
+                    print(f"   ✅ API returned {len(data)} items")
                     
-                    # Parse and format the response
-                    # Check if data is a direct list
-                    if isinstance(data, list):
-                        items_to_process = data
-                    # Fallback: check for results key
-                    elif 'results' in data and isinstance(data['results'], list):
-                        items_to_process = data['results']
-                    else:
-                        items_to_process = []
-                    
-                    for item in items_to_process:
+                    for item in data:
                         if isinstance(item, dict):
-                            # Extract artist from subtitle (format: "Artist - Album")
+                            # Extract artist from subtitle
                             subtitle = item.get('subtitle', '')
                             artist = subtitle.split(' - ')[0] if ' - ' in subtitle else 'Unknown Artist'
                             
@@ -1954,51 +1954,59 @@ def get_jiosaavn_suggestions_by_pid(pid):
                             }
                             suggestions.append(suggestion)
                     
-                    if suggestions:
-                        print(f"✅ API returned {len(suggestions)} suggestions")
-                        method_used = 'api'
-                    else:
-                        print(f"⚠️ API returned empty results, will try Selenium")
-                        
-            except Exception as e:
-                print(f"⚠️ API method failed: {e}, falling back to Selenium")
+                    print(f"✅ API Method Success: {len(suggestions)} suggestions")
+                    method_used = 'api'
+                else:
+                    print(f"   ⚠️ API returned empty or invalid data")
+                    if is_heroku:
+                        print(f"   🌐 [HEROKU] Likely geo-blocked, will try Selenium")
+            else:
+                print(f"   ⚠️ API call failed or returned minimal data")
+                
+        except Exception as e:
+            print(f"   ❌ API Error: {e}")
         
-        # Fallback to Selenium if API failed or returned no results
-        if not suggestions or use_selenium:
+        # METHOD 2: Selenium fallback if API returned no results
+        if not suggestions:
             try:
-                print(f"🌐 Fetching suggestions via Selenium for PID: {pid}")
+                print(f"\n🔄 Method 2: Selenium web scraping fallback")
                 
-                from jiosaavn_selenium_suggestions import get_jiosaavn_suggestions_selenium
+                from jiosaavn_suggestions_simple import JioSaavnSuggestions
                 
-                # Use headless mode
-                selenium_suggestions = get_jiosaavn_suggestions_selenium(
-                    pid=pid,
-                    language=language,
-                    max_results=10,
-                    headless=True
-                )
+                scraper = JioSaavnSuggestions()
+                selenium_suggestions = scraper._try_selenium(pid, language, max_results=10)
                 
                 if selenium_suggestions:
                     suggestions = selenium_suggestions
                     method_used = 'selenium'
-                    print(f"✅ Selenium returned {len(suggestions)} suggestions")
+                    print(f"✅ Selenium Success: Got {len(suggestions)} suggestions")
                 else:
                     print(f"⚠️ Selenium returned no results")
                     
             except Exception as e:
-                print(f"❌ Selenium fallback also failed: {e}")
-                if not suggestions:
-                    return jsonify({'error': f'Both API and Selenium methods failed: {str(e)}'}), 500
+                print(f"❌ Selenium Error: {e}")
         
-        # Return results
-        return jsonify({
-            'success': True,
-            'pid': pid,
-            'language': language,
-            'suggestions': suggestions,
-            'count': len(suggestions),
-            'method': method_used  # 'api' or 'selenium'
-        })
+        # Return results - only success if we actually have suggestions
+        if suggestions and len(suggestions) > 0:
+            return jsonify({
+                'success': True,
+                'pid': pid,
+                'language': language,
+                'suggestions': suggestions,
+                'count': len(suggestions),
+                'method': method_used  # 'api' or 'selenium'
+            })
+        else:
+            # No suggestions found even after Selenium fallback
+            return jsonify({
+                'success': False,
+                'error': 'No suggestions available for this song',
+                'pid': pid,
+                'language': language,
+                'suggestions': [],
+                'count': 0,
+                'method': method_used
+            }), 404
         
     except Exception as e:
         print(f"❌ Server error: {e}")
