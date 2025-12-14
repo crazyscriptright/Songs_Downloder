@@ -1649,6 +1649,118 @@
       let downloadManagerVisible = false;
       let allDownloads = {};
 
+      // YouTube fallback download via proxy API
+      async function downloadViaProxyAPI(
+        url,
+        title,
+        downloadId,
+        format = "mp3"
+      ) {
+        try {
+          console.log(`🔄 Attempting YouTube proxy fallback for: ${title}`);
+
+          const API_BASE = getApiBaseUrl();
+          const encodedUrl = encodeURIComponent(url);
+          const downloadUrl = `${API_BASE}/proxy/download?format=${format}&url=${encodedUrl}&add_info=1`;
+
+          const response = await fetch(downloadUrl);
+          const data = await response.json();
+
+          if (!response.ok || data.success === false) {
+            throw new Error(data.message || "Proxy API initiation failed");
+          }
+
+          const jobId = data.id;
+          const maxAttempts = 60;
+          let attempts = 0;
+
+          // Update download status to show fallback
+          if (allDownloads[downloadId]) {
+            allDownloads[downloadId].status = "downloading";
+            allDownloads[downloadId].progress = 0;
+            saveDownloadsToStorage();
+            updateDownloadManager();
+          }
+
+          // Poll for progress
+          return new Promise((resolve, reject) => {
+            const pollInterval = setInterval(async () => {
+              attempts++;
+
+              try {
+                const progressResponse = await fetch(
+                  `${API_BASE}/proxy/progress?id=${jobId}`
+                );
+                const progressData = await progressResponse.json();
+
+                const progressPercent = Math.round(
+                  (progressData.progress / 1000) * 100
+                );
+
+                // Update download status
+                if (allDownloads[downloadId]) {
+                  allDownloads[downloadId].progress = progressPercent;
+                  saveDownloadsToStorage();
+                  updateDownloadManager();
+                }
+
+                if (
+                  progressData.success === 1 &&
+                  progressData.progress === 1000
+                ) {
+                  clearInterval(pollInterval);
+
+                  // Download the file
+                  const proxyFileUrl = `${API_BASE}/proxy/file?url=${encodeURIComponent(
+                    progressData.download_url
+                  )}`;
+                  const fileResponse = await fetch(proxyFileUrl);
+
+                  if (!fileResponse.ok) throw new Error("File download failed");
+
+                  const blob = await fileResponse.blob();
+                  const filename = `${title}.${format}`;
+
+                  const blobUrl = window.URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.style.display = "none";
+                  a.href = blobUrl;
+                  a.download = filename;
+                  document.body.appendChild(a);
+                  a.click();
+                  window.URL.revokeObjectURL(blobUrl);
+                  document.body.removeChild(a);
+
+                  // Mark as complete
+                  if (allDownloads[downloadId]) {
+                    allDownloads[downloadId].status = "complete";
+                    allDownloads[downloadId].progress = 100;
+                    saveDownloadsToStorage();
+                    updateDownloadManager();
+                  }
+
+                  console.log(`✅ Proxy fallback successful: ${title}`);
+                  showNotification(
+                    `Downloaded via fallback: ${title}`,
+                    "success"
+                  );
+                  resolve(true);
+                } else if (attempts >= maxAttempts) {
+                  clearInterval(pollInterval);
+                  reject(new Error("Proxy API timeout"));
+                }
+              } catch (error) {
+                clearInterval(pollInterval);
+                reject(error);
+              }
+            }, 2000);
+          });
+        } catch (error) {
+          console.error("❌ Proxy fallback failed:", error);
+          throw error;
+        }
+      }
+
       // Load downloads from localStorage on page load
       function loadDownloadsFromStorage() {
         try {
@@ -2021,7 +2133,7 @@
         }
       }
 
-      // Search Suggestions Functions
+      // Search Suggestions Functions - Direct YouTube API (No Backend)
       async function fetchSuggestions(query) {
         if (!query || query.length < 2) {
           hideSuggestions();
@@ -2029,13 +2141,34 @@
         }
 
         try {
+          // Use YouTube's autocomplete API directly (CORS-friendly)
+          const encodedQuery = encodeURIComponent(query);
           const response = await fetch(
-            `${getApiBaseUrl()}/suggestions?q=${encodeURIComponent(query)}`
+            `https://suggestqueries-clients6.youtube.com/complete/search?client=youtube&q=${encodedQuery}&xhr=t`,
+            { method: "GET" }
           );
+
           const data = await response.json();
-          showSuggestions(data.suggestions || []);
+
+          // Parse YouTube suggestions format: [query, [[suggestion1], [suggestion2], ...]]
+          let suggestions = [];
+          if (data && data[1] && Array.isArray(data[1])) {
+            suggestions = data[1]
+              .slice(0, 6) // Limit to 6 suggestions
+              .map((item) => (Array.isArray(item) ? item[0] : item))
+              .filter((s) => s && typeof s === "string" && s.length > 0);
+          }
+
+          showSuggestions(suggestions);
         } catch (error) {
-          hideSuggestions();
+          console.log("Suggestions fetch error:", error);
+          // Fallback: Generate simple suggestions
+          const fallbackSuggestions = [
+            `${query} song`,
+            `${query} audio`,
+            `${query} music`,
+          ];
+          showSuggestions(fallbackSuggestions);
         }
       }
 
@@ -2456,6 +2589,153 @@
 
       // Search button click
       searchBtn.addEventListener("click", performSearch);
+
+      // YouTube Direct Download Handler
+      async function handleYouTubeDirectDownload(videoUrl) {
+        showStatus(
+          "searching",
+          "📹 Processing YouTube Video",
+          "Fetching video information..."
+        );
+
+        try {
+          const format = document.getElementById("ytFormat").value || "720";
+          const options = {
+            audioQuality: document.getElementById("ytAudioQuality").value,
+            audioLanguage: document.getElementById("ytAudioLanguage").value,
+            noMerge: document.getElementById("ytNoMerge").checked ? "1" : "0",
+            allowExtended: document.getElementById("ytAllowExtended").checked
+              ? "1"
+              : "0",
+            startTime: document.getElementById("ytStartTime").value,
+            endTime: document.getElementById("ytEndTime").value,
+          };
+
+          // Build proxy download URL
+          const API_BASE = getApiBaseUrl();
+          const encodedUrl = encodeURIComponent(videoUrl);
+          let downloadUrl = `${API_BASE}/proxy/download?format=${format}&url=${encodedUrl}&add_info=1`;
+
+          if (options.audioQuality)
+            downloadUrl += `&audio_quality=${options.audioQuality}`;
+          if (options.audioLanguage)
+            downloadUrl += `&audio_language=${options.audioLanguage}`;
+          if (options.noMerge === "1") downloadUrl += `&no_merge=1`;
+          if (options.allowExtended === "1")
+            downloadUrl += `&allow_extended_duration=1`;
+          if (options.startTime)
+            downloadUrl += `&start_time=${options.startTime}`;
+          if (options.endTime) downloadUrl += `&end_time=${options.endTime}`;
+
+          // Step 1: Initiate download
+          const response = await fetch(downloadUrl);
+          const data = await response.json();
+
+          if (!response.ok || data.success === false) {
+            throw new Error(data.message || "Failed to initiate download");
+          }
+
+          // Step 2: Poll for progress
+          const jobId = data.id;
+          const videoInfo = data.info || {};
+
+          showStatus("searching", "⏳ Processing Video", `Progress: 0%`);
+
+          const maxAttempts = 60;
+          let attempts = 0;
+
+          const pollInterval = setInterval(async () => {
+            attempts++;
+
+            try {
+              const progressResponse = await fetch(
+                `${API_BASE}/proxy/progress?id=${jobId}`
+              );
+              const progressData = await progressResponse.json();
+
+              const progressPercent = Math.round(
+                (progressData.progress / 1000) * 100
+              );
+              const statusText = progressData.text || "Processing";
+              showStatus(
+                "searching",
+                `⏳ ${statusText}`,
+                `Progress: ${progressPercent}%`
+              );
+
+              // Check if completed
+              if (
+                progressData.success === 1 &&
+                progressData.progress === 1000
+              ) {
+                clearInterval(pollInterval);
+                await downloadYouTubeFile(
+                  progressData.download_url,
+                  videoInfo.title || "video",
+                  format
+                );
+                showStatus(
+                  "complete",
+                  "✅ Download Complete",
+                  "File downloaded successfully!"
+                );
+              } else if (attempts >= maxAttempts) {
+                clearInterval(pollInterval);
+                throw new Error("Download timeout. Please try again.");
+              }
+            } catch (error) {
+              clearInterval(pollInterval);
+              throw error;
+            }
+          }, 2000);
+        } catch (error) {
+          console.error("YouTube Direct Download error:", error);
+          showStatus(
+            "error",
+            "❌ Download Failed",
+            error.message || "Failed to download video"
+          );
+        }
+      }
+
+      // Download YouTube file via proxy
+      async function downloadYouTubeFile(downloadUrl, title, format) {
+        try {
+          const API_BASE = getApiBaseUrl();
+          const proxyUrl = `${API_BASE}/proxy/file?url=${encodeURIComponent(
+            downloadUrl
+          )}`;
+
+          const response = await fetch(proxyUrl);
+          if (!response.ok) throw new Error("Download failed");
+
+          const blob = await response.blob();
+
+          // Get filename
+          let filename = `${title}.${format}`;
+          const contentDisposition = response.headers.get(
+            "Content-Disposition"
+          );
+          if (contentDisposition && contentDisposition.includes("filename=")) {
+            filename = contentDisposition
+              .split("filename=")[1]
+              .replace(/"/g, "");
+          }
+
+          // Trigger download
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.style.display = "none";
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        } catch (error) {
+          throw new Error(`Failed to download file: ${error.message}`);
+        }
+      }
 
       async function performSearch() {
         const query = searchInput.value.trim();
@@ -4026,6 +4306,71 @@
             activeDownloads--;
             processQueue();
           } else if (data.status === "error") {
+            // Check if this is a YouTube URL that failed - attempt fallback
+            const isYouTube =
+              url && (url.includes("youtube.com") || url.includes("youtu.be"));
+
+            if (isYouTube && !allDownloads[downloadId]?.fallbackAttempted) {
+              console.log(
+                `🔄 YouTube download failed, attempting proxy fallback...`
+              );
+
+              // Mark that we attempted fallback to avoid infinite loops
+              allDownloads[downloadId].fallbackAttempted = true;
+              saveDownloadsToStorage();
+
+              if (button) {
+                button.className = "download-btn downloading";
+                button.innerHTML = "🔄 Retrying...";
+              }
+
+              try {
+                // Determine format from original request
+                const format = "mp3"; // Default to mp3 for audio
+
+                await downloadViaProxyAPI(url, title, downloadId, format);
+
+                // Success - download finished, process next in queue
+                activeDownloads--;
+                processQueue();
+
+                if (button) {
+                  button.className = "download-btn complete";
+                  button.innerHTML =
+                    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline; margin-right: 5px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Downloaded';
+                }
+
+                return; // Exit early on success
+              } catch (fallbackError) {
+                console.error("❌ Proxy fallback also failed:", fallbackError);
+
+                if (button) {
+                  button.className = "download-btn";
+                  button.innerHTML = "❌ Failed";
+                  button.disabled = false;
+                }
+
+                showNotification(
+                  `❌ Download failed: Both methods failed. ${fallbackError.message}`,
+                  "error"
+                );
+
+                // Update download status
+                allDownloads[downloadId].status = "error";
+                allDownloads[
+                  downloadId
+                ].error = `Both yt-dlp and proxy API failed: ${fallbackError.message}`;
+                saveDownloadsToStorage();
+                updateDownloadManager();
+
+                // Download finished (failed), process next in queue
+                activeDownloads--;
+                processQueue();
+                return;
+              }
+            }
+
+            // Non-YouTube or fallback already attempted
             if (button) {
               button.className = "download-btn";
               button.innerHTML = "❌ Failed";

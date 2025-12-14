@@ -1479,6 +1479,14 @@ def download_song(url, title, download_id, advanced_options=None):
                 'failed_at': datetime.now().isoformat(),
                 'advanced_options': advanced_options
             }
+            
+            # Try fallback with video proxy API for YouTube URLs
+            if 'youtube.com' in url or 'youtu.be' in url:
+                try:
+                    download_with_proxy_api(url, title, download_id, advanced_options)
+                    return
+                except Exception as fallback_error:
+                    print(f"❌ Fallback proxy API also failed: {fallback_error}")
     
     except Exception as e:
         download_status[download_id] = {
@@ -2463,6 +2471,260 @@ def proxy_image():
         )
     except:
         return '', 404
+
+
+# ==================== YouTube Video Downloader Proxy Routes ====================
+# Get API key from environment
+VIDEO_DOWNLOAD_API_KEY = os.getenv('VIDEO_DOWNLOAD_API_KEY', '')
+
+def download_with_proxy_api(url, title, download_id, advanced_options=None):
+    """Fallback download using video-download-api.com when yt-dlp fails"""
+    global download_status
+    
+    try:
+        print(f"🔄 Attempting fallback download via proxy API for: {title}")
+        
+        if not VIDEO_DOWNLOAD_API_KEY:
+            raise Exception("Proxy API key not configured")
+        
+        # Update status
+        download_status[download_id] = {
+            'status': 'downloading',
+            'progress': 0,
+            'title': title,
+            'url': url,
+            'eta': 'Initiating proxy download...',
+            'speed': '0 KB/s',
+            'timestamp': download_status[download_id].get('timestamp', datetime.now().isoformat()),
+            'advanced_options': advanced_options
+        }
+        save_download_status()
+        
+        # Determine format from advanced options or default to mp3
+        format_type = 'mp3'
+        if advanced_options:
+            audio_format = advanced_options.get('audioFormat', 'mp3')
+            if audio_format in ['mp3', 'm4a', 'flac', 'wav']:
+                format_type = audio_format
+        
+        # Step 1: Initiate download
+        params = {
+            'format': format_type,
+            'url': url,
+            'apikey': VIDEO_DOWNLOAD_API_KEY,
+            'add_info': '1'
+        }
+        
+        # Add optional parameters from advanced options
+        if advanced_options:
+            if advanced_options.get('audioQuality'):
+                params['audio_quality'] = advanced_options['audioQuality']
+        
+        api_url = 'https://p.savenow.to/ajax/download.php'
+        response = requests.get(api_url, params=params, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        
+        if not data.get('success'):
+            raise Exception(data.get('message', 'Failed to initiate download'))
+        
+        job_id = data.get('id')
+        if not job_id:
+            raise Exception('No job ID returned from API')
+        
+        # Step 2: Poll for progress
+        max_attempts = 60  # 2 minutes max
+        attempts = 0
+        
+        while attempts < max_attempts:
+            attempts += 1
+            
+            progress_url = f"https://p.savenow.to/api/progress?id={job_id}"
+            progress_response = requests.get(progress_url, timeout=10)
+            progress_data = progress_response.json()
+            
+            # Update status with progress
+            progress_percent = round((progress_data.get('progress', 0) / 1000) * 100)
+            status_text = progress_data.get('text', 'Processing')
+            
+            download_status[download_id] = {
+                'status': 'downloading',
+                'progress': progress_percent,
+                'title': title,
+                'url': url,
+                'eta': f'{status_text}...',
+                'speed': 'Proxy API',
+                'timestamp': download_status[download_id]['timestamp'],
+                'advanced_options': advanced_options
+            }
+            save_download_status()
+            
+            # Check if completed
+            if progress_data.get('success') == 1 and progress_data.get('progress') == 1000:
+                download_url = progress_data.get('download_url')
+                if not download_url:
+                    raise Exception('No download URL in completed response')
+                
+                # Step 3: Download the file
+                download_status[download_id]['eta'] = 'Downloading file...'
+                save_download_status()
+                
+                file_response = requests.get(download_url, stream=True, timeout=60)
+                file_response.raise_for_status()
+                
+                # Get filename
+                import re as regex
+                safe_title = regex.sub(r'[<>:"/\\|?*]', '_', title)
+                filename = f"{safe_title}.{format_type}"
+                
+                # Save to download folder
+                download_dir = os.path.join(app.config['DOWNLOAD_FOLDER'], download_id)
+                os.makedirs(download_dir, exist_ok=True)
+                filepath = os.path.join(download_dir, filename)
+                
+                with open(filepath, 'wb') as f:
+                    for chunk in file_response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                
+                # Mark as complete
+                download_status[download_id] = {
+                    'status': 'complete',
+                    'progress': 100,
+                    'title': title,
+                    'url': url,
+                    'file': filename,
+                    'speed': 'Complete',
+                    'eta': '0:00',
+                    'timestamp': download_status[download_id]['timestamp'],
+                    'completed_at': datetime.now().isoformat(),
+                    'downloaded_via': 'proxy_api',
+                    'advanced_options': advanced_options
+                }
+                save_download_status()
+                
+                print(f"✅ Proxy API download successful: {filename}")
+                return
+            
+            # Wait before next poll
+            import time
+            time.sleep(2)
+        
+        # Timeout
+        raise Exception('Download timeout - took too long to process')
+        
+    except Exception as e:
+        print(f"❌ Proxy API download failed: {e}")
+        download_status[download_id] = {
+            'status': 'error',
+            'progress': 0,
+            'title': title,
+            'url': url,
+            'error': f'Both yt-dlp and proxy API failed. Last error: {str(e)}',
+            'speed': '0 KB/s',
+            'eta': 'N/A',
+            'timestamp': download_status[download_id].get('timestamp', datetime.now().isoformat()),
+            'failed_at': datetime.now().isoformat(),
+            'advanced_options': advanced_options
+        }
+        save_download_status()
+        raise
+
+@app.route('/proxy/download', methods=['GET'])
+def proxy_download():
+    """Proxy for video download API to avoid CORS"""
+    try:
+        if not VIDEO_DOWNLOAD_API_KEY:
+            return jsonify({'error': 'API key not configured on server'}), 500
+            
+        # Get all query parameters from frontend
+        params = {
+            'format': request.args.get('format'),
+            'url': request.args.get('url'),
+            'apikey': VIDEO_DOWNLOAD_API_KEY,
+            'add_info': request.args.get('add_info', '1'),
+        }
+        
+        # Optional parameters
+        if request.args.get('audio_quality'):
+            params['audio_quality'] = request.args.get('audio_quality')
+        if request.args.get('allow_extended_duration'):
+            params['allow_extended_duration'] = request.args.get('allow_extended_duration')
+        if request.args.get('no_merge'):
+            params['no_merge'] = request.args.get('no_merge')
+        if request.args.get('audio_language'):
+            params['audio_language'] = request.args.get('audio_language')
+        if request.args.get('start_time'):
+            params['start_time'] = request.args.get('start_time')
+        if request.args.get('end_time'):
+            params['end_time'] = request.args.get('end_time')
+        
+        # Build URL with parameters
+        api_url = 'https://p.savenow.to/ajax/download.php'
+        response = requests.get(api_url, params=params)
+        
+        # Get response data and filter out message field
+        response_data = response.json()
+        if 'message' in response_data:
+            del response_data['message']
+        
+        return jsonify(response_data), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/proxy/progress', methods=['GET'])
+def proxy_progress():
+    """Proxy for progress check to avoid CORS"""
+    try:
+        job_id = request.args.get('id')
+        
+        # Make request to actual API
+        api_url = f"https://p.savenow.to/api/progress?id={job_id}"
+        response = requests.get(api_url)
+        
+        # Get response data and filter out message field
+        response_data = response.json()
+        if 'message' in response_data:
+            del response_data['message']
+        
+        return jsonify(response_data), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/proxy/file', methods=['GET'])
+def proxy_file():
+    """Proxy for actual file download to avoid CORS and hide original headers"""
+    try:
+        download_url = request.args.get('url')
+        
+        # Stream the file from the download URL with minimal headers
+        response = requests.get(download_url, stream=True, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        
+        # Get filename from Content-Disposition or use default
+        filename = 'download.mp3'
+        if 'Content-Disposition' in response.headers:
+            content_disposition = response.headers['Content-Disposition']
+            if 'filename=' in content_disposition:
+                filename = content_disposition.split('filename=')[1].strip('"')
+        
+        # Determine content type
+        content_type = response.headers.get('Content-Type', 'application/octet-stream')
+        
+        # Create response with only necessary headers (hiding original source)
+        return app.response_class(
+            response.iter_content(chunk_size=8192),
+            mimetype=content_type,
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Content-Length': response.headers.get('Content-Length', ''),
+                'Cache-Control': 'no-cache',
+                'X-Content-Type-Options': 'nosniff'
+            }
+        )
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
