@@ -1661,7 +1661,7 @@
 
           const API_BASE = getApiBaseUrl();
           const encodedUrl = encodeURIComponent(url);
-          const downloadUrl = `${API_BASE}/proxy/download?format=${format}&url=${encodedUrl}&add_info=1&quality=128`;
+          const downloadUrl = `${API_BASE}/proxy/download?format=${format}&url=${encodedUrl}&quality=128`;
 
           const response = await fetch(downloadUrl);
           const data = await response.json();
@@ -1702,17 +1702,23 @@
                 let statusText;
 
                 if (progressData.progress < 100) {
-                  progressPercent = Math.round((progressData.progress / 100) * 10);
+                  progressPercent = Math.round(
+                    (progressData.progress / 100) * 10
+                  );
                   statusText = progressData.text || "Initializing...";
                 } else if (progressData.progress < 500) {
-                  progressPercent = 10 + Math.round(((progressData.progress - 100) / 400) * 40);
+                  progressPercent =
+                    10 + Math.round(((progressData.progress - 100) / 400) * 40);
                   statusText = progressData.text || "Downloading...";
                 } else {
-                  progressPercent = 50 + Math.round(((progressData.progress - 500) / 500) * 50);
+                  progressPercent =
+                    50 + Math.round(((progressData.progress - 500) / 500) * 50);
                   statusText = progressData.text || "Converting...";
                 }
 
-                console.log(`📊 Progress: ${progressData.progress}/1000 (${progressPercent}%) - ${statusText}`);
+                console.log(
+                  `📊 Progress: ${progressData.progress}/1000 (${progressPercent}%) - ${statusText}`
+                );
 
                 // Update download status with progress and text
                 if (allDownloads[downloadId]) {
@@ -1723,12 +1729,18 @@
                 }
 
                 // Check if download is complete
-                if (progressData.success === 1 && progressData.progress === 1000) {
+                if (
+                  progressData.success === 1 &&
+                  progressData.progress === 1000
+                ) {
                   clearInterval(pollInterval);
 
                   // Check if download_url is provided
                   if (!progressData.download_url) {
-                    throw new Error(progressData.text || "No download URL provided - Code 1805");
+                    throw new Error(
+                      progressData.text ||
+                        "No download URL provided - Code 1805"
+                    );
                   }
 
                   // Download the file
