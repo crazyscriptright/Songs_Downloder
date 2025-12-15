@@ -2646,7 +2646,9 @@ def proxy_download():
         }
         
         # Optional parameters
-        if request.args.get('audio_quality'):
+        if request.args.get('quality'):
+            params['audio_quality'] = request.args.get('quality')
+        elif request.args.get('audio_quality'):
             params['audio_quality'] = request.args.get('audio_quality')
         if request.args.get('allow_extended_duration'):
             params['allow_extended_duration'] = request.args.get('allow_extended_duration')
@@ -2661,10 +2663,17 @@ def proxy_download():
         
         # Build URL with parameters
         api_url = 'https://p.savenow.to/ajax/download.php'
+        
+        # Log the request parameters (without API key)
+        log_params = {k: v for k, v in params.items() if k != 'apikey'}
+        print(f"🌐 Proxy API Request: {log_params}")
+        
         response = requests.get(api_url, params=params)
         
         # Get response data and filter out message field
         response_data = response.json()
+        print(f"📥 Proxy API Response: {response_data}")
+        
         if 'message' in response_data:
             del response_data['message']
         
@@ -2684,6 +2693,13 @@ def proxy_progress():
         
         # Get response data and filter out message field
         response_data = response.json()
+        
+        # Log the response for debugging
+        if response_data.get('success') == 1 and response_data.get('progress') == 1000:
+            print(f"📊 Proxy API Progress Complete: {response_data}")
+            if not response_data.get('download_url'):
+                print(f"⚠️ Warning: No download_url provided. Response: {response_data}")
+        
         if 'message' in response_data:
             del response_data['message']
         

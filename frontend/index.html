@@ -1674,15 +1674,16 @@
           const maxAttempts = 60;
           let attempts = 0;
 
-          // Update download status to show fallback
+          // Update download status to show initializing
           if (allDownloads[downloadId]) {
             allDownloads[downloadId].status = "downloading";
             allDownloads[downloadId].progress = 0;
+            allDownloads[downloadId].statusText = "Initializing...";
             saveDownloadsToStorage();
             updateDownloadManager();
           }
 
-          // Poll for progress
+          // Poll for progress every 3 seconds
           return new Promise((resolve, reject) => {
             const pollInterval = setInterval(async () => {
               attempts++;
@@ -1693,22 +1694,42 @@
                 );
                 const progressData = await progressResponse.json();
 
-                const progressPercent = Math.round(
-                  (progressData.progress / 1000) * 100
-                );
+                // Convert progress (0-1000) to percentage (0-100)
+                // progress < 100: Initializing (0-10%)
+                // progress 100-500: Downloading (10-50%)
+                // progress 500-1000: Converting (50-100%)
+                let progressPercent;
+                let statusText;
 
-                // Update download status
+                if (progressData.progress < 100) {
+                  progressPercent = Math.round((progressData.progress / 100) * 10);
+                  statusText = progressData.text || "Initializing...";
+                } else if (progressData.progress < 500) {
+                  progressPercent = 10 + Math.round(((progressData.progress - 100) / 400) * 40);
+                  statusText = progressData.text || "Downloading...";
+                } else {
+                  progressPercent = 50 + Math.round(((progressData.progress - 500) / 500) * 50);
+                  statusText = progressData.text || "Converting...";
+                }
+
+                console.log(`📊 Progress: ${progressData.progress}/1000 (${progressPercent}%) - ${statusText}`);
+
+                // Update download status with progress and text
                 if (allDownloads[downloadId]) {
                   allDownloads[downloadId].progress = progressPercent;
+                  allDownloads[downloadId].statusText = statusText;
                   saveDownloadsToStorage();
                   updateDownloadManager();
                 }
 
-                if (
-                  progressData.success === 1 &&
-                  progressData.progress === 1000
-                ) {
+                // Check if download is complete
+                if (progressData.success === 1 && progressData.progress === 1000) {
                   clearInterval(pollInterval);
+
+                  // Check if download_url is provided
+                  if (!progressData.download_url) {
+                    throw new Error(progressData.text || "No download URL provided - Code 1805");
+                  }
 
                   // Download the file
                   const proxyFileUrl = `${API_BASE}/proxy/file?url=${encodeURIComponent(
@@ -1735,6 +1756,7 @@
                   if (allDownloads[downloadId]) {
                     allDownloads[downloadId].status = "complete";
                     allDownloads[downloadId].progress = 100;
+                    allDownloads[downloadId].statusText = "Completed";
                     saveDownloadsToStorage();
                     updateDownloadManager();
                   }
@@ -1753,7 +1775,7 @@
                 clearInterval(pollInterval);
                 reject(error);
               }
-            }, 2000);
+            }, 3000); // Poll every 3 seconds
           });
         } catch (error) {
           console.error("❌ Proxy fallback failed:", error);
@@ -1919,9 +1941,14 @@
 
             let timeInfo;
             if (download.status === "downloading") {
-              timeInfo = `${download.speed || "0 KB/s"} • ETA: ${
-                download.eta || "Unknown"
-              }`;
+              // Show status text if available (for proxy downloads), otherwise show speed/ETA
+              if (download.statusText) {
+                timeInfo = download.statusText;
+              } else {
+                timeInfo = `${download.speed || "0 KB/s"} • ETA: ${
+                  download.eta || "Unknown"
+                }`;
+              }
             } else if (download.status === "queued") {
               const position = downloadId.startsWith("queue_")
                 ? parseInt(downloadId.split("_")[1]) + 1
