@@ -1661,7 +1661,7 @@
 
           const API_BASE = getApiBaseUrl();
           const encodedUrl = encodeURIComponent(url);
-          const downloadUrl = `${API_BASE}/proxy/download?format=${format}&url=${encodedUrl}&add_info=1`;
+          const downloadUrl = `${API_BASE}/proxy/download?format=${format}&url=${encodedUrl}&add_info=1&quality=128`;
 
           const response = await fetch(downloadUrl);
           const data = await response.json();
