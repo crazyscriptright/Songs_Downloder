@@ -1664,7 +1664,7 @@
           const encodedUrl = encodeURIComponent(url);
           
           // Determine if this is a video or audio download based on format
-          const isVideoFormat = ['144', '240', '360', '480', '720', '1080', '1440', '2160', 'best'].includes(format);
+          const isVideoFormat = ['8k', '4k', '2k', '1440', '1080', '720', '480', '360', '240', '144', 'best'].includes(format);
           
           let downloadUrl;
           if (isVideoFormat) {
@@ -3640,12 +3640,15 @@
                                             <div class="option-group">
                                                 <label>Video Quality</label>
                                                 <select id="videoQuality">
-                                                    <option value="2160">🎬 4K (2160p)</option>
-                                                    <option value="1440">🎬 2K (1440p)</option>
+                                                    <option value="8k">🎬 8K (4320p)</option>
+                                                    <option value="4k">🎬 4K (2160p)</option>
+                                                    <option value="2k">🎬 2K (1440p)</option>
                                                     <option value="1080" selected>🎬 Full HD (1080p)</option>
                                                     <option value="720">🎬 HD (720p)</option>
                                                     <option value="480">📺 SD (480p)</option>
                                                     <option value="360">📺 Low (360p)</option>
+                                                    <option value="240">📺 Very Low (240p)</option>
+                                                    <option value="144">📺 Mobile (144p)</option>
                                                     <option value="best">⭐ Best Available</option>
                                                 </select>
                                             </div>
@@ -4183,8 +4186,10 @@
 
           // Add advanced options if they should be used
           if (useAdvanced) {
-            // Determine if this is video or audio based on searchType
-            const isVideoMode = searchType === "video";
+            // Determine if this is video or audio based on available options in DOM
+            // If videoQuality select exists, we are in video mode
+            const videoQualitySelect = document.getElementById("videoQuality");
+            const isVideoMode = videoQualitySelect !== null;
 
             // Build custom args from advanced options (minimal set)
             let customArgs = "";
