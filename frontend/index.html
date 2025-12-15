@@ -1662,7 +1662,7 @@
 
           const API_BASE = getApiBaseUrl();
           const encodedUrl = encodeURIComponent(url);
-          const downloadUrl = `${API_BASE}/proxy/download?format=${format}&url=${encodedUrl}&quality=128`;
+          const downloadUrl = `${API_BASE}/proxy/download?format=${format}&url=${encodedUrl}&quality=360`;
 
           const response = await fetch(downloadUrl);
           const data = await response.json();
@@ -4174,57 +4174,8 @@
             // Determine if this is video or audio based on searchType
             const isVideoMode = searchType === "video";
 
-            // Build custom args from advanced options
-            let customArgs = document.getElementById("customArgs")?.value || "";
-
-            // Add playlist options
-            const playlistOption =
-              document.getElementById("playlistOption")?.value;
-            if (playlistOption === "no-playlist") {
-              customArgs += " --no-playlist";
-            } else if (playlistOption === "playlist-items") {
-              const items = document.getElementById("playlistItems")?.value;
-              if (items) {
-                customArgs += ` --playlist-items ${items}`;
-              }
-            }
-            // If 'yes-playlist', download entire playlist (default yt-dlp behavior)
-
-            // Add subtitle options
-            const subtitleOption =
-              document.getElementById("subtitleOption")?.value;
-            if (subtitleOption === "auto") {
-              customArgs += " --write-auto-subs --sub-langs en";
-            } else if (subtitleOption === "all") {
-              customArgs += " --write-auto-subs --sub-langs all";
-            }
-
-            // Add speed limit
-            const speedLimit = document
-              .getElementById("speedLimit")
-              ?.value?.trim();
-            if (speedLimit) {
-              customArgs += ` --limit-rate ${speedLimit}`;
-            }
-
-            // Add max file size
-            const maxFileSize = document
-              .getElementById("maxFileSize")
-              ?.value?.trim();
-            if (maxFileSize) {
-              customArgs += ` --max-filesize ${maxFileSize}`;
-            }
-
-            // Add boolean flags
-            if (document.getElementById("geoBypass")?.checked) {
-              customArgs += " --geo-bypass";
-            }
-            if (document.getElementById("preferFreeFormats")?.checked) {
-              customArgs += " --prefer-free-formats";
-            }
-            if (document.getElementById("addChapters")?.checked) {
-              customArgs += " --add-chapters";
-            }
+            // Build custom args from advanced options (minimal set)
+            let customArgs = "";
 
             requestBody.advancedOptions = {
               keepVideo: isVideoMode,

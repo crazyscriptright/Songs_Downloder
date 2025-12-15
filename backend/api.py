@@ -890,7 +890,7 @@ def download_song(url, title, download_id, advanced_options=None):
                 if video_quality == 'best':
                     format_selector = 'bestvideo+bestaudio/best'
                 else:
-                    # Specific resolution
+                    # Specific resolution with proper format selection
                     if video_fps == '60':
                         format_selector = f'bestvideo[height<={video_quality}][fps<=60]+bestaudio/best[height<={video_quality}]'
                     elif video_fps == '30':
@@ -898,9 +898,10 @@ def download_song(url, title, download_id, advanced_options=None):
                     else:  # any fps
                         format_selector = f'bestvideo[height<={video_quality}]+bestaudio/best[height<={video_quality}]'
                 
+                # Use recode-video to ensure proper container format
                 cmd.extend([
                     '-f', format_selector,
-                    '--merge-output-format', video_format,
+                    '--recode-video', video_format,
                 ])
                 
                 # Add subtitle options if enabled
