@@ -1654,7 +1654,8 @@
         url,
         title,
         downloadId,
-        format = "mp3"
+        format = "mp3",
+        button = null
       ) {
         try {
           console.log(`🔄 Attempting YouTube proxy fallback for: ${title}`);
@@ -1681,6 +1682,12 @@
             allDownloads[downloadId].statusText = "Initializing...";
             saveDownloadsToStorage();
             updateDownloadManager();
+          }
+
+          // Update button to show initializing
+          if (button) {
+            button.className = "download-btn downloading";
+            button.innerHTML = "⏳ Initializing...";
           }
 
           // Poll for progress every 3 seconds
@@ -1719,6 +1726,12 @@
                 console.log(
                   `📊 Progress: ${progressData.progress}/1000 (${progressPercent}%) - ${statusText}`
                 );
+
+                // Update button with progress
+                if (button) {
+                  button.className = "download-btn downloading";
+                  button.innerHTML = `${progressPercent}% ${statusText}`;
+                }
 
                 // Update download status with progress and text
                 if (allDownloads[downloadId]) {
@@ -2653,10 +2666,12 @@
           // Build proxy download URL
           const API_BASE = getApiBaseUrl();
           const encodedUrl = encodeURIComponent(videoUrl);
-          let downloadUrl = `${API_BASE}/proxy/download?format=${format}&url=${encodedUrl}&add_info=1`;
+          let downloadUrl = `${API_BASE}/proxy/download?format=${format}&url=${encodedUrl}`;
 
           if (options.audioQuality)
             downloadUrl += `&audio_quality=${options.audioQuality}`;
+          else
+            downloadUrl += `&audio_quality=128`; // Default quality
           if (options.audioLanguage)
             downloadUrl += `&audio_language=${options.audioLanguage}`;
           if (options.noMerge === "1") downloadUrl += `&no_merge=1`;
@@ -2678,7 +2693,7 @@
           const jobId = data.id;
           const videoInfo = data.info || {};
 
-          showStatus("searching", "⏳ Processing Video", `Progress: 0%`);
+          showStatus("searching", "⏳ Initializing...", `Progress: 0%`);
 
           const maxAttempts = 60;
           let attempts = 0;
@@ -2692,10 +2707,21 @@
               );
               const progressData = await progressResponse.json();
 
-              const progressPercent = Math.round(
-                (progressData.progress / 1000) * 100
-              );
-              const statusText = progressData.text || "Processing";
+              // Convert progress (0-1000) to percentage (0-100)
+              let progressPercent;
+              let statusText;
+
+              if (progressData.progress < 100) {
+                progressPercent = Math.round((progressData.progress / 100) * 10);
+                statusText = progressData.text || "Initializing...";
+              } else if (progressData.progress < 500) {
+                progressPercent = 10 + Math.round(((progressData.progress - 100) / 400) * 40);
+                statusText = progressData.text || "Downloading...";
+              } else {
+                progressPercent = 50 + Math.round(((progressData.progress - 500) / 500) * 50);
+                statusText = progressData.text || "Converting...";
+              }
+
               showStatus(
                 "searching",
                 `⏳ ${statusText}`,
@@ -2708,6 +2734,12 @@
                 progressData.progress === 1000
               ) {
                 clearInterval(pollInterval);
+                
+                // Check if download_url is provided
+                if (!progressData.download_url) {
+                  throw new Error(progressData.text || "No download URL provided - Code 1805");
+                }
+                
                 await downloadYouTubeFile(
                   progressData.download_url,
                   videoInfo.title || "video",
@@ -2726,7 +2758,7 @@
               clearInterval(pollInterval);
               throw error;
             }
-          }, 2000);
+          }, 3000);
         } catch (error) {
           console.error("YouTube Direct Download error:", error);
           showStatus(
@@ -4358,16 +4390,11 @@
               allDownloads[downloadId].fallbackAttempted = true;
               saveDownloadsToStorage();
 
-              if (button) {
-                button.className = "download-btn downloading";
-                button.innerHTML = "🔄 Retrying...";
-              }
-
               try {
                 // Determine format from original request
                 const format = "mp3"; // Default to mp3 for audio
 
-                await downloadViaProxyAPI(url, title, downloadId, format);
+                await downloadViaProxyAPI(url, title, downloadId, format, button);
 
                 // Success - download finished, process next in queue
                 activeDownloads--;
