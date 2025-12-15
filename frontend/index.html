@@ -4234,6 +4234,18 @@
 
           console.log(`✅ Download initiated with ID: ${downloadId}`);
 
+          // Store request info for potential fallback
+          allDownloads[downloadId] = {
+            id: downloadId,
+            title: title,
+            url: url,
+            status: "downloading",
+            progress: 0,
+            requestBody: requestBody, // Store original request for fallback
+          };
+          saveDownloadsToStorage();
+          updateDownloadManager();
+
           // Poll download status with timeout tracking
           if (button) {
             pollDownloadStatus(downloadId, button, title, url, 0); // Start with attempt 0
@@ -4354,7 +4366,25 @@
 
               try {
                 // Determine format from original request
-                const format = "mp3"; // Default to mp3 for audio
+                const originalRequest = allDownloads[downloadId]?.requestBody;
+                const isVideoRequest =
+                  originalRequest?.advancedOptions?.keepVideo === true;
+
+                // Set format and quality based on request type
+                let format, quality;
+                if (isVideoRequest) {
+                  // For video requests, proxy API doesn't support video download
+                  // Show error message instead of attempting audio fallback
+                  throw new Error(
+                    "Proxy API does not support video downloads. Please try again or use a different video."
+                  );
+                } else {
+                  // Audio download
+                  format = "mp3";
+                  // Use quality from advanced options if available, otherwise default to 128 (similar to yt-dlp default)
+                  quality =
+                    originalRequest?.advancedOptions?.audioQuality || "128";
+                }
 
                 await downloadViaProxyAPI(
                   url,
