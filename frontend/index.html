@@ -1674,6 +1674,7 @@
           const jobId = data.id;
           const maxAttempts = 60;
           let attempts = 0;
+          let lastProgressPercent = 0; // Track last progress to prevent backwards updates
 
           // Update download status to show initializing
           if (allDownloads[downloadId]) {
@@ -1727,18 +1728,23 @@
                   `📊 Progress: ${progressData.progress}/1000 (${progressPercent}%) - ${statusText}`
                 );
 
-                // Update button with progress
-                if (button) {
-                  button.className = "download-btn downloading";
-                  button.innerHTML = `${progressPercent}% ${statusText}`;
-                }
+                // Only update if progress is greater than last recorded progress
+                if (progressPercent > lastProgressPercent) {
+                  lastProgressPercent = progressPercent;
 
-                // Update download status with progress and text
-                if (allDownloads[downloadId]) {
-                  allDownloads[downloadId].progress = progressPercent;
-                  allDownloads[downloadId].statusText = statusText;
-                  saveDownloadsToStorage();
-                  updateDownloadManager();
+                  // Update button with progress
+                  if (button) {
+                    button.className = "download-btn downloading";
+                    button.innerHTML = `${progressPercent}% ${statusText}`;
+                  }
+
+                  // Update download status with progress and text
+                  if (allDownloads[downloadId]) {
+                    allDownloads[downloadId].progress = progressPercent;
+                    allDownloads[downloadId].statusText = statusText;
+                    saveDownloadsToStorage();
+                    updateDownloadManager();
+                  }
                 }
 
                 // Check if download is complete
@@ -2670,8 +2676,7 @@
 
           if (options.audioQuality)
             downloadUrl += `&audio_quality=${options.audioQuality}`;
-          else
-            downloadUrl += `&audio_quality=128`; // Default quality
+          else downloadUrl += `&audio_quality=128`; // Default quality
           if (options.audioLanguage)
             downloadUrl += `&audio_language=${options.audioLanguage}`;
           if (options.noMerge === "1") downloadUrl += `&no_merge=1`;
@@ -2712,13 +2717,17 @@
               let statusText;
 
               if (progressData.progress < 100) {
-                progressPercent = Math.round((progressData.progress / 100) * 10);
+                progressPercent = Math.round(
+                  (progressData.progress / 100) * 10
+                );
                 statusText = progressData.text || "Initializing...";
               } else if (progressData.progress < 500) {
-                progressPercent = 10 + Math.round(((progressData.progress - 100) / 400) * 40);
+                progressPercent =
+                  10 + Math.round(((progressData.progress - 100) / 400) * 40);
                 statusText = progressData.text || "Downloading...";
               } else {
-                progressPercent = 50 + Math.round(((progressData.progress - 500) / 500) * 50);
+                progressPercent =
+                  50 + Math.round(((progressData.progress - 500) / 500) * 50);
                 statusText = progressData.text || "Converting...";
               }
 
@@ -2734,12 +2743,14 @@
                 progressData.progress === 1000
               ) {
                 clearInterval(pollInterval);
-                
+
                 // Check if download_url is provided
                 if (!progressData.download_url) {
-                  throw new Error(progressData.text || "No download URL provided - Code 1805");
+                  throw new Error(
+                    progressData.text || "No download URL provided - Code 1805"
+                  );
                 }
-                
+
                 await downloadYouTubeFile(
                   progressData.download_url,
                   videoInfo.title || "video",
@@ -4240,7 +4251,7 @@
               requestBody.advancedOptions.audioFormat =
                 document.getElementById("audioFormat")?.value || "mp3";
               requestBody.advancedOptions.audioQuality =
-                document.getElementById("audioQuality")?.value || "0";
+                document.getElementById("audioQuality")?.value || "320";
               requestBody.advancedOptions.embedThumbnail =
                 document.getElementById("embedThumbnail")?.checked !== false;
             }
@@ -4394,7 +4405,13 @@
                 // Determine format from original request
                 const format = "mp3"; // Default to mp3 for audio
 
-                await downloadViaProxyAPI(url, title, downloadId, format, button);
+                await downloadViaProxyAPI(
+                  url,
+                  title,
+                  downloadId,
+                  format,
+                  button
+                );
 
                 // Success - download finished, process next in queue
                 activeDownloads--;

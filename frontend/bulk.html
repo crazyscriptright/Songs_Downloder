@@ -1357,6 +1357,170 @@
         }
       }
 
+      // YouTube fallback download via proxy API with progress tracking
+      async function downloadViaProxyAPI(
+        url,
+        title,
+        downloadId,
+        format = "mp3",
+        quality = "128"
+      ) {
+        try {
+          console.log(`🔄 Starting proxy download: ${title}`);
+          const encodedUrl = encodeURIComponent(url);
+          const downloadUrl = `${getApiBaseUrl()}/proxy/download?format=${format}&url=${encodedUrl}&quality=${quality}`;
+
+          const response = await fetch(downloadUrl);
+          const data = await response.json();
+
+          if (!data.success) {
+            throw new Error(data.error || "Proxy download failed");
+          }
+
+          const progressId = data.progress_id;
+          console.log(
+            `✅ Proxy download initiated. Progress ID: ${progressId}`
+          );
+
+          // Track last progress to prevent backwards updates
+          let lastProgressPercent = 0;
+
+          // Poll for progress
+          const pollInterval = setInterval(async () => {
+            try {
+              const progressResponse = await fetch(
+                `${getApiBaseUrl()}/proxy/progress?progress_id=${progressId}`
+              );
+              const progressData = await progressResponse.json();
+
+              if (progressData.success) {
+                // Convert 0-1000 scale to 0-100 percentage
+                const rawProgress = progressData.progress || 0;
+                const progressPercent = Math.min(
+                  Math.round((rawProgress / 1000) * 100),
+                  100
+                );
+
+                // Determine status text based on progress ranges
+                let statusText = "Initializing...";
+                if (rawProgress >= 0 && rawProgress < 100) {
+                  statusText = "Initializing...";
+                } else if (rawProgress >= 100 && rawProgress < 500) {
+                  statusText = "Downloading...";
+                } else if (rawProgress >= 500 && rawProgress < 1000) {
+                  statusText = "Converting...";
+                } else if (rawProgress >= 1000) {
+                  statusText = "Complete";
+                }
+
+                // Only update if progress is greater than last recorded value
+                if (progressPercent > lastProgressPercent) {
+                  lastProgressPercent = progressPercent;
+
+                  // Update bulk downloads array
+                  const downloadIndex = bulkDownloads.findIndex(
+                    (d) => d.downloadId === downloadId
+                  );
+                  if (downloadIndex !== -1) {
+                    bulkDownloads[downloadIndex].progress = progressPercent;
+                    bulkDownloads[downloadIndex].status =
+                      progressPercent >= 100 ? "complete" : "downloading";
+
+                    // Update download manager
+                    updateDownloadManager();
+                    saveDownloadsToStorage();
+                  }
+
+                  console.log(
+                    `📊 Progress: ${progressPercent}% - ${statusText}`
+                  );
+                }
+
+                // Check if complete
+                if (progressData.download_url) {
+                  clearInterval(pollInterval);
+
+                  // Validate download_url is not null
+                  if (
+                    progressData.download_url === null ||
+                    progressData.download_url === "null"
+                  ) {
+                    throw new Error(
+                      "Download failed: Code 1805 - Download URL is null"
+                    );
+                  }
+
+                  console.log(
+                    `✅ Download complete: ${progressData.download_url}`
+                  );
+
+                  // Update download status
+                  const downloadIndex = bulkDownloads.findIndex(
+                    (d) => d.downloadId === downloadId
+                  );
+                  if (downloadIndex !== -1) {
+                    bulkDownloads[downloadIndex].status = "complete";
+                    bulkDownloads[downloadIndex].progress = 100;
+                    bulkDownloads[downloadIndex].download_url =
+                      progressData.download_url;
+
+                    updateDownloadManager();
+                    saveDownloadsToStorage();
+                  }
+
+                  // Auto-download the file
+                  const fileUrl = `${getApiBaseUrl()}/proxy/file?file_url=${encodeURIComponent(
+                    progressData.download_url
+                  )}`;
+                  const link = document.createElement("a");
+                  link.href = fileUrl;
+                  link.download = `${title}.${format}`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+
+                  console.log(`🎉 File download started: ${title}.${format}`);
+                }
+              } else if (progressData.error) {
+                clearInterval(pollInterval);
+                throw new Error(progressData.error);
+              }
+            } catch (pollError) {
+              console.error("Progress polling error:", pollError);
+              clearInterval(pollInterval);
+
+              // Update download status to error
+              const downloadIndex = bulkDownloads.findIndex(
+                (d) => d.downloadId === downloadId
+              );
+              if (downloadIndex !== -1) {
+                bulkDownloads[downloadIndex].status = "error";
+                bulkDownloads[downloadIndex].error =
+                  pollError.message || "Progress polling failed";
+                updateDownloadManager();
+                saveDownloadsToStorage();
+              }
+            }
+          }, 3000); // Poll every 3 seconds
+        } catch (error) {
+          console.error(`❌ Proxy download error: ${error.message}`);
+
+          // Update download status to error
+          const downloadIndex = bulkDownloads.findIndex(
+            (d) => d.downloadId === downloadId
+          );
+          if (downloadIndex !== -1) {
+            bulkDownloads[downloadIndex].status = "error";
+            bulkDownloads[downloadIndex].error =
+              error.message || "Proxy download failed";
+            updateDownloadManager();
+            saveDownloadsToStorage();
+          }
+
+          throw error;
+        }
+      }
+
       // Extract song title from URL
       function extractTitleFromUrl(url) {
         try {
@@ -1590,7 +1754,8 @@
         // Get options
         const options = {
           audioFormat: document.getElementById("bulkAudioFormat").value,
-          audioQuality: document.getElementById("bulkAudioQuality").value,
+          audioQuality:
+            document.getElementById("bulkAudioQuality").value || "0",
           embedThumbnail: document.getElementById("bulkEmbedThumbnail").checked,
           addMetadata: document.getElementById("bulkAddMetadata").checked,
           keepVideo: false,
@@ -1806,9 +1971,8 @@
           options.audioFormat = document.getElementById(
             "playlistAudioFormat"
           ).value;
-          options.audioQuality = document.getElementById(
-            "playlistAudioQuality"
-          ).value;
+          options.audioQuality =
+            document.getElementById("playlistAudioQuality").value || "0";
           options.embedThumbnail = document.getElementById(
             "playlistEmbedThumbnail"
           ).checked;
