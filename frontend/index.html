@@ -1662,7 +1662,19 @@
 
           const API_BASE = getApiBaseUrl();
           const encodedUrl = encodeURIComponent(url);
-          const downloadUrl = `${API_BASE}/proxy/download?format=${format}&url=${encodedUrl}&quality=360`;
+          
+          // Determine if this is a video or audio download based on format
+          const isVideoFormat = ['144', '240', '360', '480', '720', '1080', '1440', '2160', 'best'].includes(format);
+          
+          let downloadUrl;
+          if (isVideoFormat) {
+            // Video download - format is the resolution
+            downloadUrl = `${API_BASE}/proxy/download?format=${format}&url=${encodedUrl}`;
+          } else {
+            // Audio download - format is mp3, use quality parameter
+            const quality = allDownloads[downloadId]?.requestBody?.advancedOptions?.audioQuality || "128";
+            downloadUrl = `${API_BASE}/proxy/download?format=${format}&url=${encodedUrl}&quality=${quality}`;
+          }
 
           const response = await fetch(downloadUrl);
           const data = await response.json();
@@ -4371,19 +4383,14 @@
                   originalRequest?.advancedOptions?.keepVideo === true;
 
                 // Set format and quality based on request type
-                let format, quality;
+                let format;
                 if (isVideoRequest) {
-                  // For video requests, proxy API doesn't support video download
-                  // Show error message instead of attempting audio fallback
-                  throw new Error(
-                    "Proxy API does not support video downloads. Please try again or use a different video."
-                  );
+                  // For video requests, use resolution as format (144, 360, 720, 1080)
+                  const videoQuality = originalRequest?.advancedOptions?.videoQuality || "360";
+                  format = videoQuality; // Use resolution directly (e.g., "360", "720", "1080")
                 } else {
-                  // Audio download
+                  // Audio download - use mp3 format
                   format = "mp3";
-                  // Use quality from advanced options if available, otherwise default to 128 (similar to yt-dlp default)
-                  quality =
-                    originalRequest?.advancedOptions?.audioQuality || "128";
                 }
 
                 await downloadViaProxyAPI(
