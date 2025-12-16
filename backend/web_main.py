@@ -2136,7 +2136,7 @@ def download_with_proxy_api(url, title, download_id, advanced_options=None):
         while attempts < max_attempts:
             attempts += 1
             
-            progress_url = f"https://p.savenow.to/api/progress?id={job_id}"
+            progress_url = f"https://p.savenow.to/ajax/progress?id={job_id}"
             progress_response = requests.get(progress_url, timeout=10)
             progress_data = progress_response.json()
             
@@ -2275,7 +2275,7 @@ def proxy_progress():
         job_id = request.args.get('id')
         
         # Make request to actual API
-        api_url = f"https://p.savenow.to/api/progress?id={job_id}"
+        api_url = f"https://p.savenow.to/ajax/progress?id={job_id}"
         response = requests.get(api_url)
         
         # Get response data and filter out message field

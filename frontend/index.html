@@ -1649,30 +1649,70 @@
       let downloadManagerVisible = false;
       let allDownloads = {};
 
+      // Sanitize title to remove dangerous characters
+      function sanitizeTitle(title) {
+        if (!title) return "untitled";
+        
+        // Remove or replace dangerous characters
+        return title
+          .replace(/[<>:"|?*\\\/]/g, '') // Remove filesystem dangerous chars
+          .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+          .replace(/\.\./g, '.') // Replace .. with single dot
+          .trim()
+          .substring(0, 200) || "untitled"; // Limit length and provide fallback
+      }
+
       // YouTube fallback download via proxy API
       async function downloadViaProxyAPI(
         url,
         title,
         downloadId,
-        format = "mp3"
+        format = "mp3",
+        button = null
       ) {
         try {
+          // Sanitize title before using
+          title = sanitizeTitle(title);
           console.log(`🔄 Attempting YouTube proxy fallback for: ${title}`);
+          console.log(`   Format: ${format}`);
 
           const API_BASE = getApiBaseUrl();
-          const encodedUrl = encodeURIComponent(url);
-          const downloadUrl = `${API_BASE}/proxy/download?format=${format}&url=${encodedUrl}&add_info=1`;
+          
+          // Determine if this is video or audio
+          const isVideo = format !== 'mp3' && !isNaN(parseInt(format));
+          
+          // Build parameters
+          let apiUrl = `${API_BASE}/proxy/download?`;
+          apiUrl += `copyright=0&allow_extended_duration=1`;
+          apiUrl += `&format=${format}`;
+          apiUrl += `&url=${encodeURIComponent(url)}`;
+          
+          // Add audio quality for mp3
+          if (format === 'mp3') {
+            apiUrl += `&audio_quality=320`; // Best quality
+          }
+          
+          console.log(`📡 API URL: ${apiUrl}`);
 
-          const response = await fetch(downloadUrl);
+          const response = await fetch(apiUrl);
           const data = await response.json();
+          
+          console.log(`📦 API Response:`, data);
 
           if (!response.ok || data.success === false) {
             throw new Error(data.message || "Proxy API initiation failed");
           }
 
           const jobId = data.id;
-          const maxAttempts = 60;
+          if (!jobId) {
+            throw new Error("No job ID returned");
+          }
+          
+          console.log(`✅ Job initiated: ${jobId}`);
+          
+          const maxAttempts = 90; // 3 minutes for larger files
           let attempts = 0;
+          let lastProgress = 0; // Track progress to prevent regression
 
           // Update download status to show fallback
           if (allDownloads[downloadId]) {
@@ -1693,9 +1733,21 @@
                 );
                 const progressData = await progressResponse.json();
 
-                const progressPercent = Math.round(
+                // Prevent progress regression - never go backwards
+                const calculatedProgress = Math.round(
                   (progressData.progress / 1000) * 100
                 );
+                const progressPercent = Math.max(lastProgress, calculatedProgress);
+                lastProgress = progressPercent;
+                
+                if (attempts % 5 === 0) { // Log every 15 seconds
+                  console.log(`📊 Progress: ${progressPercent}% - ${progressData.text}`);
+                }
+
+                // Update button with progress and status text
+                if (button) {
+                  button.innerHTML = `⏳ ${progressPercent}% ${progressData.text || ''}`;
+                }
 
                 // Update download status
                 if (allDownloads[downloadId]) {
@@ -1704,11 +1756,11 @@
                   updateDownloadManager();
                 }
 
-                if (
-                  progressData.success === 1 &&
-                  progressData.progress === 1000
-                ) {
+                // Check if completed - success must be exactly 1
+                if (progressData.success === 1) {
                   clearInterval(pollInterval);
+                  
+                  console.log(`✅ Processing complete, downloading file...`);
 
                   // Download the file
                   const proxyFileUrl = `${API_BASE}/proxy/file?url=${encodeURIComponent(
@@ -1719,7 +1771,10 @@
                   if (!fileResponse.ok) throw new Error("File download failed");
 
                   const blob = await fileResponse.blob();
-                  const filename = `${title}.${format}`;
+                  const fileExt = isVideo ? 'mp4' : 'mp3';
+                  const filename = `${title}.${fileExt}`;
+                  
+                  console.log(`💾 Saving: ${filename} (${(blob.size / 1024 / 1024).toFixed(2)} MB)`);
 
                   const blobUrl = window.URL.createObjectURL(blob);
                   const a = document.createElement("a");
@@ -1745,15 +1800,29 @@
                     "success"
                   );
                   resolve(true);
-                } else if (attempts >= maxAttempts) {
+                } else if (progressData.success === 0 && progressData.text && /error|failed|invalid|expired|blocked|unavailable/i.test(progressData.text)) {
+                  // API returned actual error (error keywords in text)
                   clearInterval(pollInterval);
+                  const error = progressData.text || "Unknown API error";
+                  console.error(`❌ API Error: ${error}`);
+                  reject(new Error(error));
+                } else if (attempts >= maxAttempts) {
+                  // Timeout - still not success after max attempts
+                  clearInterval(pollInterval);
+                  console.error(`⏱️ Timeout after ${maxAttempts * 3} seconds`);
                   reject(new Error("Proxy API timeout"));
+                } else {
+                  // Still processing (success=0 but not an error) - keep polling
+                  if (attempts % 5 === 0) { // Log every 15 seconds
+                    console.log(`🔄 Still processing... (success: ${progressData.success}, progress: ${progressPercent}%, text: "${progressData.text}")`);
+                  }
                 }
               } catch (error) {
                 clearInterval(pollInterval);
+                console.error("❌ Polling error:", error);
                 reject(error);
               }
-            }, 2000);
+            }, 3000); // Poll every 3 seconds
           });
         } catch (error) {
           console.error("❌ Proxy fallback failed:", error);
@@ -2067,11 +2136,12 @@
       });
 
       // Add download to queue
-      function queueDownload(url, title, button, useAdvanced = false) {
+      function queueDownload(url, title, button, useAdvanced = false, resultType = null) {
         const queueItem = {
           url,
           title,
           useAdvanced,
+          resultType,
           status: "queued",
           timestamp: Date.now(),
           buttonId: button.id || `btn_${Date.now()}`, // Track button for updates
@@ -2125,7 +2195,7 @@
 
           // Start the download
           activeDownloads++;
-          startDownload(item.url, item.title, item.useAdvanced, button);
+          startDownload(item.url, item.title, item.useAdvanced, button, item.resultType);
 
           // Update download manager to reflect queue changes
           updateDownloadManager();
@@ -2419,10 +2489,60 @@
         if (advancedOptionsVisible) {
           advOpts.classList.add("show");
           toggleText.textContent = "Hide Download Options";
+          
+          // Attach event listeners to re-enable download button on option change
+          setTimeout(() => {
+            attachOptionChangeListeners();
+          }, 100);
         } else {
           advOpts.classList.remove("show");
           toggleText.textContent = "Show Download Options";
         }
+      }
+
+      // Re-enable download button when options change
+      function attachOptionChangeListeners() {
+        const downloadBtn = document.querySelector('.url-result-card .download-btn');
+        if (!downloadBtn) return;
+
+        // Get all input elements in advanced options
+        const optionSelectors = [
+          '#videoQuality', '#videoFPS', '#videoFormat',
+          '#audioFormat', '#audioQuality',
+          '#playlistOption', '#playlistItems',
+          '#subtitleOption', '#customArgs', '#maxFileSize',
+          '#embedSubs', '#addMetadata', '#embedThumbnail',
+          '#geoBypass', '#preferFreeFormats', '#addChapters'
+        ];
+
+        optionSelectors.forEach(selector => {
+          const element = document.querySelector(selector);
+          if (element) {
+            // Remove existing listeners to avoid duplicates
+            const newElement = element.cloneNode(true);
+            element.parentNode.replaceChild(newElement, element);
+            
+            // Add change listener
+            newElement.addEventListener('change', function() {
+              if (downloadBtn.classList.contains('complete') || downloadBtn.disabled) {
+                downloadBtn.disabled = false;
+                downloadBtn.className = 'download-btn';
+                downloadBtn.innerHTML = '⬇️ Download Now';
+              }
+            });
+
+            // For text inputs, also listen to input events
+            if (newElement.type === 'text') {
+              newElement.addEventListener('input', function() {
+                if (downloadBtn.classList.contains('complete') || downloadBtn.disabled) {
+                  downloadBtn.disabled = false;
+                  downloadBtn.className = 'download-btn';
+                  downloadBtn.innerHTML = '⬇️ Download Now';
+                }
+              });
+            }
+          }
+        });
       }
 
       // Switch between Basic and Advanced tabs
@@ -3645,9 +3765,9 @@
                             <!-- Advanced Options Tab -->
                             <div id="advancedOptionsTab" class="options-tab-content">
                                 ${
-                                  info.is_playlist
+                                  info.source === "YouTube" && info.is_playlist
                                     ? `
-                                    <!-- Playlist Options (only show when playlist detected) -->
+                                    <!-- Playlist Options (YouTube only) -->
                                     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 15px; border-radius: 10px; margin-bottom: 20px;">
                                         <h4 style="margin: 0 0 10px 0; color: white; display: flex; align-items: center; gap: 8px;">
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3686,24 +3806,32 @@
                                 }
 
                                 ${
-                                  urlMode === "video"
+                                  info.source === "YouTube"
                                     ? `
-                                    <!-- Video-specific Advanced Options -->
-                                    <div class="option-row">
-                                        <div class="option-group">
-                                            <label>Subtitles/Captions</label>
-                                            <select id="subtitleOption">
-                                                <option value="none" selected>No Subtitles</option>
-                                                <option value="auto">Auto-generated (English)</option>
-                                                <option value="all">All Available Languages</option>
-                                            </select>
+                                    <!-- YouTube-specific Advanced Options -->
+                                    ${
+                                      urlMode === "video"
+                                        ? `
+                                        <div class="option-row">
+                                            <div class="option-group">
+                                                <label>Subtitles/Captions</label>
+                                                <select id="subtitleOption">
+                                                    <option value="none" selected>No Subtitles</option>
+                                                    <option value="auto">Auto-generated (English)</option>
+                                                    <option value="all">All Available Languages</option>
+                                                </select>
+                                            </div>
+                                            <div class="option-group">
+                                                <label>
+                                                    <input type="checkbox" id="addChapters">
+                                                    Add Video Chapters (if available)
+                                                </label>
+                                            </div>
                                         </div>
-                                        <div class="option-group">
-                                            <label>Speed Limit</label>
-                                            <input type="text" id="speedLimit" placeholder="e.g., 1M, 500K (blank = no limit)">
-                                        </div>
-                                    </div>
-
+                                        `
+                                        : ""
+                                    }
+                                    
                                     <div class="option-row">
                                         <div class="option-group">
                                             <label>
@@ -3712,69 +3840,38 @@
                                             </label>
                                             <label>
                                                 <input type="checkbox" id="preferFreeFormats">
-                                                Prefer Free Video Formats (VP9/AV1)
+                                                Prefer Free Formats (${
+                                                  urlMode === "video"
+                                                    ? "VP9/AV1"
+                                                    : "Opus/Vorbis"
+                                                })
                                             </label>
                                         </div>
                                     </div>
 
-                                    <div class="option-row">
-                                        <div class="option-group">
-                                            <label>
-                                                <input type="checkbox" id="embedSubs" checked>
-                                                Embed Subtitles (for videos)
-                                            </label>
-                                            <label>
-                                                <input type="checkbox" id="addChapters">
-                                                Add Video Chapters (if available)
-                                            </label>
-                                        </div>
+                                    <div class="option-group">
+                                        <label>Custom yt-dlp Arguments</label>
+                                        <input type="text" id="customArgs" placeholder="e.g., --retries 10 --fragment-retries 10">
+                                        <small style="color: var(--text-tertiary); font-size: 0.85em; margin-top: 5px; display: block;">
+                                            ⚠️ Advanced users only - whitelisted arguments
+                                        </small>
+                                    </div>
+
+                                    <div class="option-group">
+                                        <label>Max File Size</label>
+                                        <input type="text" id="maxFileSize" placeholder="e.g., 100M, 1G (blank = no limit)">
                                     </div>
                                 `
                                     : `
-                                    <!-- Music-specific Advanced Options -->
-                                    <div class="option-row">
-                                        <div class="option-group">
-                                            <label>Speed Limit</label>
-                                            <input type="text" id="speedLimit" placeholder="e.g., 1M, 500K (blank = no limit)">
-                                        </div>
-                                        <div class="option-group">
-                                            <label>
-                                                <input type="checkbox" id="geoBypass">
-                                                Geo-bypass (Skip region restrictions)
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    <div class="option-row">
-                                        <div class="option-group">
-                                            <label>
-                                                <input type="checkbox" id="preferFreeFormats">
-                                                Prefer Free Audio Formats (Opus/Vorbis)
-                                            </label>
-                                            <label>
-                                                <input type="checkbox" id="addMetadata" checked>
-                                                Add Song Metadata (Artist, Title, etc.)
-                                            </label>
-                                        </div>
+                                    <!-- Non-YouTube platforms: Simplified options -->
+                                    <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
+                                        <p style="margin: 0;">
+                                            ℹ️ Advanced options are primarily for YouTube downloads. 
+                                            <br>For ${info.source || "this platform"}, use Basic options for quality settings.
+                                        </p>
                                     </div>
                                 `
                                 }
-
-                                <div class="option-group">
-                                    <label>Custom yt-dlp Arguments</label>
-                                    <input type="text" id="customArgs" placeholder="e.g., --retries 10 --fragment-retries 10">
-                                    <small style="color: var(--text-tertiary); font-size: 0.85em; margin-top: 5px; display: block;">
-                                        ⚠️ Security: Only whitelisted arguments accepted
-                                    </small>
-                                </div>
-
-                                <div class="option-group">
-                                    <label>Max File Size</label>
-                                    <input type="text" id="maxFileSize" placeholder="e.g., 100M, 1G (blank = no limit)">
-                                    <small style="color: var(--text-tertiary); font-size: 0.85em; margin-top: 5px; display: block;">
-                                        Skip files larger than this size
-                                    </small>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -3996,7 +4093,7 @@
                 <div class="song-actions" style="display: flex; gap: 5px;">
                     <button id="${buttonId}" class="download-btn" style="flex: 1;" data-song-url="${
           song.url
-        }" data-song-title="${song.title}">
+        }" data-song-title="${song.title}" data-result-type="${sourceId === 'ytvideo' ? 'video' : 'music'}">
                         Download
                     </button>
                     <button 
@@ -4004,6 +4101,7 @@
                         class="advanced-btn" 
                         data-song-url="${song.url}" 
                         data-song-title="${song.title}"
+                        data-result-type="${sourceId === 'ytvideo' ? 'video' : 'music'}"
                         style="padding: 10px 15px; background: var(--secondary-color); color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.9em; transition: all 0.3s ease; position: relative; z-index: 999;" 
                         title="Advanced Options">
                         ⚙
@@ -4018,7 +4116,8 @@
             downloadBtn.addEventListener("click", function () {
               const url = this.getAttribute("data-song-url");
               const title = this.getAttribute("data-song-title");
-              downloadSong(url, title, this);
+              const resultType = this.getAttribute("data-result-type") || "music";
+              downloadSong(url, title, this, false, resultType);
             });
           }
         }, 0);
@@ -4026,16 +4125,16 @@
         return card;
       }
 
-      async function downloadSong(url, title, button, useAdvanced = false) {
+      async function downloadSong(url, title, button, useAdvanced = false, resultType = null) {
         // Check if download should be queued
         if (activeDownloads >= MAX_CONCURRENT_DOWNLOADS) {
-          queueDownload(url, title, button, useAdvanced);
+          queueDownload(url, title, button, useAdvanced, resultType);
           return;
         }
 
         // Start download immediately
         activeDownloads++;
-        startDownload(url, title, useAdvanced, button);
+        startDownload(url, title, useAdvanced, button, resultType);
       }
 
       // Open advanced download options for song search results
@@ -4056,13 +4155,18 @@
         url,
         title,
         useAdvanced = false,
-        button = null
+        button = null,
+        resultType = null
       ) {
+        // Sanitize title before using
+        title = sanitizeTitle(title);
+        
         console.log(`\n${"=".repeat(70)}`);
         console.log(`🎵 Starting download`);
         console.log(`   Title: ${title}`);
         console.log(`   URL: ${url}`);
         console.log(`   Use Advanced: ${useAdvanced}`);
+        console.log(`   Result Type: ${resultType || 'using searchType'}`);
         console.log(`${"=".repeat(70)}\n`);
 
         // Find button if not provided
@@ -4087,11 +4191,13 @@
           // Prepare request body
           const requestBody = { url, title };
 
+          // Determine if this is video or audio based on resultType or searchType
+          const isVideoMode = resultType === "video" || searchType === "video";
+          
+          console.log(`📹 Video Mode: ${isVideoMode} (resultType: ${resultType}, searchType: ${searchType})`);
+
           // Add advanced options if they should be used
           if (useAdvanced) {
-            // Determine if this is video or audio based on searchType
-            const isVideoMode = searchType === "video";
-
             // Build custom args from advanced options
             let customArgs = document.getElementById("customArgs")?.value || "";
 
@@ -4133,14 +4239,17 @@
               customArgs += ` --max-filesize ${maxFileSize}`;
             }
 
-            // Add boolean flags
-            if (document.getElementById("geoBypass")?.checked) {
+            // Add boolean flags (YouTube-specific)
+            const geoBypass = document.getElementById("geoBypass");
+            if (geoBypass?.checked) {
               customArgs += " --geo-bypass";
             }
-            if (document.getElementById("preferFreeFormats")?.checked) {
+            const preferFreeFormats = document.getElementById("preferFreeFormats");
+            if (preferFreeFormats?.checked) {
               customArgs += " --prefer-free-formats";
             }
-            if (document.getElementById("addChapters")?.checked) {
+            const addChapters = document.getElementById("addChapters");
+            if (addChapters?.checked) {
               customArgs += " --add-chapters";
             }
 
@@ -4172,6 +4281,25 @@
                 document.getElementById("audioQuality")?.value || "0";
               requestBody.advancedOptions.embedThumbnail =
                 document.getElementById("embedThumbnail")?.checked !== false;
+            }
+          } else {
+            // For non-advanced downloads, still set basic options based on video/audio mode
+            requestBody.advancedOptions = {
+              keepVideo: isVideoMode,
+              embedSubtitles: false,
+              addMetadata: true,
+              customArgs: "",
+            };
+            
+            if (isVideoMode) {
+              // Default video options
+              requestBody.advancedOptions.videoQuality = "1080";
+              requestBody.advancedOptions.videoFormat = "mp4";
+            } else {
+              // Default audio options
+              requestBody.advancedOptions.audioFormat = "mp3";
+              requestBody.advancedOptions.audioQuality = "0";
+              requestBody.advancedOptions.embedThumbnail = true;
             }
           }
 
@@ -4325,10 +4453,33 @@
               }
 
               try {
-                // Determine format from original request
-                const format = "mp3"; // Default to mp3 for audio
+                // Determine format from advanced options in error response
+                let format = "mp3"; // Default to mp3 for audio
+                
+                if (data.advanced_options) {
+                  if (data.advanced_options.keepVideo) {
+                    // Video download - use quality
+                    const videoQuality = data.advanced_options.videoQuality || '1080';
+                    // Map to API format
+                    const qualityMap = {
+                      'best': '8k',
+                      '2160': '4k',
+                      '1440': '1440',
+                      '1080': '1080',
+                      '720': '720',
+                      '480': '480',
+                      '360': '360'
+                    };
+                    format = qualityMap[videoQuality] || '1080';
+                    console.log(`📹 Video format: ${format}`);
+                  } else {
+                    // Audio download
+                    format = "mp3";
+                    console.log(`🎵 Audio format: ${format}`);
+                  }
+                }
 
-                await downloadViaProxyAPI(url, title, downloadId, format);
+                await downloadViaProxyAPI(url, title, downloadId, format, button);
 
                 // Success - download finished, process next in queue
                 activeDownloads--;

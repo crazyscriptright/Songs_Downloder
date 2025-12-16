@@ -31,6 +31,9 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 
+# TESTING: Set to True to simulate yt-dlp errors for YouTube URLs (forces API fallback)
+SIMULATE_YTDLP_ERROR = os.getenv('SIMULATE_YTDLP_ERROR', 'False').lower() == 'true'
+
 # Use /tmp for Heroku (ephemeral storage)
 if os.getenv('DYNO'):  # Running on Heroku
     app.config['DOWNLOAD_FOLDER'] = '/tmp/downloads'
@@ -808,7 +811,37 @@ def download_song(url, title, download_id, advanced_options=None):
     print(f"🔗 URL: {url}")
     print(f"🆔 Download ID: {download_id}")
     print(f"⚙️  Advanced Options: {advanced_options}")
+    print(f"🧪 Simulate Error: {SIMULATE_YTDLP_ERROR}")
     print(f"{'='*70}\n")
+    
+    # TESTING: Simulate yt-dlp error for YouTube URLs to test API fallback
+    if SIMULATE_YTDLP_ERROR and ('youtube.com' in url or 'youtu.be' in url):
+        print(f"🧪 SIMULATION MODE: Forcing error for YouTube URL to test API fallback")
+        download_status[download_id] = {
+            'status': 'error',
+            'progress': 0,
+            'title': title,
+            'url': url,
+            'error': '🧪 SIMULATED ERROR: Testing API fallback mechanism (yt-dlp intentionally disabled)',
+            'speed': '0 KB/s',
+            'eta': 'N/A',
+            'timestamp': datetime.now().isoformat(),
+            'failed_at': datetime.now().isoformat(),
+            'advanced_options': advanced_options,
+            'simulated_error': True
+        }
+        save_download_status()
+        
+        # Immediately try fallback with proxy API
+        print(f"🔄 Attempting proxy API fallback...")
+        try:
+            download_with_proxy_api(url, title, download_id, advanced_options)
+            return
+        except Exception as fallback_error:
+            print(f"❌ Fallback proxy API also failed: {fallback_error}")
+            download_status[download_id]['error'] = f'🧪 Simulated error + API fallback failed: {str(fallback_error)}'
+            save_download_status()
+        return
     
     # Clean up /tmp if getting full (Heroku)
     cleanup_tmp_directory()
@@ -2478,7 +2511,7 @@ def proxy_image():
 VIDEO_DOWNLOAD_API_KEY = os.getenv('VIDEO_DOWNLOAD_API_KEY', '')
 
 def download_with_proxy_api(url, title, download_id, advanced_options=None):
-    """Fallback download using video-download-api.com when yt-dlp fails"""
+    """Fallback download using savenow.to API when yt-dlp fails"""
     global download_status
     
     try:
@@ -2500,52 +2533,91 @@ def download_with_proxy_api(url, title, download_id, advanced_options=None):
         }
         save_download_status()
         
-        # Determine format from advanced options or default to mp3
-        format_type = 'mp3'
-        if advanced_options:
-            audio_format = advanced_options.get('audioFormat', 'mp3')
-            if audio_format in ['mp3', 'm4a', 'flac', 'wav']:
-                format_type = audio_format
+        # Determine if video or audio download
+        keep_video = advanced_options.get('keepVideo', False) if advanced_options else False
         
-        # Step 1: Initiate download
+        # Build API parameters based on format
         params = {
-            'format': format_type,
-            'url': url,
-            'apikey': VIDEO_DOWNLOAD_API_KEY,
-            'add_info': '1'
+            'copyright': '0',
+            'allow_extended_duration': '1',
+            'url': url,  # Will be URL-encoded by requests
+            'api': VIDEO_DOWNLOAD_API_KEY
         }
         
-        # Add optional parameters from advanced options
-        if advanced_options:
-            if advanced_options.get('audioQuality'):
-                params['audio_quality'] = advanced_options['audioQuality']
+        if keep_video:
+            # Video download - use video quality from advanced options
+            video_quality = advanced_options.get('videoQuality', '1080') if advanced_options else '1080'
+            # Map quality values to API format
+            quality_map = {
+                'best': '8k',
+                '2160': '4k',  # 4K
+                '1440': '1440',  # 2K
+                '1080': '1080',
+                '720': '720',
+                '480': '480',
+                '360': '360'
+            }
+            format_value = quality_map.get(video_quality, '1080')
+            params['format'] = format_value
+            print(f"📹 Video download: {format_value}")
+        else:
+            # Audio download - mp3 format with quality
+            params['format'] = 'mp3'
+            # Audio quality: 0 (best) = 320kbps, 2 = 256kbps, 5 = 192kbps, 9 = 128kbps
+            audio_quality = advanced_options.get('audioQuality', '0') if advanced_options else '0'
+            quality_bitrate_map = {
+                '0': '320',  # Best quality
+                '2': '256',
+                '5': '192',
+                '9': '128'
+            }
+            params['audio_quality'] = quality_bitrate_map.get(audio_quality, '320')
+            print(f"🎵 Audio download: mp3 @ {params['audio_quality']}kbps")
         
+        # Step 1: Initiate download
         api_url = 'https://p.savenow.to/ajax/download.php'
+        print(f"📡 API Request: {api_url}")
+        print(f"📋 Parameters: {params}")
+        
         response = requests.get(api_url, params=params, timeout=30)
         response.raise_for_status()
-        data = response.json()
+        
+        try:
+            data = response.json()
+        except json.JSONDecodeError:
+            print(f"❌ Invalid JSON response: {response.text[:200]}")
+            raise Exception('Invalid API response format')
+        
+        print(f"📦 API Response: {data}")
         
         if not data.get('success'):
-            raise Exception(data.get('message', 'Failed to initiate download'))
+            error_msg = data.get('message', 'Failed to initiate download')
+            print(f"❌ API Error: {error_msg}")
+            raise Exception(error_msg)
         
         job_id = data.get('id')
         if not job_id:
             raise Exception('No job ID returned from API')
         
+        print(f"✅ Job initiated: {job_id}")
+        
         # Step 2: Poll for progress
-        max_attempts = 60  # 2 minutes max
+        max_attempts = 90  # 3 minutes max (longer for 4K/8K)
         attempts = 0
         
         while attempts < max_attempts:
             attempts += 1
             
-            progress_url = f"https://p.savenow.to/api/progress?id={job_id}"
+            progress_url = f"https://p.savenow.to/ajax/progress?id={job_id}"
             progress_response = requests.get(progress_url, timeout=10)
             progress_data = progress_response.json()
             
             # Update status with progress
             progress_percent = round((progress_data.get('progress', 0) / 1000) * 100)
             status_text = progress_data.get('text', 'Processing')
+            
+            if attempts % 5 == 0:  # Log every 10 seconds
+                print(f"📊 Progress: {progress_percent}% - {status_text}")
             
             download_status[download_id] = {
                 'status': 'downloading',
@@ -2559,33 +2631,49 @@ def download_with_proxy_api(url, title, download_id, advanced_options=None):
             }
             save_download_status()
             
-            # Check if completed
-            if progress_data.get('success') == 1 and progress_data.get('progress') == 1000:
+            # Check if completed (success must be exactly 1)
+            if progress_data.get('success') == 1:
                 download_url = progress_data.get('download_url')
                 if not download_url:
                     raise Exception('No download URL in completed response')
+                
+                print(f"✅ Processing complete, downloading file...")
                 
                 # Step 3: Download the file
                 download_status[download_id]['eta'] = 'Downloading file...'
                 save_download_status()
                 
-                file_response = requests.get(download_url, stream=True, timeout=60)
+                file_response = requests.get(download_url, stream=True, timeout=120)
                 file_response.raise_for_status()
                 
-                # Get filename
+                # Determine file extension
                 import re as regex
                 safe_title = regex.sub(r'[<>:"/\\|?*]', '_', title)
-                filename = f"{safe_title}.{format_type}"
+                
+                if keep_video:
+                    # Video file - extension based on format
+                    file_ext = 'mp4'  # Most video downloads are mp4
+                    filename = f"{safe_title}.{file_ext}"
+                else:
+                    # Audio file
+                    filename = f"{safe_title}.mp3"
                 
                 # Save to download folder
                 download_dir = os.path.join(app.config['DOWNLOAD_FOLDER'], download_id)
                 os.makedirs(download_dir, exist_ok=True)
                 filepath = os.path.join(download_dir, filename)
                 
+                print(f"💾 Saving to: {filepath}")
+                
+                total_size = 0
                 with open(filepath, 'wb') as f:
                     for chunk in file_response.iter_content(chunk_size=8192):
                         if chunk:
                             f.write(chunk)
+                            total_size += len(chunk)
+                
+                file_size_mb = total_size / (1024 * 1024)
+                print(f"✅ File saved: {filename} ({file_size_mb:.2f} MB)")
                 
                 # Mark as complete
                 download_status[download_id] = {
@@ -2599,6 +2687,7 @@ def download_with_proxy_api(url, title, download_id, advanced_options=None):
                     'timestamp': download_status[download_id]['timestamp'],
                     'completed_at': datetime.now().isoformat(),
                     'downloaded_via': 'proxy_api',
+                    'file_size': f"{file_size_mb:.2f} MB",
                     'advanced_options': advanced_options
                 }
                 save_download_status()
@@ -2606,11 +2695,23 @@ def download_with_proxy_api(url, title, download_id, advanced_options=None):
                 print(f"✅ Proxy API download successful: {filename}")
                 return
             
+            # Check for errors - only when text contains error keywords
+            if progress_data.get('success') == 0:
+                error_msg = progress_data.get('text', '')
+                # Only treat as error if text contains error keywords
+                if error_msg and re.search(r'error|failed|invalid|expired|blocked|unavailable', error_msg, re.IGNORECASE):
+                    print(f"❌ API Error: {error_msg}")
+                    raise Exception(f"API Error: {error_msg}")
+                # Otherwise, still processing - continue polling
+                if attempts % 5 == 0:
+                    print(f"🔄 Still processing... (success: 0, progress: {progress_percent}%, text: \"{error_msg}\")")
+            
             # Wait before next poll
             import time
             time.sleep(2)
         
         # Timeout
+        print(f"⏱️ Timeout after {max_attempts * 2} seconds")
         raise Exception('Download timeout - took too long to process')
         
     except Exception as e:
@@ -2679,7 +2780,7 @@ def proxy_progress():
         job_id = request.args.get('id')
         
         # Make request to actual API
-        api_url = f"https://p.savenow.to/api/progress?id={job_id}"
+        api_url = f"https://p.savenow.to/ajax/progress?id={job_id}"
         response = requests.get(api_url)
         
         # Get response data and filter out message field
@@ -2734,6 +2835,8 @@ if __name__ == '__main__':
     print(f"📊 Download status: {DOWNLOAD_STATUS_FILE}")
     print(f"🕐 Cache duration: 2 hours")
     print(f"🌐 Browser mode: Headless (always)")
+    if SIMULATE_YTDLP_ERROR:
+        print("🧪 TESTING MODE: Simulating yt-dlp errors for YouTube (forces API fallback)")
     if os.getenv('DYNO'):
         print(f"☁️  Running on Heroku (ephemeral /tmp storage)")
         print(f"🧹 Auto-cleanup enabled when /tmp > 80% full")

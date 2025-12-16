@@ -62,7 +62,7 @@ def proxy_progress():
         job_id = request.args.get('id')
         
         # Make request to actual API
-        api_url = f"https://p.savenow.to/api/progress?id={job_id}"
+        api_url = f"https://p.savenow.to/ajax/progress?id={job_id}"
         response = requests.get(api_url)
         
         # Get response data and filter out message field
