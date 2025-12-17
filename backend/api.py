@@ -1866,6 +1866,21 @@ def download():
     download_id = f"download_{datetime.now().timestamp()}"
     
     print(f"🆔 Generated download ID: {download_id}")
+    
+    # Initialize status record BEFORE starting thread to prevent "not_found" race condition
+    download_status[download_id] = {
+        'status': 'queued',
+        'progress': 0,
+        'title': title,
+        'url': url,
+        'eta': 'Initializing...',
+        'speed': '0 KB/s',
+        'timestamp': datetime.now().isoformat(),
+        'advanced_options': advanced_options
+    }
+    save_download_status()
+    print(f"✅ Status record initialized: {download_id}")
+    
     print(f"🚀 Starting download thread...")
     
     thread = threading.Thread(

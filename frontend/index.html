@@ -4442,15 +4442,22 @@
             `${getApiBaseUrl()}/download_status/${downloadId}`
           );
 
-          // Check if response is ok
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-
+          // Always try to parse JSON first, even on error responses
           const data = await response.json();
 
           // Debug logging
           console.log(`Download Status [${downloadId}]:`, data);
+
+          // Check if backend returned an error response
+          if (!response.ok && data.error) {
+            // If it's a "not found" error, treat it as temporary
+            if (data.error.toLowerCase().includes("not found")) {
+              console.log(`Download not found yet, will retry...`);
+              data.status = "not_found"; // Set status for handling below
+            } else {
+              throw new Error(data.error);
+            }
+          }
 
           // Update local download data
           allDownloads[downloadId] = {
@@ -4681,6 +4688,23 @@
           console.error(
             `   Attempt: ${attemptCount}, URL: ${getApiBaseUrl()}/download_status/${downloadId}`
           );
+
+          // If it's a network error and we haven't exceeded attempts, retry
+          if (attemptCount < MAX_ATTEMPTS && (error.name === "TypeError" || errorMessage.includes("fetch"))) {
+            console.log(`Network error, retrying in 3000ms...`);
+            setTimeout(
+              () =>
+                pollDownloadStatus(
+                  downloadId,
+                  button,
+                  title,
+                  url,
+                  attemptCount + 1
+                ),
+              3000
+            );
+            return;
+          }
 
           if (button) {
             button.className = "download-btn";

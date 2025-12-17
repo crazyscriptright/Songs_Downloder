@@ -527,7 +527,7 @@
         const loading = document.getElementById("loading");
         const loadingText = loading.querySelector("p");
 
-        const maxAttempts = 60; // 60 attempts * 2 seconds = 2 minutes max
+        const maxAttempts = 60; // 60 attempts * 3 seconds = 3 minutes max
         let attempts = 0;
 
         const pollInterval = setInterval(async () => {
@@ -563,7 +563,7 @@
             downloadBtn.disabled = false;
             loading.style.display = "none";
           }
-        }, 2000); // Poll every 2 seconds
+        }, 3000); // Poll every 3 seconds
       }
 
       function displayDownloadReady(data, videoInfo) {

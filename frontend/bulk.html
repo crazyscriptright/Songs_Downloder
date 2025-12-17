@@ -1964,10 +1964,21 @@
             const response = await fetch(
               `${getApiBaseUrl()}/bulk_status/${bulkId}`
             );
+            
+            // Always parse JSON even on error responses
             const data = await response.json();
 
             // Handle "not_found" or error responses gracefully - backend might still be initializing
-            if (data.error && data.error.includes("not found")) {
+            if (!response.ok && data.error) {
+              if (data.error.toLowerCase().includes("not found")) {
+                console.error("Bulk download not found yet, retrying...");
+                return; // Continue polling
+              }
+              // Other errors will be handled by catch block
+            }
+
+            // Also check for error in successful responses
+            if (data.error && data.error.toLowerCase().includes("not found")) {
               console.error("Bulk download not found yet, retrying...");
               return; // Continue polling
             }
@@ -2209,7 +2220,17 @@
             const response = await fetch(
               `${getApiBaseUrl()}/download_status/${downloadId}`
             );
+            
+            // Always parse JSON even on error responses
             const data = await response.json();
+
+            // Handle error responses - backend might still be initializing
+            if (!response.ok && data.error) {
+              if (data.error.toLowerCase().includes("not found")) {
+                console.error("Download not found yet, retrying...");
+                return; // Continue polling
+              }
+            }
 
             // Handle "not_found" status gracefully - backend might still be initializing
             if (data.status === "not_found") {
