@@ -1500,7 +1500,6 @@
         quality = "360"
       ) {
         try {
-          console.log(`🔄 Starting proxy download: ${title}`);
           const encodedUrl = encodeURIComponent(url);
           const downloadUrl = `${getApiBaseUrl()}/proxy/download?format=${format}&url=${encodedUrl}&quality=${quality}`;
 
@@ -1512,9 +1511,6 @@
           }
 
           const progressId = data.progress_id;
-          console.log(
-            `✅ Proxy download initiated. Progress ID: ${progressId}`
-          );
 
           // Track last progress to prevent backwards updates
           let lastProgressPercent = 0;
@@ -1564,10 +1560,6 @@
                     updateDownloadManager();
                     saveDownloadsToStorage();
                   }
-
-                  console.log(
-                    `📊 Progress: ${progressPercent}% - ${statusText}`
-                  );
                 }
 
                 // Check if complete
@@ -1583,10 +1575,6 @@
                       "Download failed: Code 1805 - Download URL is null"
                     );
                   }
-
-                  console.log(
-                    `✅ Download complete: ${progressData.download_url}`
-                  );
 
                   // Update download status
                   const downloadIndex = bulkDownloads.findIndex(
@@ -1612,8 +1600,6 @@
                   document.body.appendChild(link);
                   link.click();
                   document.body.removeChild(link);
-
-                  console.log(`🎉 File download started: ${title}.${format}`);
                 }
               } else if (progressData.error) {
                 clearInterval(pollInterval);
@@ -1937,8 +1923,6 @@
             document.getElementById("bulkEmbedThumbnail").checked;
         }
 
-        console.log(`Starting bulk download for ${urls.length} URLs`);
-
         // Initialize downloads
         bulkDownloads = urls.map((url, index) => ({
           url,
@@ -1962,7 +1946,6 @@
           });
 
           const data = await response.json();
-          console.log("Bulk download started:", data);
 
           if (data.bulk_id) {
             // Poll for progress
@@ -1983,8 +1966,6 @@
             );
             const data = await response.json();
 
-            console.log("Bulk status:", data);
-
             if (data.downloads) {
               bulkDownloads = data.downloads;
               saveDownloadsToStorage();
@@ -1999,7 +1980,6 @@
 
               if (allDone) {
                 clearInterval(pollInterval);
-                console.log("All bulk downloads completed");
               }
             }
           } catch (error) {
@@ -2099,9 +2079,6 @@
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-                console.log(
-                  `✅ Auto-downloaded: ${download.title} from ${downloadUrl}`
-                );
               }, 500 * index); // Stagger downloads by 500ms each
             }
           }
@@ -2115,7 +2092,6 @@
       // Handle bulk download click with auto-download
       function handleBulkDownloadClick(event, url, filename) {
         // Let the default download behavior work
-        console.log(`Downloading: ${filename} from ${url}`);
       }
 
       // Start playlist download
@@ -2182,8 +2158,6 @@
           options.customArgs = customArgs;
         }
 
-        console.log("Starting playlist download:", { url, options });
-
         try {
           const response = await fetch(`${getApiBaseUrl()}/download`, {
             method: "POST",
@@ -2196,7 +2170,6 @@
           });
 
           const data = await response.json();
-          console.log("Playlist download started:", data);
 
           if (data.download_id) {
             playlistDownloadId = data.download_id;
@@ -2231,13 +2204,10 @@
             );
             const data = await response.json();
 
-            console.log("Playlist status:", data);
-
             renderPlaylistProgress(data);
 
             if (data.status === "complete" || data.status === "error") {
               clearInterval(pollInterval);
-              console.log("Playlist download finished:", data.status);
             }
           } catch (error) {
             console.error("Poll error:", error);
@@ -2376,10 +2346,6 @@
 
             window.playlistAutoDownloadedFiles.add(fileId);
 
-            console.log(
-              `🎵 New file ready! Auto-downloading: ${fileDownload.title}`
-            );
-
             // Download immediately (no setTimeout needed, files complete one at a time)
             const downloadUrl = `/get_file/${playlistDownloadId}/${fileDownload.file}`;
             const link = document.createElement("a");
@@ -2389,10 +2355,6 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            console.log(
-              `✅ Auto-downloaded file ${index + 1}: ${fileDownload.title}`
-            );
-
             // Add to bulkDownloads for tracking
             bulkDownloads.push({
               downloadId: fileId,

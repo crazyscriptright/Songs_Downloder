@@ -32,7 +32,7 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 
 # TESTING: Force use proxy API instead of yt-dlp
-FORCE_PROXY_API = True  # Set to True to always use proxy API, False to use yt-dlp
+FORCE_PROXY_API = os.getenv('FORCE_PROXY_API', 'false').lower() == 'true'  # Set to True to always use proxy API, False to use yt-dlp
 
 # Enable auto-reload in development
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -339,8 +339,7 @@ def extract_soundcloud_metadata_with_recommendations(soundcloud_url):
                     track_data = value.get("data", {})
                     
                     # Debug track data structure
-                    print(f"🔍 Processing track: {key}")
-                    print(f"📊 Track data keys: {list(track_data.keys())}")
+
                     
                     # Format duration
                     duration_ms = track_data.get('duration', 0)
@@ -809,17 +808,8 @@ def download_song(url, title, download_id, advanced_options=None):
     """Download song/video using yt-dlp with optional advanced parameters and progress tracking"""
     global download_status, active_processes
     
-    print(f"\n{'='*70}")
-    print(f"🎵 Starting download: {title}")
-    print(f"🔗 URL: {url}")
-    print(f"🆔 Download ID: {download_id}")
-    print(f"⚙️  Advanced Options: {advanced_options}")
-    print(f"🧪 Force Proxy API: {FORCE_PROXY_API}")
-    print(f"{'='*70}\n")
-    
     # TESTING: Force proxy API fallback if flag is set
     if FORCE_PROXY_API and ('youtube.com' in url or 'youtu.be' in url):
-        print(f"🧪 FORCE_PROXY_API enabled: Skipping yt-dlp, using proxy API directly")
         # Initialize status before proxy call so timestamp exists
         download_status[download_id] = {
             'status': 'downloading',
@@ -1148,17 +1138,12 @@ def download_song(url, title, download_id, advanced_options=None):
                 
             line = line.strip()
             
-            # Log all output for debugging
-            if line:
-                print(f"[yt-dlp] {line}")
-            
             # Detect playlist download info: [download] Downloading item 2 of 5
             if '[download] Downloading item' in line or '[download] Downloading video' in line:
                 playlist_match = regex.search(r'Downloading (?:item|video) (\d+) of (\d+)', line)
                 if playlist_match:
                     current_file_index = int(playlist_match.group(1))
                     total_playlist_files = int(playlist_match.group(2))
-                    print(f"📦 Playlist progress: {current_file_index}/{total_playlist_files}")
                     # Update title to show playlist progress
                     download_status[download_id]['title'] = f"Downloading {current_file_index}/{total_playlist_files}"
                     save_download_status()
@@ -1167,7 +1152,6 @@ def download_song(url, title, download_id, advanced_options=None):
             if 'ERROR:' in line:
                 error_msg = line.replace('ERROR:', '').strip()
                 error_messages.append(error_msg)
-                print(f"❌ Error detected: {error_msg}")
             
             # Detect common error patterns
             error_patterns = [
@@ -1191,7 +1175,6 @@ def download_song(url, title, download_id, advanced_options=None):
             
             if any(pattern.lower() in line.lower() for pattern in error_patterns):
                 error_messages.append(line)
-                print(f"⚠️  Error pattern matched: {line}")
             
             # Parse download progress: [download]  45.2% of 3.50MiB at 1.23MiB/s ETA 00:02
             if '[download]' in line and '%' in line:
@@ -1205,7 +1188,6 @@ def download_song(url, title, download_id, advanced_options=None):
                         # Check if a file just completed (100%)
                         if progress >= 100.0 and total_playlist_files > 0:
                             # A file in the playlist just completed
-                            print(f"✅ File {current_file_index}/{total_playlist_files} completed!")
                             
                             # Find the most recently created file
                             download_dir = os.path.join(app.config['DOWNLOAD_FOLDER'], download_id)
@@ -1250,11 +1232,8 @@ def download_song(url, title, download_id, advanced_options=None):
                                         # Update main download status with completed files so far
                                         download_status[download_id]['file_downloads'] = completed_files.copy()
                                         save_download_status()
-                                        print(f"💾 Saved completed file {len(completed_files)}/{total_playlist_files}: {file_title}")
                             except Exception as e:
-                                print(f"⚠️  Error checking completed file: {e}")
-                        
-                        # If this is a playlist, calculate overall progress
+                                pass                        # If this is a playlist, calculate overall progress
                         if total_playlist_files > 0:
                             # Progress = (completed files + current file progress) / total files
                             files_done = len(completed_files)
@@ -1299,22 +1278,15 @@ def download_song(url, title, download_id, advanced_options=None):
         
         process.wait()
         return_code = process.returncode
-        print(f"\n🏁 Process completed with return code: {return_code}")
-        print(f"📊 Has progress: {has_progress}")
-        print(f"❌ Error messages: {len(error_messages)}")
-        if error_messages:
-            print(f"   Errors: {error_messages[:3]}")
         
         # Check if cancelled during execution
         if download_status.get(download_id, {}).get('status') == 'cancelled':
-            print(f"🚫 Download was cancelled, exiting")
             return
         
         # Check for errors even if return code is 0 (yt-dlp sometimes returns 0 on errors)
         if error_messages:
             # Combine error messages
             error_text = ' | '.join(error_messages[:3])  # Limit to first 3 errors
-            print(f"❌ Download failed with errors: {error_text}")
             download_status[download_id] = {
                 'status': 'error',
                 'progress': 0,
@@ -1328,16 +1300,13 @@ def download_song(url, title, download_id, advanced_options=None):
                 'advanced_options': advanced_options
             }
             save_download_status()
-            print(f"💾 Status saved as 'error'")
             return
         
         if process.returncode == 0 and has_progress:
-            print(f"✅ Download completed successfully")
             # Find the downloaded file in the unique directory
             download_dir = os.path.join(app.config['DOWNLOAD_FOLDER'], download_id)
             try:
                 files = os.listdir(download_dir)
-                print(f"📁 Files in download folder: {len(files)}")
                 
                 # Check if multiple files were downloaded (playlist)
                 if len(files) > 1:
@@ -2002,10 +1971,7 @@ def bulk_download():
     if not valid_urls:
         return jsonify({'error': 'No valid URLs provided'}), 400
     
-    print(f"\n{'='*70}")
-    print(f"📦 Bulk download request: {len(valid_urls)} URLs")
-    print(f"⚙️  Advanced Options: {advanced_options}")
-    print(f"{'='*70}\n")
+
     
     # Generate bulk ID
     bulk_id = f"bulk_{datetime.now().timestamp()}"
@@ -2057,8 +2023,6 @@ def bulk_download():
             download_id = download_info['download_id']
             url = download_info['url']
             title = download_info['title']
-            
-            print(f"\n📥 Processing bulk item {i+1}/{len(valid_urls)}: {url}")
             
             # Update status to downloading
             download_status[download_id]['status'] = 'downloading'
