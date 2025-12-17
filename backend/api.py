@@ -880,13 +880,14 @@ def download_song(url, title, download_id, advanced_options=None):
         if not url.startswith(('http://', 'https://')):
             raise ValueError("Only HTTP/HTTPS URLs are allowed")
         
-        # SECURITY: Validate title (prevent dangerous characters in title only)
-        DANGEROUS_CHARS_TITLE = ['&&', '||', ';', '|', '`', '$', '<', '>', '\n', '\r']
-        for dangerous_char in DANGEROUS_CHARS_TITLE:
-            if dangerous_char in title:
-                raise ValueError(f"Security: Dangerous character '{dangerous_char}' detected in title")
+        # SECURITY: Validate title - only block actual shell injection patterns
+        # Single characters like | & are fine in titles, but shell operators are not
+        DANGEROUS_PATTERNS_TITLE = ['&&', '||', ';\n', ';\r', '`', '$(', '\n;', '\r;', '|;']
+        for dangerous_pattern in DANGEROUS_PATTERNS_TITLE:
+            if dangerous_pattern in title:
+                raise ValueError(f"Security: Dangerous pattern detected in title")
         
-        # Sanitize filename
+        # Sanitize filename (filesystem-unsafe characters only)
         safe_title = re.sub(r'[<>:"/\\|?*]', '_', title)
         
         # Base command - using list format for subprocess (safer than shell=True)

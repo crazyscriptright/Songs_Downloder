@@ -575,8 +575,8 @@
 
       .stats {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 20px;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
         margin-top: 20px;
       }
 
@@ -584,12 +584,13 @@
         background: var(--bg-secondary);
         border: 1px solid var(--border-color);
         border-radius: 10px;
-        padding: 20px;
+        padding: 15px 10px;
         text-align: center;
+        min-width: 0;
       }
 
       .stat-value {
-        font-size: 2em;
+        font-size: 1.8em;
         font-weight: 700;
         color: var(--accent-color);
         margin-bottom: 5px;
@@ -597,7 +598,8 @@
 
       .stat-label {
         color: var(--text-secondary);
-        font-size: 0.9em;
+        font-size: 0.85em;
+        word-wrap: break-word;
       }
 
       .help-text {
@@ -641,6 +643,50 @@
 
         .options-grid {
           grid-template-columns: 1fr;
+        }
+
+        .stats {
+          display: flex;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
+        .stat-card {
+          flex: 1;
+          padding: 10px 5px;
+          min-width: 0;
+        }
+
+        .stat-value {
+          font-size: 1.4em;
+        }
+
+        .stat-label {
+          font-size: 0.7em;
+          line-height: 1.2;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .stats {
+          display: flex;
+          justify-content: space-between;
+          gap: 6px;
+        }
+
+        .stat-card {
+          flex: 1;
+          padding: 8px 4px;
+          min-width: 0;
+        }
+
+        .stat-value {
+          font-size: 1.2em;
+        }
+
+        .stat-label {
+          font-size: 0.65em;
+          line-height: 1.1;
         }
       }
 
@@ -1008,15 +1054,40 @@
           ></textarea>
 
           <!-- Download Type Selector for YouTube URLs -->
-          <div class="download-type-selector" style="margin-bottom: 20px;">
-            <label style="display: block; margin-bottom: 10px; font-weight: 600; color: var(--text-primary);">Download Type (YouTube only):</label>
-            <div style="display: flex; gap: 15px;">
-              <label style="display: flex; align-items: center; cursor: pointer;">
-                <input type="radio" name="bulkDownloadType" value="music" checked style="margin-right: 8px;" onchange="toggleBulkDownloadOptions()" />
+          <div class="download-type-selector" style="margin-bottom: 20px">
+            <label
+              style="
+                display: block;
+                margin-bottom: 10px;
+                font-weight: 600;
+                color: var(--text-primary);
+              "
+              >Download Type (YouTube only):</label
+            >
+            <div style="display: flex; gap: 15px">
+              <label
+                style="display: flex; align-items: center; cursor: pointer"
+              >
+                <input
+                  type="radio"
+                  name="bulkDownloadType"
+                  value="music"
+                  checked
+                  style="margin-right: 8px"
+                  onchange="toggleBulkDownloadOptions()"
+                />
                 <span>🎵 Music (Audio Only)</span>
               </label>
-              <label style="display: flex; align-items: center; cursor: pointer;">
-                <input type="radio" name="bulkDownloadType" value="video" style="margin-right: 8px;" onchange="toggleBulkDownloadOptions()" />
+              <label
+                style="display: flex; align-items: center; cursor: pointer"
+              >
+                <input
+                  type="radio"
+                  name="bulkDownloadType"
+                  value="video"
+                  style="margin-right: 8px"
+                  onchange="toggleBulkDownloadOptions()"
+                />
                 <span>🎬 Video</span>
               </label>
             </div>
@@ -1055,7 +1126,11 @@
           </div>
 
           <!-- Video Options -->
-          <div id="bulkVideoOptions" class="options-section" style="display: none;">
+          <div
+            id="bulkVideoOptions"
+            class="options-section"
+            style="display: none"
+          >
             <div class="options-grid">
               <div class="input-group">
                 <label>Video Quality</label>
@@ -1649,10 +1724,10 @@
           let downloadButton = "";
           if (download.status === "complete" && download.download_url) {
             // Check if download_url is already a complete URL (starts with http)
-            const downloadUrl = download.download_url.startsWith('http') 
-              ? download.download_url 
+            const downloadUrl = download.download_url.startsWith("http")
+              ? download.download_url
               : `${getApiBaseUrl()}${download.download_url}`;
-            
+
             downloadButton = `
               <a href="${downloadUrl}" 
                  class="manager-download-link" 
@@ -1805,16 +1880,18 @@
       // Start bulk download
       // Toggle bulk download options based on type
       function toggleBulkDownloadOptions() {
-        const downloadType = document.querySelector('input[name="bulkDownloadType"]:checked').value;
-        const audioOptions = document.getElementById('bulkAudioOptions');
-        const videoOptions = document.getElementById('bulkVideoOptions');
-        
-        if (downloadType === 'video') {
-          audioOptions.style.display = 'none';
-          videoOptions.style.display = 'block';
+        const downloadType = document.querySelector(
+          'input[name="bulkDownloadType"]:checked'
+        ).value;
+        const audioOptions = document.getElementById("bulkAudioOptions");
+        const videoOptions = document.getElementById("bulkVideoOptions");
+
+        if (downloadType === "video") {
+          audioOptions.style.display = "none";
+          videoOptions.style.display = "block";
         } else {
-          audioOptions.style.display = 'block';
-          videoOptions.style.display = 'none';
+          audioOptions.style.display = "block";
+          videoOptions.style.display = "none";
         }
       }
 
@@ -1831,8 +1908,10 @@
         }
 
         // Get download type
-        const downloadType = document.querySelector('input[name="bulkDownloadType"]:checked').value;
-        const isVideoMode = downloadType === 'video';
+        const downloadType = document.querySelector(
+          'input[name="bulkDownloadType"]:checked'
+        ).value;
+        const isVideoMode = downloadType === "video";
 
         // Get options based on download type
         const options = {
@@ -1842,14 +1921,20 @@
 
         // Add video or audio specific options
         if (isVideoMode) {
-          options.videoQuality = document.getElementById("bulkVideoQuality").value;
+          options.videoQuality =
+            document.getElementById("bulkVideoQuality").value;
           options.videoFPS = document.getElementById("bulkVideoFPS").value;
-          options.videoFormat = document.getElementById("bulkVideoFormat").value;
-          options.embedSubtitles = document.getElementById("bulkEmbedSubs").checked;
+          options.videoFormat =
+            document.getElementById("bulkVideoFormat").value;
+          options.embedSubtitles =
+            document.getElementById("bulkEmbedSubs").checked;
         } else {
-          options.audioFormat = document.getElementById("bulkAudioFormat").value;
-          options.audioQuality = document.getElementById("bulkAudioQuality").value || "0";
-          options.embedThumbnail = document.getElementById("bulkEmbedThumbnail").checked;
+          options.audioFormat =
+            document.getElementById("bulkAudioFormat").value;
+          options.audioQuality =
+            document.getElementById("bulkAudioQuality").value || "0";
+          options.embedThumbnail =
+            document.getElementById("bulkEmbedThumbnail").checked;
         }
 
         console.log(`Starting bulk download for ${urls.length} URLs`);
@@ -1955,10 +2040,10 @@
           let downloadButton = "";
           if (download.status === "complete" && download.download_url) {
             // Check if download_url is already a complete URL (starts with http)
-            const downloadUrl = download.download_url.startsWith('http') 
-              ? download.download_url 
+            const downloadUrl = download.download_url.startsWith("http")
+              ? download.download_url
               : `${getApiBaseUrl()}${download.download_url}`;
-            
+
             downloadButton = `
               <a href="${downloadUrl}" 
                  class="download-link" 
@@ -2005,8 +2090,8 @@
               setTimeout(() => {
                 const link = document.createElement("a");
                 // Check if download_url is already a complete URL (starts with http)
-                const downloadUrl = download.download_url.startsWith('http') 
-                  ? download.download_url 
+                const downloadUrl = download.download_url.startsWith("http")
+                  ? download.download_url
                   : `${getApiBaseUrl()}${download.download_url}`;
                 link.href = downloadUrl;
                 link.download = download.title || `download_${index + 1}`;
@@ -2014,7 +2099,9 @@
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-                console.log(`✅ Auto-downloaded: ${download.title} from ${downloadUrl}`);
+                console.log(
+                  `✅ Auto-downloaded: ${download.title} from ${downloadUrl}`
+                );
               }, 500 * index); // Stagger downloads by 500ms each
             }
           }
@@ -2229,10 +2316,10 @@
         } else if (data.status === "complete" && data.download_url) {
           // Fallback for old format
           // Check if download_url is already a complete URL (starts with http)
-          const downloadUrl = data.download_url.startsWith('http') 
-            ? data.download_url 
+          const downloadUrl = data.download_url.startsWith("http")
+            ? data.download_url
             : `${getApiBaseUrl()}${data.download_url}`;
-          
+
           downloadButton = `
             <br>
             <a href="${downloadUrl}" 
