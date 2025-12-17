@@ -1,0 +1,118 @@
+/* Responsive Design & Mobile Optimization */
+
+/* Hide button labels on small screens */
+@media (max-width: 768px) {
+  .type-btn .btn-label {
+    display: none !important;
+  }
+  
+  .type-btn {
+    padding: 10px 12px !important;
+    min-width: auto !important;
+  }
+}
+
+/* Header responsive */
+@media (max-width: 768px) {
+  header {
+    padding: 20px 10px !important;
+    margin-bottom: 30px !important;
+    /* padding-top: calc(15vh + 18px) !important; */
+  }
+
+  header h1 {
+    font-size: 1.5em !important;
+    min-width: 100% !important;
+    text-align: center;
+  }
+
+  header p {
+    font-size: 0.95em !important;
+  }
+  
+  /* Top bar responsive */
+  .header-top-bar {
+    padding-bottom: calc(15vh + 18px) !important;
+  }
+  
+  /* Page header responsive */
+  .page-header {
+    padding: 20px 10px !important;
+    margin-bottom: 30px !important;
+  }
+  
+  .page-header h1 {
+    font-size: 1.5em !important;
+    min-width: 100% !important;
+    text-align: center;
+  }
+  
+  .page-header p {
+    font-size: 0.95em !important;
+  }
+  
+  /* Logo link - hide text on mobile, show only icon */
+  .logo-link .logo-text {
+    display: none !important;
+  }
+  
+  .logo-link {
+    padding: 10px 12px !important;
+    min-width: auto !important;
+  }
+  
+  /* Theme toggle button responsive */
+  .theme-toggle-btn {
+    width: 42px !important;
+    height: 42px !important;
+    padding: 10px !important;
+    font-size: 1.1em !important;
+  }
+}
+
+
+/* Mobile devices - Stack search input and button */
+@media (max-width: 768px) {
+  /* Force search input group to stack vertically on mobile */
+  .music-downloader .search-input-group {
+    flex-direction: column !important;
+  }
+  
+  .music-downloader .search-input-group input {
+    width: 100% !important;
+  }
+  
+  .music-downloader .search-input-group button {
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+  
+  /* Make type buttons smaller on mobile */
+  .music-downloader .type-selector button {
+    padding: 8px 18px !important;
+    font-size: 0.9em !important;
+  }
+  
+  /* Single column grid for results */
+  .music-downloader .results-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Very small mobile devices */
+@media (max-width: 480px) {
+  .music-downloader .search-input-group input {
+    padding: 14px 18px !important;
+    font-size: 1em !important;
+  }
+  
+  .music-downloader .search-input-group button {
+    padding: 14px 25px !important;
+    font-size: 1em !important;
+  }
+  
+  .music-downloader .type-selector button {
+    padding: 6px 15px !important;
+    font-size: 0.85em !important;
+  }
+}

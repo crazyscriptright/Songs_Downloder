@@ -1,6 +1,7 @@
 {
   "name": "music-downloader-frontend",
   "version": "1.0.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -8,6 +9,19 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "vite": "^5.0.0"
+    "@fontsource/bodoni-moda": "^5.2.7",
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/noto-serif-display": "^5.2.9",
+    "@fontsource/poppins": "^5.2.7",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "react-router-dom": "^7.10.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.10",
+    "@tailwindcss/vite": "^4.1.18",
+    "@vitejs/plugin-react": "^5.1.2",
+    "tailwindcss": "^4.1.18",
+    "vite": "^7.3.0"
   }
 }

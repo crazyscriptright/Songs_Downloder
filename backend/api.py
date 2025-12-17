@@ -2850,7 +2850,7 @@ if __name__ == '__main__':
         cleanup_tmp_directory()
 
     # Use PORT from environment (Heroku provides this)
-    port = int(os.getenv('PORT', 5000))
+    port = int(os.getenv('PORT', 5001))
     # Disable debug in production
     debug = os.getenv('FLASK_ENV') == 'development'
     app.run(host='0.0.0.0', debug=debug, port=port, threaded=True)
