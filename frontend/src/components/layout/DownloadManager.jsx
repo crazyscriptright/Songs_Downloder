@@ -4,9 +4,7 @@ export const DownloadManager = ({
   downloads, 
   isVisible, 
   onToggle, 
-  onClearFinished,
-  onStopAll,
-  onRemoveAll,
+  onClearFinished, 
   onCancel 
 }) => {
   const downloadList = Object.entries(downloads);
@@ -19,24 +17,53 @@ export const DownloadManager = ({
       {/* Toggle Button - Floating Action Button */}
       <button
         onClick={onToggle}
-        className="fixed bottom-5 right-5 md:bottom-[30px] md:right-[30px] z-[999] bg-[var(--accent-color)] text-white rounded-full border-none shadow-[0_4px_20px_var(--shadow-color)] cursor-pointer transition-all duration-300 w-[60px] h-[60px] flex items-center justify-center hover:scale-110 hover:shadow-[0_6px_30px_var(--shadow-color)]"
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          zIndex: 50,
+          background: 'var(--accent-color)',
+          color: 'white',
+          padding: '16px',
+          borderRadius: '50%',
+          border: 'none',
+          boxShadow: '0 4px 16px var(--shadow-color)',
+          cursor: 'pointer',
+          transition: 'all 0.3s ease',
+          width: '60px',
+          height: '60px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '1.5em'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.1)';
+          e.currentTarget.style.boxShadow = '0 6px 20px var(--shadow-color)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)';
+          e.currentTarget.style.boxShadow = '0 4px 16px var(--shadow-color)';
+        }}
       >
-        <svg
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="7 10 12 15 17 10"></polyline>
-          <line x1="12" y1="15" x2="12" y2="3"></line>
-        </svg>
+        ⬇️
         {activeCount > 0 && (
-          <span className="absolute -top-[5px] -right-[5px] bg-[var(--error-color)] text-white text-[0.6em] font-bold rounded-full w-6 h-6 flex items-center justify-center">
+          <span style={{
+            position: 'absolute',
+            top: '-6px',
+            right: '-6px',
+            backgroundColor: '#ef4444',
+            color: 'white',
+            fontSize: '0.65em',
+            fontWeight: '700',
+            borderRadius: '50%',
+            width: '22px',
+            height: '22px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 6px rgba(239, 68, 68, 0.4)'
+          }}>
             {activeCount}
           </span>
         )}
@@ -44,102 +71,87 @@ export const DownloadManager = ({
 
       {/* Download Manager Panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-full md:w-[420px] bg-[var(--bg-card)] border-l border-[var(--border-color)] shadow-[-2px_0_20px_rgba(0,0,0,0.15)] transition-transform duration-300 z-[998] flex flex-col ${
-          isVisible ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          height: '100%',
+          width: '380px',
+          backgroundColor: 'var(--bg-card)',
+          borderLeft: '1px solid var(--border-color)',
+          boxShadow: '-2px 0 20px rgba(0,0,0,0.15)',
+          transform: isVisible ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 0.3s ease',
+          zIndex: 50,
+          display: 'flex',
+          flexDirection: 'column'
+        }}
       >
         {/* Header */}
-        <div className="p-4 border-b border-[var(--border-color)] bg-[var(--accent-color)] text-white">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="m-0 text-lg font-bold flex items-center gap-2">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-              </svg>
-              Downloads
-            </h3>
-            <button
-              onClick={onToggle}
-              className="p-1.5 bg-transparent border-none text-white cursor-pointer text-2xl leading-none transition-transform duration-200 hover:rotate-90"
-            >
-              ×
-            </button>
-          </div>
-          
-          {/* Action Buttons */}
-          <div className="flex gap-2">
-            <button
-              onClick={onStopAll}
-              disabled={activeCount === 0}
-              title="Stop All Downloads"
-              className={`px-2.5 py-1.5 text-sm font-semibold rounded-md border-none transition-all duration-200 ${
-                activeCount === 0
-                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed opacity-50'
-                  : 'bg-orange-500 text-white hover:bg-orange-600'
-              }`}
-            >
-              ⏸
-            </button>
-            <button
-              onClick={() => {
-                if (activeCount > 0) {
-                  if (window.confirm(`Stop and remove all ${downloadList.length} downloads including ${activeCount} active download(s)?`)) {
-                    onRemoveAll();
-                  }
-                } else {
-                  onRemoveAll();
-                }
-              }}
-              disabled={downloadList.length === 0}
-              title="Clear All Downloads"
-              className={`px-2.5 py-1.5 text-sm font-semibold rounded-md border-none transition-all duration-200 ${
-                downloadList.length === 0
-                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed opacity-50'
-                  : 'bg-red-600 text-white hover:bg-red-700'
-              }`}
-            >
-              🗑️
-            </button>
+        <div style={{
+          padding: '16px 20px',
+          borderBottom: '1px solid var(--border-color)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'var(--accent-color)',
+          color: 'white'
+        }}>
+          <h3 style={{ margin: 0, fontSize: '1.15em', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            ⬇️ Downloads
+          </h3>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button
               onClick={onClearFinished}
-              title="Clear Finished Downloads"
-              className="px-2.5 py-1.5 text-sm font-semibold bg-white/20 text-white rounded-md border-none cursor-pointer transition-all duration-200 hover:bg-white/30"
+              style={{
+                padding: '6px 12px',
+                fontSize: '0.85em',
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.3)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'}
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              </svg>
+              Clear
+            </button>
+            <button
+              onClick={onToggle}
+              style={{
+                padding: '6px',
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '1.5em',
+                lineHeight: '1',
+                transition: 'transform 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'rotate(90deg)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'rotate(0deg)'}
+            >
+              ×
             </button>
           </div>
         </div>
 
         {/* Download List */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
           {downloadList.length === 0 ? (
-            <div className="text-center text-[var(--text-tertiary)] py-10 px-5 text-sm">
+            <div style={{
+              textAlign: 'center',
+              color: 'var(--text-tertiary)',
+              padding: '40px 20px',
+              fontSize: '0.95em'
+            }}>
               No downloads yet
             </div>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {downloadList.map(([id, download]) => (
                 <DownloadItem
                   key={id}
@@ -169,17 +181,43 @@ const DownloadItem = ({ id, download, onCancel }) => {
 
   return (
     <div 
-      className="bg-[var(--bg-secondary)] rounded-xl p-3.5 transition-all duration-200"
-      style={{ borderLeft: `4px solid ${getStatusColor(download.status)}` }}
+      style={{
+        backgroundColor: 'var(--bg-secondary)',
+        borderRadius: '10px',
+        padding: '14px',
+        borderLeft: `4px solid ${getStatusColor(download.status)}`,
+        transition: 'all 0.2s ease'
+      }}
     >
-      <div className="flex items-start justify-between mb-2.5">
-        <h4 className="text-sm font-semibold m-0 text-[var(--text-primary)] flex-1 overflow-hidden text-ellipsis whitespace-nowrap pr-2">
+      <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', marginBottom: '10px' }}>
+        <h4 style={{ 
+          fontSize: '0.9em', 
+          fontWeight: '600', 
+          margin: 0,
+          color: 'var(--text-primary)',
+          flex: 1,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          paddingRight: '8px'
+        }}>
           {download.title}
         </h4>
         {(download.status === 'downloading' || download.status === 'queued') && (
           <button
             onClick={() => onCancel(id)}
-            className="bg-transparent border-none text-[var(--error-color)] cursor-pointer p-0.5 text-lg leading-none transition-opacity duration-200 hover:opacity-70"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--error-color)',
+              cursor: 'pointer',
+              padding: '2px',
+              fontSize: '1.1em',
+              lineHeight: '1',
+              transition: 'opacity 0.2s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
+            onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
           >
             ×
           </button>
@@ -187,23 +225,37 @@ const DownloadItem = ({ id, download, onCancel }) => {
       </div>
 
       {download.progress !== undefined && (
-        <div className="mb-2">
-          <div className="w-full rounded-xl h-1.5 bg-[var(--border-color)] overflow-hidden">
+        <div style={{ marginBottom: '8px' }}>
+          <div style={{ 
+            width: '100%', 
+            borderRadius: '10px', 
+            height: '6px',
+            backgroundColor: 'var(--border-color)',
+            overflow: 'hidden'
+          }}>
             <div
-              className="h-full rounded-xl transition-all duration-300"
               style={{
+                height: '100%',
+                borderRadius: '10px',
                 width: `${download.progress}%`,
                 backgroundColor: download.status === 'complete' ? 'var(--success-color)' :
                                 download.status === 'error' ? 'var(--error-color)' :
-                                'var(--accent-color)'
+                                'var(--accent-color)',
+                transition: 'width 0.3s ease'
               }}
             />
           </div>
         </div>
       )}
 
-      <div className="flex items-center justify-between text-xs text-[var(--text-tertiary)]">
-        <span className="capitalize">{download.status}</span>
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between',
+        fontSize: '0.8em',
+        color: 'var(--text-tertiary)'
+      }}>
+        <span style={{ textTransform: 'capitalize' }}>{download.status}</span>
         {download.speed && <span>{download.speed}</span>}
       </div>
     </div>

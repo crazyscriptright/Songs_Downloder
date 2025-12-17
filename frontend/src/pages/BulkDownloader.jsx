@@ -4,7 +4,6 @@ import { DownloadManager } from "../components/layout/DownloadManager";
 import { AnimatedBackground } from "../components/layout/AnimatedBackground";
 import { PageHeader } from "../components/layout/PageHeader";
 import { useTheme, useDownloadManager } from "../hooks/useDownload";
-import { getApiBaseUrl } from "../utils/helpers";
 
 export default function BulkDownloader() {
   const { theme, toggleTheme } = useTheme();
@@ -47,122 +46,39 @@ export default function BulkDownloader() {
 
   const handleBulkDownload = async () => {
     const urls = urlList.split("\n").filter((url) => url.trim());
-    if (urls.length === 0) {
-      alert("Please enter at least one URL");
-      return;
-    }
+    if (urls.length === 0) return;
 
     setStats((prev) => ({ ...prev, totalUrls: urls.length }));
 
-    // Prepare options for backend
-    const options = {
-      audioFormat: bulkAudioFormat,
-      audioQuality: bulkAudioQuality,
-      embedThumbnail: bulkEmbedThumbnail,
-      addMetadata: bulkAddMetadata,
-      keepVideo: bulkDownloadType === "video",
-      videoQuality: bulkVideoQuality,
-      videoFPS: bulkVideoFPS,
-      videoFormat: bulkVideoFormat,
-      embedSubtitles: bulkEmbedSubtitles,
-    };
-
-    // Send bulk download request to backend first
-    try {
-      const response = await fetch(`${getApiBaseUrl()}/bulk_download`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          urls: urls.map(url => url.trim()), 
-          advancedOptions: options 
-        }),
+    urls.forEach((url, index) => {
+      const id = `${Date.now()}-${index}`;
+      downloadManager.addDownload(id, {
+        title: `URL ${index + 1}`,
+        url: url.trim(),
+        status: "queued",
+        progress: 0,
+        type: bulkDownloadType,
+        format:
+          bulkDownloadType === "audio" ? bulkAudioFormat : bulkVideoFormat,
+        quality:
+          bulkDownloadType === "audio" ? bulkAudioQuality : bulkVideoQuality,
+        embedThumbnail:
+          bulkDownloadType === "audio" ? bulkEmbedThumbnail : false,
+        addMetadata: bulkDownloadType === "audio" ? bulkAddMetadata : false,
+        fps: bulkDownloadType === "video" ? bulkVideoFPS : undefined,
+        embedSubtitles:
+          bulkDownloadType === "video" ? bulkEmbedSubtitles : false,
       });
-
-      const data = await response.json();
-      console.log("Bulk download started:", data);
-
-      if (data.bulk_id) {
-        // Create download entries in UI with bulkId-index format
-        urls.forEach((url, index) => {
-          const id = `${data.bulk_id}-${index}`;
-          downloadManager.addDownload(id, {
-            title: `URL ${index + 1}`,
-            url: url.trim(),
-            status: "queued",
-            progress: 0,
-            type: bulkDownloadType,
-            format: bulkDownloadType === "audio" ? bulkAudioFormat : bulkVideoFormat,
-            quality: bulkDownloadType === "audio" ? bulkAudioQuality : bulkVideoQuality,
-          });
-        });
-
-        // Poll for progress
-        pollBulkProgress(data.bulk_id);
-      }
-    } catch (error) {
-      console.error("Bulk download error:", error);
-      alert(`Error: ${error.message}`);
-    }
-  };
-
-  // Poll bulk download progress
-  const pollBulkProgress = async (bulkId) => {
-    const pollInterval = setInterval(async () => {
-      try {
-        const response = await fetch(`${getApiBaseUrl()}/bulk_status/${bulkId}`);
-        const data = await response.json();
-
-        console.log("Bulk status:", data);
-
-        if (data.downloads) {
-          // Update download manager with backend status
-          data.downloads.forEach((download, index) => {
-            const id = `${bulkId}-${index}`;
-            downloadManager.updateDownload(id, {
-              title: download.title || `URL ${index + 1}`,
-              status: download.status,
-              progress: download.progress || 0,
-              url: download.url,
-              downloadUrl: download.download_url,
-              error: download.error,
-            });
-          });
-
-          // Update stats
-          const completed = data.downloads.filter(d => d.status === 'complete').length;
-          const failed = data.downloads.filter(d => d.status === 'error').length;
-          setStats(prev => ({ ...prev, completed, failed }));
-
-          // Check if all done
-          const allDone = data.downloads.every(
-            (d) => d.status === "complete" || d.status === "error"
-          );
-
-          if (allDone) {
-            clearInterval(pollInterval);
-            console.log("All bulk downloads completed");
-          }
-        }
-      } catch (error) {
-        console.error("Poll error:", error);
-        clearInterval(pollInterval);
-      }
-    }, 2000);
+    });
   };
 
   const handlePlaylistDownload = async () => {
-    const url = playlistUrl.trim();
-    if (!url) {
-      alert("Please enter a playlist URL");
-      return;
-    }
+    if (!playlistUrl.trim()) return;
 
     const id = Date.now().toString();
-    
-    // Add to download manager UI
     downloadManager.addDownload(id, {
       title: "Playlist",
-      url: url,
+      url: playlistUrl,
       status: "downloading",
       progress: 0,
       type: playlistType,
@@ -176,105 +92,6 @@ export default function BulkDownloader() {
       fps: playlistType === "video" ? playlistVideoFPS : undefined,
       embedSubtitles: playlistType === "video" ? playlistEmbedSubtitles : false,
     });
-
-    // Build options for backend
-    const options = {
-      keepVideo: playlistType === "video",
-    };
-
-    // Custom args for playlist items
-    let customArgs = "";
-    if (playlistItems === "custom" && customRange.trim()) {
-      const validRange = /^(\d+|\d+-\d+)(,(\d+|\d+-\d+))*$/;
-      if (!validRange.test(customRange.trim())) {
-        alert("Invalid playlist range format. Use formats like: 1-5, 1,3,5, or 1-3,5-7");
-        return;
-      }
-      customArgs += ` --playlist-items ${customRange.trim()}`;
-    }
-
-    if (playlistType === "audio") {
-      options.audioFormat = playlistAudioFormat;
-      options.audioQuality = playlistAudioQuality;
-      options.embedThumbnail = playlistEmbedThumbnail;
-      options.addMetadata = playlistAddMetadata;
-    } else {
-      options.videoQuality = playlistVideoQuality;
-      options.videoFPS = playlistVideoFPS;
-      options.videoFormat = playlistVideoFormat;
-      options.embedSubtitles = playlistEmbedSubtitles;
-      options.addMetadata = true;
-    }
-
-    if (customArgs) {
-      options.customArgs = customArgs;
-    }
-
-    console.log("Starting playlist download:", { url, options });
-
-    try {
-      const response = await fetch(`${getApiBaseUrl()}/download`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url,
-          title: url,
-          advancedOptions: options,
-        }),
-      });
-
-      const data = await response.json();
-      console.log("Playlist download started:", data);
-
-      if (data.download_id) {
-        downloadManager.updateDownload(id, {
-          downloadId: data.download_id,
-          status: "downloading",
-        });
-
-        // Poll for progress
-        pollPlaylistProgress(data.download_id, id);
-      }
-    } catch (error) {
-      console.error("Playlist download error:", error);
-      alert(`Error: ${error.message}`);
-      downloadManager.updateDownload(id, {
-        status: "error",
-        error: error.message,
-      });
-    }
-  };
-
-  // Poll playlist progress
-  const pollPlaylistProgress = async (downloadId, uiId) => {
-    const pollInterval = setInterval(async () => {
-      try {
-        const response = await fetch(`${getApiBaseUrl()}/download_status/${downloadId}`);
-        const data = await response.json();
-
-        console.log("Playlist status:", data);
-
-        downloadManager.updateDownload(uiId, {
-          status: data.status,
-          progress: data.progress || 0,
-          title: data.title || "Playlist",
-          downloadUrl: data.download_url,
-          error: data.error,
-        });
-
-        if (data.status === "complete" || data.status === "error") {
-          clearInterval(pollInterval);
-          console.log("Playlist download finished:", data.status);
-        }
-      } catch (error) {
-        console.error("Poll error:", error);
-        clearInterval(pollInterval);
-        downloadManager.updateDownload(uiId, {
-          status: "error",
-          error: "Failed to fetch status",
-        });
-      }
-    }, 2000);
   };
 
   const urlCount = urlList.split("\n").filter((url) => url.trim()).length;

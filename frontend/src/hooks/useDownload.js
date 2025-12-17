@@ -62,45 +62,11 @@ export const useDownloadManager = () => {
     storage.saveDownloads(updated);
   };
 
-  const stopAll = () => {
-    const updated = Object.fromEntries(
-      Object.entries(downloads).map(([id, download]) => {
-        if (download.status === 'downloading' || download.status === 'queued') {
-          return [id, { ...download, status: 'cancelled' }];
-        }
-        return [id, download];
-      })
-    );
-    setDownloads(updated);
-    storage.saveDownloads(updated);
-  };
-
-  const removeAll = () => {
-    setDownloads({});
-    storage.saveDownloads({});
-  };
-
-  const cancelDownload = (id) => {
-    if (downloads[id]) {
-      const updated = {
-        ...downloads,
-        [id]: { ...downloads[id], status: 'cancelled' }
-      };
-      setDownloads(updated);
-      storage.saveDownloads(updated);
-    }
-  };
-
   const toggleVisibility = () => setIsVisible(!isVisible);
 
   return {
     downloads,
     isVisible,
-    onToggle: toggleVisibility,
-    onClearFinished: clearFinished,
-    onStopAll: stopAll,
-    onRemoveAll: removeAll,
-    onCancel: cancelDownload,
     addDownload,
     updateDownload,
     removeDownload,
