@@ -4202,12 +4202,31 @@
         performSearch();
       }
 
+      // Track ongoing download requests to prevent duplicates
+      const ongoingDownloads = new Set();
+
+      // Helper to clean up ongoing download tracking
+      function cleanupOngoingDownload(url, title) {
+        const downloadKey = `${url}|${title}`;
+        ongoingDownloads.delete(downloadKey);
+        console.log(`🧹 Cleaned up ongoing download: ${title}`);
+      }
+
       async function startDownload(
         url,
         title,
         useAdvanced = false,
         button = null
       ) {
+        // Prevent duplicate calls for the same URL
+        const downloadKey = `${url}|${title}`;
+        if (ongoingDownloads.has(downloadKey)) {
+          console.log(`⚠️ Download already in progress for: ${title}`);
+          return;
+        }
+        
+        ongoingDownloads.add(downloadKey);
+
         console.log(`\n${"=".repeat(70)}`);
         console.log(`🎵 Starting download`);
         console.log(`   Title: ${title}`);
@@ -4396,6 +4415,10 @@
           }
         } catch (error) {
           console.error("❌ Download start error:", error);
+          
+          // Remove from ongoing downloads
+          cleanupOngoingDownload(url, title);
+          
           if (button) {
             button.className = "download-btn";
             button.innerHTML = "❌ Failed";
@@ -4432,6 +4455,7 @@
           showNotification(`⏱️ Download timeout: ${title}`, "error");
 
           // Download timed out, process next in queue
+          cleanupOngoingDownload(url, title);
           activeDownloads--;
           processQueue();
           return;
@@ -4499,6 +4523,7 @@
             }
 
             // Download finished, process next in queue
+            cleanupOngoingDownload(url, title);
             activeDownloads--;
             processQueue();
           } else if (data.status === "error") {
@@ -4542,6 +4567,7 @@
                 );
 
                 // Success - download finished, process next in queue
+                cleanupOngoingDownload(url, title);
                 activeDownloads--;
                 processQueue();
 
@@ -4593,6 +4619,7 @@
             );
 
             // Download finished (failed), process next in queue
+            cleanupOngoingDownload(url, title);
             activeDownloads--;
             processQueue();
           } else if (data.status === "cancelled") {
@@ -4603,6 +4630,7 @@
             }
 
             // Download cancelled, process next in queue
+            cleanupOngoingDownload(url, title);
             activeDownloads--;
             processQueue();
           } else if (data.status === "downloading") {
@@ -4690,7 +4718,10 @@
           );
 
           // If it's a network error and we haven't exceeded attempts, retry
-          if (attemptCount < MAX_ATTEMPTS && (error.name === "TypeError" || errorMessage.includes("fetch"))) {
+          if (
+            attemptCount < MAX_ATTEMPTS &&
+            (error.name === "TypeError" || errorMessage.includes("fetch"))
+          ) {
             console.log(`Network error, retrying in 3000ms...`);
             setTimeout(
               () =>
@@ -4715,6 +4746,7 @@
           showNotification(`❌ Status check failed: ${errorMessage}`, "error");
 
           // Download failed, process next in queue
+          cleanupOngoingDownload(url, title);
           activeDownloads--;
           processQueue();
         }

@@ -870,14 +870,9 @@ def download_song(url, title, download_id, advanced_options=None):
         if not url.startswith(('http://', 'https://')):
             raise ValueError("Only HTTP/HTTPS URLs are allowed")
         
-        # SECURITY: Validate title - only block actual shell injection patterns
-        # Single characters like | & are fine in titles, but shell operators are not
-        DANGEROUS_PATTERNS_TITLE = ['&&', '||', ';\n', ';\r', '`', '$(', '\n;', '\r;', '|;']
-        for dangerous_pattern in DANGEROUS_PATTERNS_TITLE:
-            if dangerous_pattern in title:
-                raise ValueError(f"Security: Dangerous pattern detected in title")
-        
-        # Sanitize filename (filesystem-unsafe characters only)
+        # Sanitize filename for filesystem (not for shell security)
+        # Only replace characters that are invalid in filenames
+        # Note: We use subprocess with shell=False, so no shell injection risk
         safe_title = re.sub(r'[<>:"/\\|?*]', '_', title)
         
         # Base command - using list format for subprocess (safer than shell=True)
@@ -1827,14 +1822,7 @@ def download():
     if not isinstance(url, str) or not url.startswith(('http://', 'https://')):
         return jsonify({'error': 'Invalid URL format. Only HTTP/HTTPS URLs are allowed.'}), 400
     
-    # SECURITY: Block shell operators and dangerous characters in title only
-    DANGEROUS_CHARS_TITLE = ['&&', '||', ';', '|', '`', '$', '<', '>', '\n', '\r']
-    for dangerous_char in DANGEROUS_CHARS_TITLE:
-        if dangerous_char in title:
-            return jsonify({'error': f'Security: Dangerous character detected in title'}), 400
-    
-    # SECURITY: Sanitize title (prevent path traversal but allow URLs)
-    # Replace path separators and dangerous characters instead of rejecting
+    # SECURITY: Validate title type and prevent path traversal
     if not isinstance(title, str):
         return jsonify({'error': 'Invalid title type'}), 400
     
@@ -1842,12 +1830,13 @@ def download():
     if '..' in title:
         return jsonify({'error': 'Invalid title: path traversal detected'}), 400
     
-    # Sanitize the title by replacing path separators and other unsafe characters
-    title = title.replace('\\', '_').replace('/', '_').replace(':', '_').replace('*', '_').replace('?', '_').replace('"', '_').replace('<', '_').replace('>', '_').replace('|', '_')
-    
     # SECURITY: Limit title length
-    if len(title) > 200:
-        title = title[:200]
+    if len(title) > 500:
+        title = title[:500]
+    
+    # NOTE: No character filtering needed - we use subprocess with shell=False
+    # which passes title as a parameter (not shell command), so special characters
+    # like |, &, ;, etc. are safe and won't be executed
     
     # SECURITY: Validate URL length
     if len(url) > 2048:
@@ -2514,6 +2503,76 @@ def proxy_image():
         )
     except:
         return '', 404
+
+
+@app.route('/extract_playlist', methods=['POST'])
+def extract_playlist():
+    """Extract individual video URLs from a playlist"""
+    data = request.get_json()
+    playlist_url = data.get('url')
+    playlist_items = data.get('playlistItems', '')  # e.g., "1-5" or "1,3,5"
+    
+    if not playlist_url:
+        return jsonify({'error': 'No playlist URL provided'}), 400
+    
+    try:
+        print(f"📋 Extracting playlist: {playlist_url}")
+        print(f"   Items filter: {playlist_items or 'all'}")
+        
+        # Build yt-dlp command to extract URLs only (no download)
+        cmd = ['yt-dlp', '--flat-playlist', '--get-id', '--get-title']
+        
+        # Add playlist items filter if specified
+        if playlist_items:
+            cmd.extend(['--playlist-items', playlist_items])
+        
+        cmd.append(playlist_url)
+        
+        print(f"🔧 Command: {' '.join(cmd)}")
+        
+        # Execute command
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            shell=False
+        )
+        
+        stdout, stderr = process.communicate(timeout=30)
+        
+        if process.returncode != 0:
+            error_msg = stderr.strip() or "Failed to extract playlist"
+            print(f"❌ Extraction failed: {error_msg}")
+            return jsonify({'error': error_msg}), 400
+        
+        # Parse output - alternating lines of title and video ID
+        lines = [line.strip() for line in stdout.strip().split('\n') if line.strip()]
+        
+        videos = []
+        for i in range(0, len(lines), 2):
+            if i + 1 < len(lines):
+                title = lines[i]
+                video_id = lines[i + 1]
+                videos.append({
+                    'title': title,
+                    'url': f'https://www.youtube.com/watch?v={video_id}',
+                    'video_id': video_id
+                })
+        
+        print(f"✅ Extracted {len(videos)} videos from playlist")
+        
+        return jsonify({
+            'success': True,
+            'videos': videos,
+            'count': len(videos)
+        })
+        
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Playlist extraction timed out'}), 408
+    except Exception as e:
+        print(f"❌ Playlist extraction error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 # ==================== YouTube Video Downloader Proxy Routes ====================

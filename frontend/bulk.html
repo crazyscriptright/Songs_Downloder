@@ -1881,7 +1881,18 @@
         }
       }
 
+      // Track ongoing bulk downloads to prevent duplicates
+      let ongoingBulkDownload = false;
+      let ongoingPlaylistDownload = false;
+
       async function startBulkDownload() {
+        // Prevent duplicate bulk download calls
+        if (ongoingBulkDownload) {
+          console.error("⚠️ Bulk download already in progress");
+          alert("Bulk download already in progress. Please wait.");
+          return;
+        }
+
         const urlsText = document.getElementById("bulkUrls").value;
         const urls = urlsText
           .split("\n")
@@ -1892,6 +1903,8 @@
           alert("Please enter at least one URL");
           return;
         }
+
+        ongoingBulkDownload = true;
 
         // Get download type
         const downloadType = document.querySelector(
@@ -1950,9 +1963,12 @@
           if (data.bulk_id) {
             // Poll for progress
             pollBulkProgress(data.bulk_id);
+          } else {
+            ongoingBulkDownload = false;
           }
         } catch (error) {
           console.error("Bulk download error:", error);
+          ongoingBulkDownload = false;
           alert(`Error: ${error.message}`);
         }
       }
@@ -1964,7 +1980,7 @@
             const response = await fetch(
               `${getApiBaseUrl()}/bulk_status/${bulkId}`
             );
-            
+
             // Always parse JSON even on error responses
             const data = await response.json();
 
@@ -1997,6 +2013,7 @@
 
               if (allDone) {
                 clearInterval(pollInterval);
+                ongoingBulkDownload = false; // Clear flag when bulk download completes
               }
             }
           } catch (error) {
@@ -2112,8 +2129,16 @@
         // Let the default download behavior work
       }
 
-      // Start playlist download
+      // Start playlist download using API-based approach
       async function startPlaylistDownload() {
+        // Prevent duplicate playlist downloads
+        if (ongoingPlaylistDownload) {
+          console.log(
+            "Playlist download already in progress, ignoring duplicate request"
+          );
+          return;
+        }
+
         const url = document.getElementById("playlistUrl").value.trim();
         if (!url) {
           alert("Please enter a playlist URL");
@@ -2123,14 +2148,8 @@
         const type = document.getElementById("playlistType").value;
         const itemsOption = document.getElementById("playlistItems").value;
 
-        // Build options
-        const options = {
-          keepVideo: type === "video",
-        };
-
-        // Custom args for playlist
-        let customArgs = "";
-
+        // Get custom range if specified
+        let playlistItems = "";
         if (itemsOption === "custom") {
           const range = document.getElementById("customRange").value.trim();
           if (range) {
@@ -2142,267 +2161,139 @@
               );
               return;
             }
-            customArgs += ` --playlist-items ${range}`;
+            playlistItems = range;
           }
         }
 
-        if (type === "audio") {
-          options.audioFormat = document.getElementById(
-            "playlistAudioFormat"
-          ).value;
-          options.audioQuality =
-            document.getElementById("playlistAudioQuality").value || "0";
-          options.embedThumbnail = document.getElementById(
-            "playlistEmbedThumbnail"
-          ).checked;
-          options.addMetadata = document.getElementById(
-            "playlistAddMetadata"
-          ).checked;
-        } else {
-          options.videoQuality = document.getElementById(
-            "playlistVideoQuality"
-          ).value;
-          options.videoFPS = document.getElementById("playlistVideoFPS").value;
-          options.videoFormat = document.getElementById(
-            "playlistVideoFormat"
-          ).value;
-          options.embedSubtitles = document.getElementById(
-            "playlistEmbedSubtitles"
-          ).checked;
-          options.addMetadata = true;
-        }
-
-        if (customArgs) {
-          options.customArgs = customArgs;
-        }
+        ongoingPlaylistDownload = true; // Set flag when starting playlist download
 
         try {
-          const response = await fetch(`${getApiBaseUrl()}/download`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              url,
-              title: url,
-              advancedOptions: options,
-            }),
+          // Step 1: Extract individual video URLs from playlist
+          console.log("📋 Extracting playlist videos...");
+          const extractResponse = await fetch(
+            `${getApiBaseUrl()}/extract_playlist`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                url,
+                playlistItems: playlistItems,
+              }),
+            }
+          );
+
+          const extractData = await extractResponse.json();
+
+          if (!extractResponse.ok || !extractData.success) {
+            throw new Error(extractData.error || "Failed to extract playlist");
+          }
+
+          const videos = extractData.videos;
+          console.log(`✅ Extracted ${videos.length} videos from playlist`);
+
+          if (videos.length === 0) {
+            alert("No videos found in playlist");
+            ongoingPlaylistDownload = false;
+            return;
+          }
+
+          // Step 2: Download each video using API-based download
+          const format =
+            type === "video"
+              ? document.getElementById("playlistVideoQuality").value
+              : "mp3";
+
+          const quality =
+            type === "audio"
+              ? document.getElementById("playlistAudioQuality").value || "128"
+              : null;
+
+          // Add all videos to bulkDownloads for tracking
+          videos.forEach((video, index) => {
+            const downloadId = `playlist_${Date.now()}_${index}`;
+            bulkDownloads.push({
+              url: video.url,
+              title: video.title,
+              status: "queued",
+              progress: 0,
+              downloadId: downloadId,
+              isPlaylist: true,
+              format: format,
+              quality: quality,
+            });
           });
 
-          const data = await response.json();
+          saveDownloadsToStorage();
+          renderBulkProgress();
+          updateDownloadManager();
 
-          if (data.download_id) {
-            playlistDownloadId = data.download_id;
+          // Download videos sequentially using API
+          for (let i = 0; i < videos.length; i++) {
+            const video = videos[i];
+            const downloadItem = bulkDownloads.find(
+              (d) => d.url === video.url && d.title === video.title
+            );
 
-            // Add to bulkDownloads for tracking
-            bulkDownloads.push({
-              url: url,
-              title: url,
-              status: "downloading",
-              progress: 0,
-              downloadId: data.download_id,
-              download_id: data.download_id,
-              isPlaylist: true,
-            });
+            if (!downloadItem) continue;
 
-            saveDownloadsToStorage();
-            updateDownloadManager();
-            pollPlaylistProgress(data.download_id);
+            try {
+              console.log(
+                `⬇️ Downloading ${i + 1}/${videos.length}: ${video.title}`
+              );
+
+              // Update status to downloading
+              downloadItem.status = "downloading";
+              downloadItem.progress = 0;
+              saveDownloadsToStorage();
+              renderBulkProgress();
+              updateDownloadManager();
+
+              // Download using proxy API
+              await downloadViaProxyAPI(
+                video.url,
+                video.title,
+                downloadItem.downloadId,
+                format,
+                null,
+                quality
+              );
+
+              console.log(
+                `✅ Completed ${i + 1}/${videos.length}: ${video.title}`
+              );
+            } catch (error) {
+              console.error(`❌ Failed to download ${video.title}:`, error);
+              downloadItem.status = "error";
+              downloadItem.error = error.message;
+              saveDownloadsToStorage();
+              renderBulkProgress();
+              updateDownloadManager();
+            }
           }
+
+          console.log("🎉 Playlist download completed!");
+          ongoingPlaylistDownload = false;
         } catch (error) {
           console.error("Playlist download error:", error);
           alert(`Error: ${error.message}`);
+          ongoingPlaylistDownload = false;
         }
       }
 
-      // Poll playlist progress
-      async function pollPlaylistProgress(downloadId) {
-        const pollInterval = setInterval(async () => {
-          try {
-            const response = await fetch(
-              `${getApiBaseUrl()}/download_status/${downloadId}`
-            );
-            
-            // Always parse JSON even on error responses
-            const data = await response.json();
+      // Render playlist progress (now shows individual videos from playlist in bulk progress)
+      function renderPlaylistProgress() {
+        // Playlist videos are already tracked in bulkDownloads and shown via renderBulkProgress()
+        // Just update the stats
+        const playlistVideos = bulkDownloads.filter((d) => d.isPlaylist);
+        const total = playlistVideos.length;
+        const completed = playlistVideos.filter(
+          (d) => d.status === "complete"
+        ).length;
+        const failed = playlistVideos.filter(
+          (d) => d.status === "error"
+        ).length;
 
-            // Handle error responses - backend might still be initializing
-            if (!response.ok && data.error) {
-              if (data.error.toLowerCase().includes("not found")) {
-                console.error("Download not found yet, retrying...");
-                return; // Continue polling
-              }
-            }
-
-            // Handle "not_found" status gracefully - backend might still be initializing
-            if (data.status === "not_found") {
-              console.error("Download not found yet, retrying...");
-              return; // Continue polling
-            }
-
-            renderPlaylistProgress(data);
-
-            if (data.status === "complete" || data.status === "error") {
-              clearInterval(pollInterval);
-            }
-          } catch (error) {
-            console.error("Poll error:", error);
-            // Don't stop polling on network errors - might be temporary
-          }
-        }, 3000);
-      }
-
-      // Render playlist progress
-      function renderPlaylistProgress(data) {
-        const container = document.getElementById("playlistProgress");
-
-        if (!container.querySelector(".download-item")) {
-          const item = document.createElement("div");
-          item.className = "download-item";
-          item.id = "playlistItem";
-          container.appendChild(item);
-        }
-
-        // Track auto-downloaded files for this playlist
-        if (!window.playlistAutoDownloadedFiles) {
-          window.playlistAutoDownloadedFiles = new Set();
-        }
-
-        // Update bulkDownloads array with latest status
-        const downloadIndex = bulkDownloads.findIndex(
-          (d) =>
-            d.downloadId === playlistDownloadId ||
-            d.download_id === playlistDownloadId
-        );
-        if (downloadIndex !== -1) {
-          bulkDownloads[downloadIndex].status = data.status;
-          bulkDownloads[downloadIndex].progress = data.progress;
-          bulkDownloads[downloadIndex].title =
-            data.title && !data.title.startsWith("http")
-              ? data.title
-              : data.url || bulkDownloads[downloadIndex].title;
-          if (data.download_url) {
-            bulkDownloads[downloadIndex].download_url = data.download_url;
-          }
-          if (data.file) {
-            bulkDownloads[downloadIndex].file = data.file;
-          }
-          saveDownloadsToStorage();
-          updateDownloadManager();
-        }
-
-        const item = document.getElementById("playlistItem");
-        const statusClass = `status-${data.status}`;
-        const statusText =
-          data.status.charAt(0).toUpperCase() + data.status.slice(1);
-
-        // Show URL or actual title (not 'Playlist: Playlist')
-        const displayTitle =
-          data.title && !data.title.startsWith("http")
-            ? data.title
-            : data.url || "Playlist";
-
-        // Check if we have individual file downloads
-        let downloadButton = "";
-        if (data.file_downloads && data.file_downloads.length > 0) {
-          // Show files downloaded so far
-          const filesDownloaded = data.file_downloads.length;
-          const totalFiles =
-            data.total_files || data.file_count || filesDownloaded;
-          const statusMsg =
-            data.status === "complete"
-              ? `✓ All ${filesDownloaded} file(s) downloaded!`
-              : `⬇ ${filesDownloaded}/${totalFiles} file(s) downloaded...`;
-          downloadButton = `
-            <br>
-            <div style="margin-top: 10px; color: var(--success-color);">
-              ${statusMsg}
-            </div>
-          `;
-        } else if (data.status === "complete" && data.download_url) {
-          // Fallback for old format
-          // Check if download_url is already a complete URL (starts with http)
-          const downloadUrl = data.download_url.startsWith("http")
-            ? data.download_url
-            : `${getApiBaseUrl()}${data.download_url}`;
-
-          downloadButton = `
-            <br>
-            <a href="${downloadUrl}" 
-               class="download-link" 
-               download
-               style="margin-top: 10px;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-              </svg>
-              Download Files
-            </a>
-          `;
-        }
-
-        item.className = `download-item ${data.status}`;
-        item.innerHTML = `
-          <div class="download-header">
-            <div class="download-title">${displayTitle}</div>
-            <div class="download-status ${statusClass}">${statusText}</div>
-          </div>
-          <div class="progress-bar">
-            <div class="progress-fill" style="width: ${data.progress}%"></div>
-          </div>
-          <div class="download-info">
-            ${data.speed} • ETA: ${data.eta} • ${Math.round(data.progress)}%
-            ${
-              data.error
-                ? `<br><span style="color: var(--error-color)">Error: ${data.error}</span>`
-                : ""
-            }
-            ${downloadButton}
-          </div>
-        `;
-
-        // Update stats (estimate based on progress)
-        if (data.progress > 0) {
-          const estimated = Math.max(1, Math.round(100 / data.progress));
-          const completed = Math.round((estimated * data.progress) / 100);
-          updatePlaylistStats(estimated, completed, 0);
-        }
-
-        // Auto-download individual files AS SOON AS they appear (even during download)
-        if (data.file_downloads && data.file_downloads.length > 0) {
-          // Download each newly completed file immediately
-          data.file_downloads.forEach((fileDownload, index) => {
-            const fileId = fileDownload.download_id;
-
-            // Skip if already downloaded
-            if (window.playlistAutoDownloadedFiles.has(fileId)) {
-              return;
-            }
-
-            window.playlistAutoDownloadedFiles.add(fileId);
-
-            // Download immediately (no setTimeout needed, files complete one at a time)
-            const downloadUrl = `/get_file/${playlistDownloadId}/${fileDownload.file}`;
-            const link = document.createElement("a");
-            link.href = `${getApiBaseUrl()}${downloadUrl}`;
-            link.download = fileDownload.file || fileDownload.title;
-            link.style.display = "none";
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            // Add to bulkDownloads for tracking
-            bulkDownloads.push({
-              downloadId: fileId,
-              title: fileDownload.title,
-              url: data.url,
-              status: "complete",
-              progress: 100,
-              download_url: downloadUrl,
-              file: fileDownload.file,
-            });
-            saveDownloadsToStorage();
-            updateDownloadManager();
-          });
-        }
+        updatePlaylistStats(total, completed, failed);
       }
     </script>
   </body>
