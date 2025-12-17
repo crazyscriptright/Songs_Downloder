@@ -7,6 +7,7 @@ import threading
 import os
 import json
 import re
+import subprocess
 from datetime import datetime
 import requests
 from io import BytesIO
@@ -2809,31 +2810,50 @@ def proxy_download():
 def proxy_progress():
     """Proxy for progress check to avoid CORS"""
     try:
-        job_id = request.args.get('id')
+        # Accept both 'id' and 'progress_id' parameters
+        job_id = request.args.get('progress_id') or request.args.get('id')
+        
+        if not job_id:
+            print("❌ No progress_id or id provided")
+            return jsonify({'success': False, 'error': 'No job ID provided'}), 400
+        
+        print(f"📊 Checking progress for job: {job_id}")
         
         # Make request to actual API
         api_url = f"https://p.savenow.to/api/progress?id={job_id}"
-        response = requests.get(api_url)
+        response = requests.get(api_url, timeout=10)
+        
+        print(f"📥 API Response Status: {response.status_code}")
         
         # Get response data and filter out message field
         response_data = response.json()
+        print(f"📦 API Response Data: {response_data}")
+        
         if 'message' in response_data:
             del response_data['message']
         
         return jsonify(response_data), response.status_code
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Progress check error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/proxy/file', methods=['GET'])
 def proxy_file():
     """Proxy for actual file download to avoid CORS and hide original headers"""
     try:
-        download_url = request.args.get('url')
+        # Accept both 'file_url' and 'url' parameters
+        download_url = request.args.get('file_url') or request.args.get('url')
+        
+        if not download_url:
+            print("❌ No file_url or url provided")
+            return jsonify({'error': 'No download URL provided'}), 400
+        
+        print(f"📥 Downloading file from: {download_url}")
         
         # Stream the file from the download URL with minimal headers
         response = requests.get(download_url, stream=True, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
+        }, timeout=30)
         
         # Get filename from Content-Disposition or use default
         filename = 'download.mp3'
@@ -2857,6 +2877,7 @@ def proxy_file():
             }
         )
     except Exception as e:
+        print(f"❌ File download error: {e}")
         return jsonify({'error': str(e)}), 500
 
 

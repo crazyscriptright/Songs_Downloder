@@ -1510,7 +1510,7 @@
             throw new Error(data.error || "Proxy download failed");
           }
 
-          const progressId = data.progress_id;
+          const progressId = data.id; // Backend returns 'id' not 'progress_id'
 
           // Track last progress to prevent backwards updates
           let lastProgressPercent = 0;

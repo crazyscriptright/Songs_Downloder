@@ -4224,7 +4224,7 @@
           console.log(`⚠️ Download already in progress for: ${title}`);
           return;
         }
-        
+
         ongoingDownloads.add(downloadKey);
 
         console.log(`\n${"=".repeat(70)}`);
@@ -4415,10 +4415,10 @@
           }
         } catch (error) {
           console.error("❌ Download start error:", error);
-          
+
           // Remove from ongoing downloads
           cleanupOngoingDownload(url, title);
-          
+
           if (button) {
             button.className = "download-btn";
             button.innerHTML = "❌ Failed";
