@@ -1975,7 +1975,9 @@ def get_all_downloads():
     # Add download URLs for completed files
     for download_id, status in filtered_downloads.items():
         if status['status'] == 'complete' and 'file' in status:
-            status['download_url'] = f"/get_file/{download_id}/{status['file']}"
+            # Only set local path if download_url doesn't already exist (from proxy API)
+            if 'download_url' not in status:
+                status['download_url'] = f"/get_file/{download_id}/{status['file']}"
     
     return jsonify(filtered_downloads)
 
@@ -2115,7 +2117,11 @@ def bulk_status_check(bulk_id):
                     individual_status = download_status[download_id]
                     # Add download URL if download is complete and has file
                     if individual_status.get('status') == 'complete' and 'file' in individual_status:
-                        bulk_status_data['downloads'][i]['download_url'] = f"/get_file/{download_id}/{individual_status['file']}"
+                        # Preserve external proxy API URL, or use local path for yt-dlp downloads
+                        if 'download_url' in individual_status:
+                            bulk_status_data['downloads'][i]['download_url'] = individual_status['download_url']
+                        else:
+                            bulk_status_data['downloads'][i]['download_url'] = f"/get_file/{download_id}/{individual_status['file']}"
                         bulk_status_data['downloads'][i]['file'] = individual_status['file']
                         # Update title with actual filename
                         if 'title' not in bulk_status_data['downloads'][i] or bulk_status_data['downloads'][i]['title'].startswith('Item '):

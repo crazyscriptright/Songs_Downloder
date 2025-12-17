@@ -1007,35 +1007,94 @@
             placeholder="https://www.youtube.com/watch?v=...&#10;https://soundcloud.com/...&#10;https://www.jiosaavn.com/song/...&#10;&#10;Paste your URLs here (one per line)"
           ></textarea>
 
-          <div class="options-grid">
-            <div class="input-group">
-              <label>Audio Format</label>
-              <select id="bulkAudioFormat">
-                <option value="mp3">MP3</option>
-                <option value="m4a">M4A</option>
-                <option value="opus">Opus</option>
-                <option value="vorbis">Vorbis</option>
-                <option value="wav">WAV</option>
-                <option value="flac">FLAC</option>
-              </select>
-            </div>
-
-            <div class="input-group">
-              <label>Audio Quality</label>
-              <select id="bulkAudioQuality">
-                <option value="0">Best (0)</option>
-                <option value="2">High (2)</option>
-                <option value="5">Medium (5)</option>
-                <option value="9">Low (9)</option>
-              </select>
+          <!-- Download Type Selector for YouTube URLs -->
+          <div class="download-type-selector" style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 10px; font-weight: 600; color: var(--text-primary);">Download Type (YouTube only):</label>
+            <div style="display: flex; gap: 15px;">
+              <label style="display: flex; align-items: center; cursor: pointer;">
+                <input type="radio" name="bulkDownloadType" value="music" checked style="margin-right: 8px;" onchange="toggleBulkDownloadOptions()" />
+                <span>🎵 Music (Audio Only)</span>
+              </label>
+              <label style="display: flex; align-items: center; cursor: pointer;">
+                <input type="radio" name="bulkDownloadType" value="video" style="margin-right: 8px;" onchange="toggleBulkDownloadOptions()" />
+                <span>🎬 Video</span>
+              </label>
             </div>
           </div>
 
-          <div class="checkbox-group">
-            <input type="checkbox" id="bulkEmbedThumbnail" checked />
-            <label for="bulkEmbedThumbnail">Embed Thumbnail</label>
+          <!-- Audio Options -->
+          <div id="bulkAudioOptions" class="options-section">
+            <div class="options-grid">
+              <div class="input-group">
+                <label>Audio Format</label>
+                <select id="bulkAudioFormat">
+                  <option value="mp3">MP3</option>
+                  <option value="m4a">M4A</option>
+                  <option value="opus">Opus</option>
+                  <option value="vorbis">Vorbis</option>
+                  <option value="wav">WAV</option>
+                  <option value="flac">FLAC</option>
+                </select>
+              </div>
+
+              <div class="input-group">
+                <label>Audio Quality</label>
+                <select id="bulkAudioQuality">
+                  <option value="0">Best (0)</option>
+                  <option value="2">High (2)</option>
+                  <option value="5">Medium (5)</option>
+                  <option value="9">Low (9)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="checkbox-group">
+              <input type="checkbox" id="bulkEmbedThumbnail" checked />
+              <label for="bulkEmbedThumbnail">Embed Thumbnail</label>
+            </div>
           </div>
 
+          <!-- Video Options -->
+          <div id="bulkVideoOptions" class="options-section" style="display: none;">
+            <div class="options-grid">
+              <div class="input-group">
+                <label>Video Quality</label>
+                <select id="bulkVideoQuality">
+                  <option value="2160">4K (2160p)</option>
+                  <option value="1440">2K (1440p)</option>
+                  <option value="1080" selected>Full HD (1080p)</option>
+                  <option value="720">HD (720p)</option>
+                  <option value="480">SD (480p)</option>
+                  <option value="360">Low (360p)</option>
+                </select>
+              </div>
+
+              <div class="input-group">
+                <label>Video FPS</label>
+                <select id="bulkVideoFPS">
+                  <option value="60">60 FPS</option>
+                  <option value="30" selected>30 FPS</option>
+                  <option value="24">24 FPS</option>
+                </select>
+              </div>
+
+              <div class="input-group">
+                <label>Video Format</label>
+                <select id="bulkVideoFormat">
+                  <option value="mkv" selected>MKV (Best Quality)</option>
+                  <option value="mp4">MP4 (Compatible)</option>
+                  <option value="webm">WebM</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="checkbox-group">
+              <input type="checkbox" id="bulkEmbedSubs" checked />
+              <label for="bulkEmbedSubs">Embed Subtitles</label>
+            </div>
+          </div>
+
+          <!-- Common Options -->
           <div class="checkbox-group">
             <input type="checkbox" id="bulkAddMetadata" checked />
             <label for="bulkAddMetadata">Add Metadata</label>
@@ -1589,8 +1648,13 @@
 
           let downloadButton = "";
           if (download.status === "complete" && download.download_url) {
+            // Check if download_url is already a complete URL (starts with http)
+            const downloadUrl = download.download_url.startsWith('http') 
+              ? download.download_url 
+              : `${getApiBaseUrl()}${download.download_url}`;
+            
             downloadButton = `
-              <a href="${getApiBaseUrl()}${download.download_url}" 
+              <a href="${downloadUrl}" 
                  class="manager-download-link" 
                  download>
                 Download
@@ -1739,6 +1803,21 @@
       }
 
       // Start bulk download
+      // Toggle bulk download options based on type
+      function toggleBulkDownloadOptions() {
+        const downloadType = document.querySelector('input[name="bulkDownloadType"]:checked').value;
+        const audioOptions = document.getElementById('bulkAudioOptions');
+        const videoOptions = document.getElementById('bulkVideoOptions');
+        
+        if (downloadType === 'video') {
+          audioOptions.style.display = 'none';
+          videoOptions.style.display = 'block';
+        } else {
+          audioOptions.style.display = 'block';
+          videoOptions.style.display = 'none';
+        }
+      }
+
       async function startBulkDownload() {
         const urlsText = document.getElementById("bulkUrls").value;
         const urls = urlsText
@@ -1751,15 +1830,27 @@
           return;
         }
 
-        // Get options
+        // Get download type
+        const downloadType = document.querySelector('input[name="bulkDownloadType"]:checked').value;
+        const isVideoMode = downloadType === 'video';
+
+        // Get options based on download type
         const options = {
-          audioFormat: document.getElementById("bulkAudioFormat").value,
-          audioQuality:
-            document.getElementById("bulkAudioQuality").value || "0",
-          embedThumbnail: document.getElementById("bulkEmbedThumbnail").checked,
+          keepVideo: isVideoMode,
           addMetadata: document.getElementById("bulkAddMetadata").checked,
-          keepVideo: false,
         };
+
+        // Add video or audio specific options
+        if (isVideoMode) {
+          options.videoQuality = document.getElementById("bulkVideoQuality").value;
+          options.videoFPS = document.getElementById("bulkVideoFPS").value;
+          options.videoFormat = document.getElementById("bulkVideoFormat").value;
+          options.embedSubtitles = document.getElementById("bulkEmbedSubs").checked;
+        } else {
+          options.audioFormat = document.getElementById("bulkAudioFormat").value;
+          options.audioQuality = document.getElementById("bulkAudioQuality").value || "0";
+          options.embedThumbnail = document.getElementById("bulkEmbedThumbnail").checked;
+        }
 
         console.log(`Starting bulk download for ${urls.length} URLs`);
 
@@ -1863,13 +1954,16 @@
 
           let downloadButton = "";
           if (download.status === "complete" && download.download_url) {
+            // Check if download_url is already a complete URL (starts with http)
+            const downloadUrl = download.download_url.startsWith('http') 
+              ? download.download_url 
+              : `${getApiBaseUrl()}${download.download_url}`;
+            
             downloadButton = `
-              <a href="${getApiBaseUrl()}${download.download_url}" 
+              <a href="${downloadUrl}" 
                  class="download-link" 
                  download
-                 onclick="handleBulkDownloadClick(event, '${getApiBaseUrl()}${
-              download.download_url
-            }', '${displayTitle}')">
+                 onclick="handleBulkDownloadClick(event, '${downloadUrl}', '${displayTitle}')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="7 10 12 15 17 10"></polyline>
@@ -1910,13 +2004,17 @@
               // Trigger automatic download
               setTimeout(() => {
                 const link = document.createElement("a");
-                link.href = `${getApiBaseUrl()}${download.download_url}`;
+                // Check if download_url is already a complete URL (starts with http)
+                const downloadUrl = download.download_url.startsWith('http') 
+                  ? download.download_url 
+                  : `${getApiBaseUrl()}${download.download_url}`;
+                link.href = downloadUrl;
                 link.download = download.title || `download_${index + 1}`;
                 link.style.display = "none";
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-                console.log(`✅ Auto-downloaded: ${download.title}`);
+                console.log(`✅ Auto-downloaded: ${download.title} from ${downloadUrl}`);
               }, 500 * index); // Stagger downloads by 500ms each
             }
           }
@@ -2130,9 +2228,14 @@
           `;
         } else if (data.status === "complete" && data.download_url) {
           // Fallback for old format
+          // Check if download_url is already a complete URL (starts with http)
+          const downloadUrl = data.download_url.startsWith('http') 
+            ? data.download_url 
+            : `${getApiBaseUrl()}${data.download_url}`;
+          
           downloadButton = `
             <br>
-            <a href="${getApiBaseUrl()}${data.download_url}" 
+            <a href="${downloadUrl}" 
                class="download-link" 
                download
                style="margin-top: 10px;">

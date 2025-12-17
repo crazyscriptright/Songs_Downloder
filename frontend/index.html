@@ -1662,17 +1662,31 @@
 
           const API_BASE = getApiBaseUrl();
           const encodedUrl = encodeURIComponent(url);
-          
+
           // Determine if this is a video or audio download based on format
-          const isVideoFormat = ['8k', '4k', '2k', '1440', '1080', '720', '480', '360', '240', '144', 'best'].includes(format);
-          
+          const isVideoFormat = [
+            "8k",
+            "4k",
+            "2k",
+            "1440",
+            "1080",
+            "720",
+            "480",
+            "360",
+            "240",
+            "144",
+            "best",
+          ].includes(format);
+
           let downloadUrl;
           if (isVideoFormat) {
             // Video download - format is the resolution
             downloadUrl = `${API_BASE}/proxy/download?format=${format}&url=${encodedUrl}`;
           } else {
             // Audio download - format is mp3, use quality parameter
-            const quality = allDownloads[downloadId]?.requestBody?.advancedOptions?.audioQuality || "128";
+            const quality =
+              allDownloads[downloadId]?.requestBody?.advancedOptions
+                ?.audioQuality || "128";
             downloadUrl = `${API_BASE}/proxy/download?format=${format}&url=${encodedUrl}&quality=${quality}`;
           }
 
@@ -3144,11 +3158,13 @@
 
           // Add event listener for direct URL download button
           setTimeout(() => {
-            const downloadBtn = document.getElementById("direct-url-download-btn");
+            const downloadBtn = document.getElementById(
+              "direct-url-download-btn"
+            );
             if (downloadBtn) {
               const url = downloadBtn.getAttribute("data-url");
               const title = downloadBtn.getAttribute("data-title");
-              downloadBtn.addEventListener("click", function() {
+              downloadBtn.addEventListener("click", function () {
                 console.log(`🎯 Direct URL download button clicked`);
                 console.log(`   URL: ${url}`);
                 console.log(`   Title: ${title}`);
@@ -3369,7 +3385,7 @@
         // Determine if this is a video or music URL based on searchType parameter
         // Use the current searchType which reflects the user's choice or URL parameter
         let urlMode = searchType; // Use global searchType (music/video/all)
-        
+
         console.log(`🎬 createDirectUrlSection - URL Mode Detection:`);
         console.log(`   Global searchType: ${searchType}`);
         console.log(`   Initial urlMode: ${urlMode}`);
@@ -3908,7 +3924,9 @@
                         class="download-btn" 
                         style="width: 100%; padding: 15px; font-size: 1.2em; font-weight: bold;"
                         data-url="${processedInfo.url}"
-                        data-title="${(previewData && previewData.title) || info.url}">
+                        data-title="${
+                          (previewData && previewData.title) || info.url
+                        }">
                         Download Now
                     </button>
                     
@@ -4158,7 +4176,7 @@
         console.log(`   Title: ${title}`);
         console.log(`   useAdvanced: ${useAdvanced}`);
         console.log(`   button:`, button);
-        
+
         // Check if download should be queued
         if (activeDownloads >= MAX_CONCURRENT_DOWNLOADS) {
           queueDownload(url, title, button, useAdvanced);
@@ -4224,22 +4242,22 @@
           console.log(`   Current searchType: ${searchType}`);
           console.log(`   URL: ${url}`);
           console.log(`   useAdvanced: ${useAdvanced}`);
-          
+
           // Determine if this is video or audio based on:
           // 1. Global searchType variable (PRIMARY - respects user's tab selection)
           // 2. Available DOM elements (videoQuality select)
           // 3. URL pattern (fallback)
-          
+
           let isVideoMode = false;
-          
+
           // PRIMARY: Check global searchType first (respects Music/Video tab selection)
-          if (searchType === 'video') {
+          if (searchType === "video") {
             isVideoMode = true;
             console.log(`   ✅ Video mode: searchType = 'video'`);
-          } else if (searchType === 'music') {
+          } else if (searchType === "music") {
             isVideoMode = false;
             console.log(`   ✅ Music mode: searchType = 'music'`);
-          } else if (searchType === 'all') {
+          } else if (searchType === "all") {
             // SECONDARY: Check if videoQuality element exists
             const videoQualitySelect = document.getElementById("videoQuality");
             if (videoQualitySelect !== null) {
@@ -4247,29 +4265,42 @@
               console.log(`   ✅ Video mode: videoQuality element found`);
             }
             // TERTIARY: Check URL pattern
-            else if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
+            else if (
+              url.includes("youtube.com/watch") ||
+              url.includes("youtu.be/")
+            ) {
               // Regular YouTube URL (not music.youtube.com) = video
-              if (!url.includes('music.youtube.com')) {
+              if (!url.includes("music.youtube.com")) {
                 isVideoMode = true;
-                console.log(`   ✅ Video mode: URL pattern (youtube.com/watch)`);
+                console.log(
+                  `   ✅ Video mode: URL pattern (youtube.com/watch)`
+                );
               } else {
                 isVideoMode = false;
-                console.log(`   ✅ Music mode: URL pattern (music.youtube.com)`);
+                console.log(
+                  `   ✅ Music mode: URL pattern (music.youtube.com)`
+                );
               }
             } else {
               // Default to music for other sources
               isVideoMode = false;
-              console.log(`   ✅ Music mode: default (SoundCloud/JioSaavn/etc)`);
+              console.log(
+                `   ✅ Music mode: default (SoundCloud/JioSaavn/etc)`
+              );
             }
           }
-          
+
           console.log(`   🎯 FINAL isVideoMode: ${isVideoMode}`);
 
           // Build advanced options with default values
           requestBody.advancedOptions = {
             keepVideo: isVideoMode,
-            embedSubtitles: useAdvanced ? (document.getElementById("embedSubs")?.checked !== false) : false,
-            addMetadata: useAdvanced ? (document.getElementById("addMetadata")?.checked !== false) : true,
+            embedSubtitles: useAdvanced
+              ? document.getElementById("embedSubs")?.checked !== false
+              : false,
+            addMetadata: useAdvanced
+              ? document.getElementById("addMetadata")?.checked !== false
+              : true,
             customArgs: "",
           };
 
@@ -4279,14 +4310,20 @@
             const videoQualityElem = document.getElementById("videoQuality");
             const videoFPSElem = document.getElementById("videoFPS");
             const videoFormatElem = document.getElementById("videoFormat");
-            
+
             const videoQuality = videoQualityElem?.value || "1080";
             const videoFPS = videoFPSElem?.value || "30";
             const videoFormat = videoFormatElem?.value || "mkv";
 
-            console.log(`   Video Quality: ${videoQuality} (element exists: ${!!videoQualityElem})`);
-            console.log(`   Video FPS: ${videoFPS} (element exists: ${!!videoFPSElem})`);
-            console.log(`   Video Format: ${videoFormat} (element exists: ${!!videoFormatElem})`);
+            console.log(
+              `   Video Quality: ${videoQuality} (element exists: ${!!videoQualityElem})`
+            );
+            console.log(
+              `   Video FPS: ${videoFPS} (element exists: ${!!videoFPSElem})`
+            );
+            console.log(
+              `   Video Format: ${videoFormat} (element exists: ${!!videoFormatElem})`
+            );
 
             requestBody.advancedOptions.videoQuality = videoQuality;
             requestBody.advancedOptions.videoFPS = videoFPS;
@@ -4295,18 +4332,24 @@
             // Audio-specific options
             const audioFormatElem = document.getElementById("audioFormat");
             const audioQualityElem = document.getElementById("audioQuality");
-            
+
             const audioFormat = audioFormatElem?.value || "mp3";
             const audioQuality = audioQualityElem?.value || "0";
-            
-            console.log(`   Audio Format: ${audioFormat} (element exists: ${!!audioFormatElem})`);
-            console.log(`   Audio Quality: ${audioQuality} (element exists: ${!!audioQualityElem})`);
-            
+
+            console.log(
+              `   Audio Format: ${audioFormat} (element exists: ${!!audioFormatElem})`
+            );
+            console.log(
+              `   Audio Quality: ${audioQuality} (element exists: ${!!audioQualityElem})`
+            );
+
             requestBody.advancedOptions.audioFormat = audioFormat;
             requestBody.advancedOptions.audioQuality = audioQuality;
-            requestBody.advancedOptions.embedThumbnail = useAdvanced ? (document.getElementById("embedThumbnail")?.checked !== false) : true;
+            requestBody.advancedOptions.embedThumbnail = useAdvanced
+              ? document.getElementById("embedThumbnail")?.checked !== false
+              : true;
           }
-          
+
           console.log(`✅ Options built:`, requestBody.advancedOptions);
 
           console.log(`📤 Sending download request:`, requestBody);
@@ -4475,7 +4518,8 @@
                 let format;
                 if (isVideoRequest) {
                   // For video requests, use resolution as format (144, 360, 720, 1080)
-                  const videoQuality = originalRequest?.advancedOptions?.videoQuality || "360";
+                  const videoQuality =
+                    originalRequest?.advancedOptions?.videoQuality || "360";
                   format = videoQuality; // Use resolution directly (e.g., "360", "720", "1080")
                 } else {
                   // Audio download - use mp3 format
