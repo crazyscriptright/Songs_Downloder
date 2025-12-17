@@ -1966,6 +1966,12 @@
             );
             const data = await response.json();
 
+            // Handle "not_found" or error responses gracefully - backend might still be initializing
+            if (data.error && data.error.includes("not found")) {
+              console.error("Bulk download not found yet, retrying...");
+              return; // Continue polling
+            }
+
             if (data.downloads) {
               bulkDownloads = data.downloads;
               saveDownloadsToStorage();
@@ -1984,9 +1990,10 @@
             }
           } catch (error) {
             console.error("Poll error:", error);
-            clearInterval(pollInterval);
+            // Don't stop polling on network errors - backend might be initializing
+            // Only stop if it's a persistent error
           }
-        }, 2000);
+        }, 3000);
       }
 
       // Render bulk progress
@@ -2204,6 +2211,12 @@
             );
             const data = await response.json();
 
+            // Handle "not_found" status gracefully - backend might still be initializing
+            if (data.status === "not_found") {
+              console.error("Download not found yet, retrying...");
+              return; // Continue polling
+            }
+
             renderPlaylistProgress(data);
 
             if (data.status === "complete" || data.status === "error") {
@@ -2211,9 +2224,9 @@
             }
           } catch (error) {
             console.error("Poll error:", error);
-            clearInterval(pollInterval);
+            // Don't stop polling on network errors - might be temporary
           }
-        }, 2000);
+        }, 3000);
       }
 
       // Render playlist progress
