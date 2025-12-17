@@ -3142,6 +3142,22 @@
           resultsDiv.innerHTML = "";
           resultsDiv.appendChild(section);
 
+          // Add event listener for direct URL download button
+          setTimeout(() => {
+            const downloadBtn = document.getElementById("direct-url-download-btn");
+            if (downloadBtn) {
+              const url = downloadBtn.getAttribute("data-url");
+              const title = downloadBtn.getAttribute("data-title");
+              downloadBtn.addEventListener("click", function() {
+                console.log(`🎯 Direct URL download button clicked`);
+                console.log(`   URL: ${url}`);
+                console.log(`   Title: ${title}`);
+                // Always use advanced options (useAdvanced = true)
+                downloadSong(url, title, this, true);
+              });
+            }
+          }, 0);
+
           // Initialize lazy loading for the preview image
           setTimeout(() => {
             initLazyLoadingForNewImages();
@@ -3353,6 +3369,12 @@
         // Determine if this is a video or music URL based on searchType parameter
         // Use the current searchType which reflects the user's choice or URL parameter
         let urlMode = searchType; // Use global searchType (music/video/all)
+        
+        console.log(`🎬 createDirectUrlSection - URL Mode Detection:`);
+        console.log(`   Global searchType: ${searchType}`);
+        console.log(`   Initial urlMode: ${urlMode}`);
+        console.log(`   URL: ${info.url}`);
+        console.log(`   Source: ${info.source}`);
 
         // If searchType is 'all', fallback to URL-based detection
         if (searchType === "all") {
@@ -3371,6 +3393,11 @@
           } else {
             urlMode = "music"; // default to music
           }
+          console.log(`   Final urlMode (after 'all' detection): ${urlMode}`);
+        } else {
+          // Use searchType directly - if user selected "music" tab, download music (audio)
+          // if user selected "video" tab, download video
+          console.log(`   Final urlMode (using searchType): ${urlMode}`);
         }
 
         // URL Mode detection and preview HTML building continues...
@@ -3876,10 +3903,12 @@
                         </div>
                     </div>
 
-                    <button class="download-btn" style="width: 100%; padding: 15px; font-size: 1.2em; font-weight: bold;" 
-                            onclick="downloadSong('${
-                              processedInfo.url
-                            }', 'Downloaded_File', this, true)">
+                    <button 
+                        id="direct-url-download-btn" 
+                        class="download-btn" 
+                        style="width: 100%; padding: 15px; font-size: 1.2em; font-weight: bold;"
+                        data-url="${processedInfo.url}"
+                        data-title="${(previewData && previewData.title) || info.url}">
                         Download Now
                     </button>
                     
@@ -4124,6 +4153,12 @@
       }
 
       async function downloadSong(url, title, button, useAdvanced = false) {
+        console.log(`🎵 downloadSong called:`);
+        console.log(`   URL: ${url}`);
+        console.log(`   Title: ${title}`);
+        console.log(`   useAdvanced: ${useAdvanced}`);
+        console.log(`   button:`, button);
+        
         // Check if download should be queued
         if (activeDownloads >= MAX_CONCURRENT_DOWNLOADS) {
           queueDownload(url, title, button, useAdvanced);
@@ -4184,46 +4219,95 @@
           // Prepare request body
           const requestBody = { url, title };
 
-          // Add advanced options if they should be used
-          if (useAdvanced) {
-            // Determine if this is video or audio based on available options in DOM
-            // If videoQuality select exists, we are in video mode
+          // ALWAYS determine if this is video or audio based on the active tab
+          console.log(`⚙️ Building options...`);
+          console.log(`   Current searchType: ${searchType}`);
+          console.log(`   URL: ${url}`);
+          console.log(`   useAdvanced: ${useAdvanced}`);
+          
+          // Determine if this is video or audio based on:
+          // 1. Global searchType variable (PRIMARY - respects user's tab selection)
+          // 2. Available DOM elements (videoQuality select)
+          // 3. URL pattern (fallback)
+          
+          let isVideoMode = false;
+          
+          // PRIMARY: Check global searchType first (respects Music/Video tab selection)
+          if (searchType === 'video') {
+            isVideoMode = true;
+            console.log(`   ✅ Video mode: searchType = 'video'`);
+          } else if (searchType === 'music') {
+            isVideoMode = false;
+            console.log(`   ✅ Music mode: searchType = 'music'`);
+          } else if (searchType === 'all') {
+            // SECONDARY: Check if videoQuality element exists
             const videoQualitySelect = document.getElementById("videoQuality");
-            const isVideoMode = videoQualitySelect !== null;
-
-            // Build custom args from advanced options (minimal set)
-            let customArgs = "";
-
-            requestBody.advancedOptions = {
-              keepVideo: isVideoMode,
-              embedSubtitles:
-                document.getElementById("embedSubs")?.checked !== false,
-              addMetadata:
-                document.getElementById("addMetadata")?.checked !== false,
-              customArgs: customArgs.trim(),
-            };
-
-            // Add video-specific options
-            if (isVideoMode) {
-              const videoQuality =
-                document.getElementById("videoQuality")?.value;
-              const videoFPS = document.getElementById("videoFPS")?.value;
-              const videoFormat =
-                document.getElementById("videoFormat")?.value || "mkv";
-
-              requestBody.advancedOptions.videoQuality = videoQuality;
-              requestBody.advancedOptions.videoFPS = videoFPS;
-              requestBody.advancedOptions.videoFormat = videoFormat;
+            if (videoQualitySelect !== null) {
+              isVideoMode = true;
+              console.log(`   ✅ Video mode: videoQuality element found`);
+            }
+            // TERTIARY: Check URL pattern
+            else if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
+              // Regular YouTube URL (not music.youtube.com) = video
+              if (!url.includes('music.youtube.com')) {
+                isVideoMode = true;
+                console.log(`   ✅ Video mode: URL pattern (youtube.com/watch)`);
+              } else {
+                isVideoMode = false;
+                console.log(`   ✅ Music mode: URL pattern (music.youtube.com)`);
+              }
             } else {
-              // Audio-specific options
-              requestBody.advancedOptions.audioFormat =
-                document.getElementById("audioFormat")?.value || "mp3";
-              requestBody.advancedOptions.audioQuality =
-                document.getElementById("audioQuality")?.value || "320";
-              requestBody.advancedOptions.embedThumbnail =
-                document.getElementById("embedThumbnail")?.checked !== false;
+              // Default to music for other sources
+              isVideoMode = false;
+              console.log(`   ✅ Music mode: default (SoundCloud/JioSaavn/etc)`);
             }
           }
+          
+          console.log(`   🎯 FINAL isVideoMode: ${isVideoMode}`);
+
+          // Build advanced options with default values
+          requestBody.advancedOptions = {
+            keepVideo: isVideoMode,
+            embedSubtitles: useAdvanced ? (document.getElementById("embedSubs")?.checked !== false) : false,
+            addMetadata: useAdvanced ? (document.getElementById("addMetadata")?.checked !== false) : true,
+            customArgs: "",
+          };
+
+          // Add video-specific options
+          if (isVideoMode) {
+            // Try to read from DOM first, fallback to defaults
+            const videoQualityElem = document.getElementById("videoQuality");
+            const videoFPSElem = document.getElementById("videoFPS");
+            const videoFormatElem = document.getElementById("videoFormat");
+            
+            const videoQuality = videoQualityElem?.value || "1080";
+            const videoFPS = videoFPSElem?.value || "30";
+            const videoFormat = videoFormatElem?.value || "mkv";
+
+            console.log(`   Video Quality: ${videoQuality} (element exists: ${!!videoQualityElem})`);
+            console.log(`   Video FPS: ${videoFPS} (element exists: ${!!videoFPSElem})`);
+            console.log(`   Video Format: ${videoFormat} (element exists: ${!!videoFormatElem})`);
+
+            requestBody.advancedOptions.videoQuality = videoQuality;
+            requestBody.advancedOptions.videoFPS = videoFPS;
+            requestBody.advancedOptions.videoFormat = videoFormat;
+          } else {
+            // Audio-specific options
+            const audioFormatElem = document.getElementById("audioFormat");
+            const audioQualityElem = document.getElementById("audioQuality");
+            
+            const audioFormat = audioFormatElem?.value || "mp3";
+            const audioQuality = audioQualityElem?.value || "0";
+            
+            console.log(`   Audio Format: ${audioFormat} (element exists: ${!!audioFormatElem})`);
+            console.log(`   Audio Quality: ${audioQuality} (element exists: ${!!audioQualityElem})`);
+            
+            requestBody.advancedOptions.audioFormat = audioFormat;
+            requestBody.advancedOptions.audioQuality = audioQuality;
+            requestBody.advancedOptions.embedThumbnail = useAdvanced ? (document.getElementById("embedThumbnail")?.checked !== false) : true;
+          }
+          
+          console.log(`✅ Options built:`, requestBody.advancedOptions);
 
           console.log(`📤 Sending download request:`, requestBody);
 

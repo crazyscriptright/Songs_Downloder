@@ -31,6 +31,12 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 
+# TESTING: Force use proxy API instead of yt-dlp
+FORCE_PROXY_API = True  # Set to True to always use proxy API, False to use yt-dlp
+
+# Enable auto-reload in development
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+
 # Use /tmp for Heroku (ephemeral storage)
 if os.getenv('DYNO'):  # Running on Heroku
     app.config['DOWNLOAD_FOLDER'] = '/tmp/downloads'
@@ -808,7 +814,43 @@ def download_song(url, title, download_id, advanced_options=None):
     print(f"🔗 URL: {url}")
     print(f"🆔 Download ID: {download_id}")
     print(f"⚙️  Advanced Options: {advanced_options}")
+    print(f"🧪 Force Proxy API: {FORCE_PROXY_API}")
     print(f"{'='*70}\n")
+    
+    # TESTING: Force proxy API fallback if flag is set
+    if FORCE_PROXY_API and ('youtube.com' in url or 'youtu.be' in url):
+        print(f"🧪 FORCE_PROXY_API enabled: Skipping yt-dlp, using proxy API directly")
+        # Initialize status before proxy call so timestamp exists
+        download_status[download_id] = {
+            'status': 'downloading',
+            'progress': 0,
+            'title': title,
+            'url': url,
+            'eta': 'Initiating proxy download...',
+            'speed': '0 KB/s',
+            'timestamp': datetime.now().isoformat(),
+            'advanced_options': advanced_options
+        }
+        save_download_status()
+        try:
+            download_with_proxy_api(url, title, download_id, advanced_options)
+            return
+        except Exception as fallback_error:
+            print(f"❌ Proxy API failed: {fallback_error}")
+            download_status[download_id] = {
+                'status': 'error',
+                'progress': 0,
+                'title': title,
+                'url': url,
+                'error': f'Proxy API failed: {str(fallback_error)}',
+                'speed': '0 KB/s',
+                'eta': 'N/A',
+                'timestamp': download_status.get(download_id, {}).get('timestamp', datetime.now().isoformat()),
+                'failed_at': datetime.now().isoformat(),
+                'advanced_options': advanced_options
+            }
+            save_download_status()
+            return
     
     # Clean up /tmp if getting full (Heroku)
     cleanup_tmp_directory()
@@ -1874,16 +1916,30 @@ def download():
 def download_status_check(download_id):
     """Check download status"""
     if download_id in download_status:
-        status = download_status[download_id]
-        # If download complete, add file download URL
+        status = download_status[download_id].copy()
+        
+        # If download complete, add file download URL (only if not already set by proxy API)
         if status['status'] == 'complete' and 'file' in status:
-            status['download_url'] = f"/get_file/{download_id}/{status['file']}"
+            # Check if download_url already exists (from proxy API)
+            if 'download_url' not in status:
+                # Local file download (yt-dlp)
+                status['download_url'] = f"/get_file/{download_id}/{status['file']}"
+                print(f"📁 Local file download URL: {status['download_url']}")
+            else:
+                # External download URL (proxy API)
+                if status.get('downloaded_via') == 'proxy_api':
+                    print(f"🌐 External Download URL (Proxy API): {status['download_url']}")
+                    print(f"   Filename: {status['file']}")
+                    if status.get('alternative_download_urls'):
+                        print(f"   Backup URLs: {len(status['alternative_download_urls'])} available")
         
         # Log status check (only for interesting states to avoid spam)
         if status['status'] in ['error', 'complete', 'cancelled']:
             print(f"📊 Status check [{download_id}]: {status['status']}")
             if status['status'] == 'error' and 'error' in status:
                 print(f"   Error: {status['error']}")
+            elif status['status'] == 'complete':
+                print(f"   ✅ Download URL: {status.get('download_url', 'N/A')}")
         
         return jsonify(status)
     else:
@@ -2484,6 +2540,7 @@ def download_with_proxy_api(url, title, download_id, advanced_options=None):
     
     try:
         print(f"🔄 Attempting fallback download via proxy API for: {title}")
+        print(f"📋 Advanced Options: {advanced_options}")
         
         if not VIDEO_DOWNLOAD_API_KEY:
             raise Exception("Proxy API key not configured")
@@ -2501,30 +2558,59 @@ def download_with_proxy_api(url, title, download_id, advanced_options=None):
         }
         save_download_status()
         
-        # Determine format from advanced options or default to mp3
-        format_type = 'mp3'
-        if advanced_options:
-            audio_format = advanced_options.get('audioFormat', 'mp3')
-            if audio_format in ['mp3', 'm4a', 'flac', 'wav']:
-                format_type = audio_format
+        # Determine if it's video or audio download
+        is_video = advanced_options and advanced_options.get('keepVideo', False)
+        
+        # Map format based on whether it's video or audio
+        if is_video:
+            # Video download - use video quality setting
+            video_quality = advanced_options.get('videoQuality', '1080')
+            # API format mapping: 360, 480, 720, 1080, 1440, 4k, 8k
+            format_type = video_quality  # Use quality directly (720, 1080, etc.)
+            file_extension = 'mp4'  # Videos are always MP4 from the API
+            print(f"🎥 Video download mode: quality={video_quality}, format={format_type}")
+        else:
+            # Audio download
+            audio_format = advanced_options.get('audioFormat', 'mp3') if advanced_options else 'mp3'
+            format_type = audio_format if audio_format in ['mp3', 'm4a', 'flac', 'wav', 'opus'] else 'mp3'
+            file_extension = format_type
+            print(f"🎵 Audio download mode: format={format_type}")
         
         # Step 1: Initiate download
         params = {
+            'copyright': '0',
+            'allow_extended_duration': '1',
             'format': format_type,
             'url': url,
-            'apikey': VIDEO_DOWNLOAD_API_KEY,
+            'api': VIDEO_DOWNLOAD_API_KEY,  # Use 'api' not 'apikey'
             'add_info': '1'
         }
         
         # Add optional parameters from advanced options
         if advanced_options:
-            if advanced_options.get('audioQuality'):
-                params['audio_quality'] = advanced_options['audioQuality']
+            # Audio quality parameter (for both audio-only and video downloads)
+            audio_quality = advanced_options.get('audioQuality')
+            if audio_quality:
+                params['audio_quality'] = audio_quality
+                print(f"🔊 Audio quality: {audio_quality}")
         
         api_url = 'https://p.savenow.to/ajax/download.php'
+        
+        # Build full URL for debugging
+        import urllib.parse
+        full_api_url = api_url + '?' + urllib.parse.urlencode(params)
+        print(f"\n{'='*80}")
+        print(f"🌐 ✨ FULL API URL FOR DEBUG ✨")
+        print(f"{'='*80}")
+        print(full_api_url)
+        print(f"{'='*80}\n")
+        print(f"📤 API Parameters: {params}")
+        
         response = requests.get(api_url, params=params, timeout=30)
         response.raise_for_status()
         data = response.json()
+        
+        print(f"📥 API Response: {data}")
         
         if not data.get('success'):
             raise Exception(data.get('message', 'Failed to initiate download'))
@@ -2532,6 +2618,8 @@ def download_with_proxy_api(url, title, download_id, advanced_options=None):
         job_id = data.get('id')
         if not job_id:
             raise Exception('No job ID returned from API')
+        
+        print(f"✅ Job ID: {job_id}")
         
         # Step 2: Poll for progress
         max_attempts = 60  # 2 minutes max
@@ -2566,29 +2654,20 @@ def download_with_proxy_api(url, title, download_id, advanced_options=None):
                 if not download_url:
                     raise Exception('No download URL in completed response')
                 
-                # Step 3: Download the file
-                download_status[download_id]['eta'] = 'Downloading file...'
-                save_download_status()
+                # Get alternative download URLs as backup
+                alternative_urls = progress_data.get('alternative_download_urls', [])
                 
-                file_response = requests.get(download_url, stream=True, timeout=60)
-                file_response.raise_for_status()
-                
-                # Get filename
+                # Generate filename with correct extension
                 import re as regex
                 safe_title = regex.sub(r'[<>:"/\\|?*]', '_', title)
-                filename = f"{safe_title}.{format_type}"
+                filename = f"{safe_title}.{file_extension}"
                 
-                # Save to download folder
-                download_dir = os.path.join(app.config['DOWNLOAD_FOLDER'], download_id)
-                os.makedirs(download_dir, exist_ok=True)
-                filepath = os.path.join(download_dir, filename)
+                print(f"✅ Proxy API download successful!")
+                print(f"📥 Primary Download URL: {download_url}")
+                print(f"🌐 Alternative URLs: {len(alternative_urls)} backup(s) available")
+                print(f"💾 Filename: {filename}")
                 
-                with open(filepath, 'wb') as f:
-                    for chunk in file_response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                
-                # Mark as complete
+                # Mark as complete with external download URL (frontend will download directly)
                 download_status[download_id] = {
                     'status': 'complete',
                     'progress': 100,
@@ -2600,11 +2679,13 @@ def download_with_proxy_api(url, title, download_id, advanced_options=None):
                     'timestamp': download_status[download_id]['timestamp'],
                     'completed_at': datetime.now().isoformat(),
                     'downloaded_via': 'proxy_api',
+                    'download_url': download_url,  # External URL for frontend
+                    'alternative_download_urls': alternative_urls,  # Backup URLs
                     'advanced_options': advanced_options
                 }
                 save_download_status()
                 
-                print(f"✅ Proxy API download successful: {filename}")
+                print(f"🎉 Frontend will download directly from: {download_url}")
                 return
             
             # Wait before next poll
@@ -2640,17 +2721,16 @@ def proxy_download():
             
         # Get all query parameters from frontend
         params = {
-            'copyright': '0',  # Required parameter
-            'allow_extended_duration': '1',  # Allow extended duration by default
+            'copyright': '0',
+            'allow_extended_duration': '1',
             'format': request.args.get('format', 'mp3'),
             'url': request.args.get('url'),
-            'api': VIDEO_DOWNLOAD_API_KEY,  # Use 'api' not 'apikey'
+            'api': VIDEO_DOWNLOAD_API_KEY,
+            'add_info': '1'
         }
         
         # Optional parameters
-        if request.args.get('quality'):
-            params['audio_quality'] = request.args.get('quality')
-        elif request.args.get('audio_quality'):
+        if request.args.get('audio_quality'):
             params['audio_quality'] = request.args.get('audio_quality')
         
         # Override allow_extended_duration if provided
@@ -2756,6 +2836,7 @@ if __name__ == '__main__':
 
     # Use PORT from environment (Heroku provides this)
     port = int(os.getenv('PORT', 5000))
-    # Disable debug in production
+    # Enable debug and auto-reload in development
     debug = os.getenv('FLASK_ENV') == 'development'
-    app.run(host='0.0.0.0', debug=debug, port=port, threaded=True)
+    use_reloader = debug  # Auto-reload when files change
+    app.run(host='0.0.0.0', debug=debug, port=port, threaded=True, use_reloader=use_reloader)
