@@ -3,8 +3,28 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/index.html",
+      "destination": "/index.html"
+    },
+    {
       "source": "/bulk",
       "destination": "/bulk.html"
+    },
+    {
+      "source": "/bulk.html",
+      "destination": "/bulk.html"
+    },
+    {
+      "source": "/ytdownload",
+      "destination": "/ytdownload.html"
+    },
+    {
+      "source": "/ytdownload.html",
+      "destination": "/ytdownload.html"
     }
   ]
 }

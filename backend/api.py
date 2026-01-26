@@ -2,7 +2,7 @@
 Universal Music Downloader - Flask Web Interface
 """
 
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, Response
 import threading
 import os
 import json
@@ -107,6 +107,7 @@ jiosaavn_api = None
 search_results = {}
 download_status = {}
 active_processes = {}
+bulk_heartbeats = {}  # Track last heartbeat time for bulk downloads
 
 # Use /tmp for cache files on Heroku (ephemeral storage)
 if os.getenv('DYNO'):  # Running on Heroku
@@ -200,13 +201,14 @@ def search_ytmusic(query):
         songs = ytmusic.parse_search_results(data) if data else []
         
         for song in songs:
+            thumbnail_url = song.get('thumbnail', f"https://img.youtube.com/vi/{song['video_id']}/mqdefault.jpg")
             results.append({
                 'title': song['title'],
                 'artist': song['metadata'],
                 'source': 'YouTube Music',
                 'url': song['url'],
                 'video_id': song['video_id'],
-                'thumbnail': song.get('thumbnail', f"https://img.youtube.com/vi/{song['video_id']}/mqdefault.jpg"),
+                'thumbnail': thumbnail_url,
                 'type': 'song'
             })
     except Exception as e:
@@ -226,13 +228,14 @@ def search_ytvideo(query):
         videos = ytvideo.parse_video_results(data) if data else []
         
         for video in videos:
+            thumbnail_url = video.get('thumbnail', f"https://img.youtube.com/vi/{video['video_id']}/mqdefault.jpg")
             results.append({
                 'title': video['title'],
                 'artist': video['metadata'],
                 'source': 'YouTube Video',
                 'url': video['url'],
                 'video_id': video['video_id'],
-                'thumbnail': video.get('thumbnail', f"https://img.youtube.com/vi/{video['video_id']}/mqdefault.jpg"),
+                'thumbnail': thumbnail_url,
                 'type': 'video'
             })
     except Exception as e:
@@ -444,6 +447,72 @@ def extract_jiosaavn_metadata(jiosaavn_url):
         
         metadata = {}
         
+        # METHOD 1: Try to extract from window.__INITIAL_DATA__ using regex (most reliable)
+        try:
+            # Find script containing window.__INITIAL_DATA__
+            for script in soup.find_all("script"):
+                if script.string and "window.__INITIAL_DATA__" in script.string and '"song":{' in script.string:
+                    script_content = script.string
+                    
+                    # Don't try to extract the song section - search in the full content
+                    # This is more reliable for nested JSON
+                    
+                    # Extract title
+                    title_match = re.search(r'"song":\{"status":"fulfilled","song":\{"type":"song","album":\{"text":"[^"]*","action":"[^"]*"\},"artists":\[.*?\],"breadCrumbs":\[.*?\],"copyright":\{.*?\},"duration":\d+,"encrypted_media_url":"[^"]*","has_lyrics":[^,]*,"id":"([^"]+)".*?"language":"([^"]+)".*?"title":\{"text":"([^"]+)"', script_content, re.DOTALL)
+                    
+                    if title_match:
+                        metadata['pid'] = title_match.group(1)
+                        metadata['language'] = title_match.group(2)
+                        metadata['title'] = title_match.group(3)
+                        print(f"📌 Title: {metadata['title']}")
+                        print(f"📌 PID: {metadata['pid']}")
+                        print(f"📌 Language: {metadata['language']}")
+                    
+                    # Extract album
+                    album_match = re.search(r'"song":\{"status":"fulfilled","song":\{"type":"song","album":\{"text":"([^"]+)"', script_content)
+                    if album_match:
+                        metadata['album'] = album_match.group(1)
+                        print(f"📌 Album: {metadata['album']}")
+                    
+                    # Extract thumbnail/image URL
+                    image_match = re.search(r'"image":\["([^"]+)"\]', script_content)
+                    if image_match:
+                        # Decode unicode escape sequences
+                        thumbnail_url = image_match.group(1).replace(r'\u002F', '/')
+                        metadata['thumbnail'] = thumbnail_url
+                        print(f"📌 Thumbnail: {metadata['thumbnail']}")
+                    
+                    # Extract artists - find the artists array in the song object
+                    artists_match = re.search(r'"song":\{"status":"fulfilled","song":\{"type":"song","album":\{[^}]+\},"artists":\[([^\]]+)\]', script_content)
+                    if artists_match:
+                        artists_json = artists_match.group(1)
+                        # Find all artist objects with name and role
+                        artist_entries = re.findall(r'\{"id":"[^"]+","name":"([^"]+)","role":"([^"]+)"', artists_json)
+                        
+                        artist_names = []
+                        for name, role in artist_entries:
+                            # Include singers and music directors
+                            if role in ['singer', 'music']:
+                                artist_names.append(name)
+                                print(f"📌 Artist: {name} ({role})")
+                        
+                        metadata['artists'] = artist_names if artist_names else []
+                    
+                    # If we got at least title and PID, consider it successful
+                        if metadata.get('title') and metadata.get('pid'):
+                            print(f"✅ Extracted from __INITIAL_DATA__ (minified)")
+                            return metadata
+                        
+                        break  # Found the script, no need to continue
+                            
+        except Exception as e:
+            print(f"⚠️ Could not extract from __INITIAL_DATA__: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # METHOD 2: Fallback to HTML parsing (legacy method)
+        print("⚠️ Falling back to HTML parsing method...")
+        
         # Extract image source
         img_element = soup.find("img", {"id": "songHeaderImage"})
         if img_element:
@@ -466,7 +535,7 @@ def extract_jiosaavn_metadata(jiosaavn_url):
             if album_link:
                 metadata['album'] = album_link.get_text(strip=True)
             
-            # Extract artists
+            # Extract artists as array
             artist_links = album_para.find_all("a", {"screen_name": "song_screen", "href": lambda x: x and "/artist/" in x})
             artists = []
             for link in artist_links:
@@ -475,7 +544,7 @@ def extract_jiosaavn_metadata(jiosaavn_url):
                     artists.append(artist_name)
             
             if artists:
-                metadata['artist'] = ", ".join(artists)
+                metadata['artists'] = artists  # Store as array
         
         # Extract PID from page content
         pid_value = None
@@ -591,6 +660,7 @@ def search_jiosaavn(query):
                 'Unknown Artist'
             )
             
+            thumbnail_url = song.get('image', '')
             results.append({
                 'title': song['title'],
                 'artist': artist,
@@ -598,7 +668,7 @@ def search_jiosaavn(query):
                 'source': 'JioSaavn',
                 'url': song['perma_url'],
                 'song_id': song['id'],
-                'thumbnail': song.get('image', ''),
+                'thumbnail': thumbnail_url,
                 'year': song.get('year', ''),
                 'language': song.get('language', ''),
                 'play_count': song.get('play_count', ''),
@@ -648,6 +718,29 @@ def search_soundcloud(query):
         traceback.print_exc()
     
     return results
+
+
+def upgrade_image_quality(image_url, size='500x500'):
+    """Upgrade image quality by replacing size parameter in URL"""
+    if not image_url or not isinstance(image_url, str):
+        return image_url
+    
+    # JioSaavn CDN - replace 50x50, 150x150 with higher quality
+    if 'saavncdn.com' in image_url or 'jiosaavn.com' in image_url:
+        # Replace any size pattern with the requested size
+        image_url = re.sub(r'-(50x50|150x150|250x250)\.', f'-{size}.', image_url)
+        # If no size pattern found, try to add it before the extension
+        if size not in image_url:
+            image_url = re.sub(r'\.(jpg|jpeg|png|webp)$', f'-{size}.\\1', image_url, flags=re.IGNORECASE)
+    
+    # YouTube thumbnails - upgrade to higher quality
+    elif 'ytimg.com' in image_url or 'youtube.com' in image_url:
+        # Replace default.jpg with maxresdefault.jpg for better quality
+        image_url = image_url.replace('default.jpg', 'maxresdefault.jpg')
+        image_url = image_url.replace('mqdefault.jpg', 'maxresdefault.jpg')
+        image_url = image_url.replace('hqdefault.jpg', 'maxresdefault.jpg')
+    
+    return image_url
 
 
 def is_url(query):
@@ -1681,24 +1774,121 @@ def search_ytvideo_endpoint():
 
 
 def get_youtube_suggestions(query):
-    """Get search suggestions from YouTube API"""
+    """Get search suggestions from YouTube API with music filtering"""
+    # Words to block (non-music content and ringtone-only suggestions)
+    BLOCK_WORDS = [
+        "movie", "full movie", "trailer",
+        "teaser", "film", "scene",
+        "dialogue", "review", "tutorial",
+        "how to", "recipe", "meaning",
+        "in english", "in hindi", "in telugu",
+        "in tamil", "translation", "benefits",
+        "ringtone download", "mp3 ringtone",
+        "ringtone free", "download mp3 ringtone"
+    ]
+    
+    # Words that MUST be present for music content (stricter filtering)
+    MUSIC_WORDS = [
+        "song", "lyrics", "audio",
+        "music", "mp3", "cover",
+        "bgm", "theme", "remix",
+        "acoustic", "live", "official",
+        "video", "album", "track"
+    ]
+    
     try:
         import urllib.parse
         import json
         
-        # YouTube's suggestion API endpoint
+        # DON'T append " song" - let API return diverse music suggestions
+        # This allows other related songs to appear, not just variations of the same song
         encoded_query = urllib.parse.quote(query)
-        url = f"https://suggestqueries.google.com/complete/search?client=youtube&q={encoded_query}"
         
-        response = requests.get(url, timeout=3)
+        # Use Firefox client with YouTube dataset
+        url = f"https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q={encoded_query}"
+        
+        # Anonymous headers to protect privacy
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+            'Accept': 'application/json',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'DNT': '1',  # Do Not Track
+            'Connection': 'keep-alive',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'cross-site'
+        }
+        
+        # Optional: Add proxy support from environment variable
+        proxies = None
+        proxy_url = os.getenv('HTTP_PROXY') or os.getenv('HTTPS_PROXY')
+        if proxy_url:
+            proxies = {
+                'http': proxy_url,
+                'https': proxy_url
+            }
+        
+        response = requests.get(url, timeout=3, headers=headers, proxies=proxies)
         if response.status_code == 200:
-            # YouTube returns JSONP format, extract JSON part
-            jsonp_text = response.text
-            if jsonp_text.startswith('window.google.ac.h('):
-                json_text = jsonp_text[19:-1]  # Remove JSONP wrapper
-                data = json.loads(json_text)
-                suggestions = [item[0] for item in data[1][:5]]  # Get first 5 suggestions
-                return suggestions
+            data = response.json()
+            
+            # Firefox client returns array directly: [query, [suggestions]]
+            if isinstance(data, list) and len(data) >= 2:
+                raw_suggestions = data[1] if isinstance(data[1], list) else []
+                
+                filtered_suggestions = []
+                seen = set()
+                import re
+                
+                # Pattern to remove music-related postfixes
+                postfix_pattern = r'\s+(song|lyrics|audio|music|mp3|cover|bgm|theme|remix|acoustic|live|official|video|album|track|download|ringtone)s?$'
+                
+                for suggestion in raw_suggestions:
+                    if not isinstance(suggestion, str):
+                        continue
+                    
+                    # Normalize: lowercase and trim
+                    normalized = suggestion.lower().strip()
+                    
+                    # Skip empty suggestions
+                    if not normalized:
+                        continue
+                    
+                    # STEP 1: Remove ALL music-related postfixes FIRST
+                    cleaned = normalized
+                    # Keep removing postfixes until none are left (handles multiple postfixes)
+                    while True:
+                        new_cleaned = re.sub(postfix_pattern, '', cleaned, flags=re.IGNORECASE).strip()
+                        if new_cleaned == cleaned:
+                            break
+                        cleaned = new_cleaned
+                    
+                    # Skip if nothing left after cleaning
+                    if not cleaned:
+                        continue
+                    
+                    # STEP 2: Check for duplicates AFTER cleaning
+                    if cleaned in seen:
+                        continue
+                    
+                    # STEP 3: Block non-music content (check cleaned version)
+                    if any(block_word in cleaned for block_word in BLOCK_WORDS):
+                        continue
+                    
+                    # Add to results
+                    seen.add(cleaned)
+                    # Store cleaned version with original casing preserved
+                    original_cleaned = suggestion
+                    while True:
+                        new_original = re.sub(postfix_pattern, '', original_cleaned, flags=re.IGNORECASE).strip()
+                        if new_original == original_cleaned:
+                            break
+                        original_cleaned = new_original
+                    
+                    filtered_suggestions.append(original_cleaned)
+                
+                return filtered_suggestions[:5]  # Return top 5 suggestions
+                
     except Exception as e:
         print(f"YouTube suggestions error: {e}")
     return []
@@ -2020,11 +2210,32 @@ def bulk_download():
         'timestamp': datetime.now().isoformat()
     }
     
+    # Initialize heartbeat tracking
+    bulk_heartbeats[bulk_id] = {
+        'last_heartbeat': datetime.now(),
+        'timeout_seconds': 30  # Stop if no heartbeat for 30 seconds
+    }
+    
     save_download_status()
     
     # Start sequential downloads in background thread
     def process_bulk_downloads():
         for i, download_info in enumerate(bulk_downloads):
+            # Check heartbeat timeout before processing next item
+            if bulk_id in bulk_heartbeats:
+                heartbeat_data = bulk_heartbeats[bulk_id]
+                time_since_heartbeat = (datetime.now() - heartbeat_data['last_heartbeat']).total_seconds()
+                
+                if time_since_heartbeat > heartbeat_data['timeout_seconds']:
+                    print(f"⏱️ Heartbeat timeout for bulk download {bulk_id} - stopping processing")
+                    download_status[bulk_id]['status'] = 'timeout'
+                    download_status[bulk_id]['error'] = 'Client disconnected - no heartbeat received'
+                    save_download_status()
+                    # Clean up heartbeat tracking
+                    if bulk_id in bulk_heartbeats:
+                        del bulk_heartbeats[bulk_id]
+                    return
+            
             download_id = download_info['download_id']
             url = download_info['url']
             title = download_info['title']
@@ -2061,6 +2272,11 @@ def bulk_download():
         # Mark bulk as complete
         download_status[bulk_id]['status'] = 'complete'
         save_download_status()
+        
+        # Clean up heartbeat tracking
+        if bulk_id in bulk_heartbeats:
+            del bulk_heartbeats[bulk_id]
+        
         print(f"\n✅ Bulk download complete: {download_status[bulk_id]['completed']}/{len(valid_urls)} successful\n")
     
     thread = threading.Thread(target=process_bulk_downloads)
@@ -2100,6 +2316,32 @@ def bulk_status_check(bulk_id):
         return jsonify(bulk_status_data)
     else:
         return jsonify({'error': 'Bulk download not found'}), 404
+
+
+@app.route('/bulk_heartbeat/<bulk_id>', methods=['POST'])
+def bulk_heartbeat(bulk_id):
+    """Update heartbeat timestamp for bulk download to keep it alive"""
+    global bulk_heartbeats
+    
+    if bulk_id in bulk_heartbeats:
+        bulk_heartbeats[bulk_id]['last_heartbeat'] = datetime.now()
+        return jsonify({
+            'status': 'ok',
+            'message': 'Heartbeat received'
+        })
+    elif bulk_id in download_status:
+        # Bulk download exists but heartbeat tracking was cleaned up (already complete/timeout)
+        bulk_status = download_status[bulk_id].get('status', 'unknown')
+        return jsonify({
+            'status': 'ended',
+            'bulk_status': bulk_status,
+            'message': f'Bulk download already {bulk_status}'
+        })
+    else:
+        return jsonify({
+            'status': 'not_found',
+            'message': 'Bulk download not found'
+        }), 404
 
 
 @app.route('/cancel_download/<download_id>', methods=['POST'])
@@ -2266,11 +2508,19 @@ def preview_url():
         # Try to extract enhanced metadata for JioSaavn
         if source == "JioSaavn":
             enhanced_metadata = extract_jiosaavn_metadata(url)
+            # print(f"{enhanced_metadata}")
             if enhanced_metadata:
+                # Get artists array (from new extraction method)
+                artists_array = enhanced_metadata.get('artists', [])
+                
+                # Create artist string for backward compatibility
+                artist_str = ', '.join(artists_array) if artists_array else 'Unknown Artist'
+                
                 preview_data = {
                     'title': enhanced_metadata.get('title', f'{source} Content'),
-                    'uploader': enhanced_metadata.get('artist', source),
-                    'channel': enhanced_metadata.get('artist', source),
+                    'uploader': artist_str,  # Keep string for backward compatibility
+                    'channel': artist_str,   # Keep string for backward compatibility
+                    'artists': artists_array,  # Array of artist names
                     'thumbnail': enhanced_metadata.get('thumbnail', ''),
                     'album': enhanced_metadata.get('album', ''),
                     'pid': enhanced_metadata.get('pid', ''),  # Add PID for suggestions
@@ -2487,23 +2737,6 @@ def extract_jiosaavn_pid():
             
     except Exception as e:
         return jsonify({'error': f'Server error: {str(e)}'}), 500
-
-
-@app.route('/proxy_image')
-def proxy_image():
-    """Proxy images to avoid CORS issues"""
-    url = request.args.get('url')
-    if not url:
-        return '', 404
-    
-    try:
-        response = requests.get(url, timeout=5)
-        return send_file(
-            BytesIO(response.content),
-            mimetype=response.headers.get('Content-Type', 'image/jpeg')
-        )
-    except:
-        return '', 404
 
 
 @app.route('/extract_playlist', methods=['POST'])
@@ -2878,6 +3111,114 @@ def proxy_file():
         )
     except Exception as e:
         print(f"❌ File download error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+def get_responsive_image_url(image_url, size='medium'):
+    """
+    Returns appropriate image URL based on requested size.
+    size: 'small' (150x150), 'medium' (250x250), 'large' (500x500)
+    """
+    if not image_url or not isinstance(image_url, str):
+        return image_url
+    
+    size_map = {
+        'small': '150x150',
+        'medium': '250x250', 
+        'large': '500x500'
+    }
+    
+    target_size = size_map.get(size, '250x250')
+    width, height = target_size.split('x')
+    
+    # JioSaavn CDN - format: -150x150.jpg
+    if 'saavncdn.com' in image_url or 'jiosaavn.com' in image_url:
+        # Replace existing size with target size (match -150x150.jpg pattern)
+        new_url = re.sub(r'-(\d+x\d+)\.(jpg|jpeg|png|webp)', f'-{target_size}.\\2', image_url, flags=re.IGNORECASE)
+        if new_url != image_url:
+            return new_url
+        # If no match, try without file extension check
+        new_url = re.sub(r'-(\d+x\d+)', f'-{target_size}', image_url)
+        return new_url
+    
+    # Google/YouTube images - format: w120-h120-l90-rj
+    elif 'googleusercontent.com' in image_url or 'ggpht.com' in image_url:
+        # Replace w120-h120 pattern with target size
+        new_url = re.sub(r'w\d+-h\d+', f'w{width}-h{height}', image_url)
+        return new_url
+    
+    # SoundCloud images - format: t500x500.jpg
+    elif 'sndcdn.com' in image_url or 'soundcloud.com' in image_url:
+        # SoundCloud doesn't support small size, use medium instead
+        if size == 'small':
+            target_size = '250x250'
+        # Replace t500x500.jpg pattern with target size
+        new_url = re.sub(r't(\d+x\d+)\.(jpg|jpeg|png|webp)', f't{target_size}.\\2', image_url, flags=re.IGNORECASE)
+        if new_url != image_url:
+            return new_url
+        # Also handle -large. pattern (old SoundCloud format)
+        new_url = image_url.replace('-large.', f'-t{target_size}.')
+        return new_url
+    
+    # YouTube thumbnails (ytimg.com) - use quality levels
+    elif 'ytimg.com' in image_url or 'youtube.com' in image_url:
+        if size == 'large':
+            image_url = image_url.replace('mqdefault.jpg', 'maxresdefault.jpg').replace('default.jpg', 'maxresdefault.jpg')
+        elif size == 'medium':
+            image_url = image_url.replace('default.jpg', 'hqdefault.jpg').replace('maxresdefault.jpg', 'hqdefault.jpg')
+        # small keeps default or mqdefault
+    
+    return image_url
+
+
+@app.route('/api/proxy-image', methods=['GET'])
+def proxy_image():
+    """
+    Proxy images through backend with responsive quality.
+    Query params: url (required), size (optional: small/medium/large)
+    """
+    try:
+        image_url = request.args.get('url')
+        size = request.args.get('size', 'medium')  # Default to medium quality
+        
+        if not image_url:
+            return jsonify({'error': 'URL parameter required'}), 400
+        
+        # Get responsive image URL
+        responsive_url = get_responsive_image_url(image_url, size)
+        
+        # Fetch image with anonymous headers
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0',
+            'Accept': 'image/avif,image/webp,*/*',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'DNT': '1',
+            'Referer': 'https://www.google.com/',
+        }
+        
+        # Use proxy if available
+        proxies = {
+            'http': os.getenv('HTTP_PROXY', ''),
+            'https': os.getenv('HTTPS_PROXY', '')
+        } if os.getenv('HTTP_PROXY') or os.getenv('HTTPS_PROXY') else None
+        
+        response = requests.get(responsive_url, headers=headers, proxies=proxies, timeout=10)
+        
+        if response.status_code == 200:
+            # Return image with proper content type and caching
+            return Response(
+                response.content, 
+                mimetype=response.headers.get('Content-Type', 'image/jpeg'),
+                headers={
+                    'Cache-Control': 'public, max-age=86400',  # Cache for 24 hours
+                    'Access-Control-Allow-Origin': '*'
+                }
+            )
+        else:
+            return jsonify({'error': 'Failed to fetch image'}), response.status_code
+            
+    except Exception as e:
+        print(f"Error proxying image: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bulk & Playlist Downloader</title>
     <link rel="icon" type="image/png" href="static/fevicon2.png" />
+    <script>
+      // Apply theme immediately to prevent flash
+      (function() {
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'light') {
+          document.documentElement.className = 'light-theme';
+        }
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -31,6 +40,7 @@
         --gradient-secondary: linear-gradient(135deg, #34d399 0%, #10b981 100%);
       }
 
+      :root.light-theme body,
       body.light-theme {
         --bg-primary: #fafafa;
         --bg-secondary: #f5f5f5;
@@ -1076,7 +1086,7 @@
                   style="margin-right: 8px"
                   onchange="toggleBulkDownloadOptions()"
                 />
-                <span>🎵 Music (Audio Only)</span>
+                <span><svg style="width:16px;height:16px;vertical-align:middle;margin-right:6px;" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>Music (Audio Only)</span>
               </label>
               <label
                 style="display: flex; align-items: center; cursor: pointer"
@@ -1088,7 +1098,7 @@
                   style="margin-right: 8px"
                   onchange="toggleBulkDownloadOptions()"
                 />
-                <span>🎬 Video</span>
+                <span><svg style="width:16px;height:16px;vertical-align:middle;margin-right:6px;" viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>Video</span>
               </label>
             </div>
           </div>
@@ -1360,9 +1370,18 @@
     <div id="downloadManager" class="download-manager">
       <div class="download-manager-header">
         <h3>Downloads</h3>
-        <button class="close-manager-btn" onclick="toggleDownloadManager()">
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <select id="downloadFilter" onchange="filterDownloads(this.value)" style="background: rgba(255, 255, 255, 0.2); border: none; color: rgb(26, 26, 26); border-radius: 5px; padding: 5px 10px; cursor: pointer; font-size: 0.85em;">
+            <option value="all">All</option>
+            <option value="downloading">Downloading</option>
+            <option value="queued">Queued</option>
+            <option value="complete">Complete</option>
+            <option value="error">Failed</option>
+          </select>
+          <button class="close-manager-btn" onclick="toggleDownloadManager()">
           Close
         </button>
+        </div>
       </div>
       <div class="download-manager-list" id="downloadManagerList">
         <div
@@ -1424,6 +1443,7 @@
       let currentDownloadIndex = 0;
       let playlistDownloadId = null;
       let downloadManagerVisible = false;
+      let currentFilter = 'all'; // Track current download filter
 
       // Load downloads from localStorage on page load
       function loadDownloadsFromStorage() {
@@ -1669,6 +1689,12 @@
         }
       }
 
+      // Filter downloads by status
+      function filterDownloads(filter) {
+        currentFilter = filter;
+        updateDownloadManager();
+      }
+
       // Toggle download manager
       function toggleDownloadManager() {
         downloadManagerVisible = !downloadManagerVisible;
@@ -1691,10 +1717,40 @@
             d.status === "queued" ||
             d.status === "complete"
         );
+        
+        // Count downloads by status
+        const counts = {
+          all: bulkDownloads.length,
+          downloading: bulkDownloads.filter(d => d.status === 'downloading').length,
+          queued: bulkDownloads.filter(d => d.status === 'queued').length,
+          complete: bulkDownloads.filter(d => d.status === 'complete').length,
+          error: bulkDownloads.filter(d => d.status === 'error').length
+        };
+        
+        // Update dropdown options with counts
+        const filterSelect = document.getElementById('downloadFilter');
+        if (filterSelect) {
+          filterSelect.innerHTML = `
+            <option value="all">All (${counts.all})</option>
+            <option value="downloading">Downloading (${counts.downloading})</option>
+            <option value="queued">Queued (${counts.queued})</option>
+            <option value="complete">Complete (${counts.complete})</option>
+            <option value="error">Failed (${counts.error})</option>
+          `;
+          filterSelect.value = currentFilter;
+        }
+        
+        // Filter downloads based on current filter
+        let filteredDownloads = bulkDownloads;
+        if (currentFilter !== 'all') {
+          filteredDownloads = bulkDownloads.filter(d => d.status === currentFilter);
+        }
 
-        if (activeDownloads.length === 0) {
-          managerList.innerHTML =
-            '<div style="text-align: center; padding: 20px; color: var(--text-tertiary);">No active downloads</div>';
+        if (filteredDownloads.length === 0) {
+          const emptyMessage = currentFilter === 'all'
+            ? 'No active downloads'
+            : `No ${currentFilter} downloads`;
+          managerList.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-tertiary);">${emptyMessage}</div>`;
           badge.style.display = "none";
           return;
         }
@@ -1703,7 +1759,7 @@
         badge.textContent = activeDownloads.length;
 
         managerList.innerHTML = "";
-        activeDownloads.forEach((download, index) => {
+        filteredDownloads.forEach((download, index) => {
           const item = document.createElement("div");
           item.className = `manager-download-item ${download.status}`;
 
@@ -1729,6 +1785,23 @@
               ? download.title
               : download.url;
 
+          // Status icons
+          let statusIcon = "";
+          switch (download.status) {
+            case "queued":
+              statusIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+              break;
+            case "downloading":
+              statusIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7,10 12,15 17,10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
+              break;
+            case "complete":
+              statusIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+              break;
+            case "error":
+              statusIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+              break;
+          }
+
           item.innerHTML = `
             <div class="manager-download-title">${managerTitle}</div>
             <div class="manager-progress-bar">
@@ -1737,7 +1810,7 @@
               }%"></div>
             </div>
             <div class="manager-download-info">
-              <span>${
+              <span>${statusIcon} ${
                 download.status === "complete"
                   ? "Complete"
                   : download.status === "error"
@@ -1754,6 +1827,7 @@
 
       // Theme Toggle
       function toggleTheme() {
+        document.documentElement.classList.toggle("light-theme");
         document.body.classList.toggle("light-theme");
         const theme = document.body.classList.contains("light-theme")
           ? "light"
@@ -1764,10 +1838,37 @@
       // Load saved theme and downloads
       window.addEventListener("DOMContentLoaded", () => {
         const savedTheme = localStorage.getItem("theme");
+        
+        // Default to dark theme if no preference saved
+        if (!savedTheme) {
+          localStorage.setItem("theme", "dark");
+        }
+        
+        // Apply theme class from saved preference
         if (savedTheme === "light") {
+          document.documentElement.classList.add("light-theme");
           document.body.classList.add("light-theme");
         }
         loadDownloadsFromStorage();
+      });
+      
+      // Clean up heartbeat when page is closed or navigated away
+      window.addEventListener("beforeunload", () => {
+        if (bulkHeartbeatInterval) {
+          clearInterval(bulkHeartbeatInterval);
+          bulkHeartbeatInterval = null;
+        }
+      });
+      
+      // Also handle visibility change (tab switching)
+      document.addEventListener("visibilitychange", () => {
+        // When tab becomes hidden and stays hidden for more than 30 seconds,
+        // heartbeat will stop and server will timeout the bulk download
+        if (document.hidden) {
+          console.log("⚠️ Page hidden - heartbeat will continue but download may timeout if hidden too long");
+        } else {
+          console.log("✅ Page visible again");
+        }
       });
 
       // Tab Switching
@@ -1974,7 +2075,26 @@
       }
 
       // Poll bulk download progress
+      let bulkHeartbeatInterval = null;
+      
       async function pollBulkProgress(bulkId) {
+        // Start heartbeat to keep the bulk download alive
+        if (bulkHeartbeatInterval) {
+          clearInterval(bulkHeartbeatInterval);
+        }
+        
+        // Send heartbeat every 10 seconds (server timeout is 30 seconds)
+        bulkHeartbeatInterval = setInterval(async () => {
+          try {
+            await fetch(`${getApiBaseUrl()}/bulk_heartbeat/${bulkId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
+          } catch (error) {
+            console.error('Heartbeat error:', error);
+          }
+        }, 10000);
+        
         const pollInterval = setInterval(async () => {
           try {
             const response = await fetch(
@@ -1998,6 +2118,17 @@
               console.error("Bulk download not found yet, retrying...");
               return; // Continue polling
             }
+            
+            // Check if download timed out due to no heartbeat
+            if (data.status === 'timeout') {
+              console.error('⏱️ Bulk download timed out - no heartbeat received');
+              clearInterval(pollInterval);
+              clearInterval(bulkHeartbeatInterval);
+              bulkHeartbeatInterval = null;
+              ongoingBulkDownload = false;
+              alert('Bulk download stopped: Connection lost');
+              return;
+            }
 
             if (data.downloads) {
               bulkDownloads = data.downloads;
@@ -2011,8 +2142,10 @@
                 (d) => d.status === "complete" || d.status === "error"
               );
 
-              if (allDone) {
+              if (allDone || data.status === 'complete') {
                 clearInterval(pollInterval);
+                clearInterval(bulkHeartbeatInterval);
+                bulkHeartbeatInterval = null;
                 ongoingBulkDownload = false; // Clear flag when bulk download completes
               }
             }

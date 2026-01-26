@@ -270,7 +270,7 @@
 
         <div class="info-box">
           <p>
-            🎵 <strong>Ready to download!</strong> Enter a YouTube URL and
+            <svg style="width:18px;height:18px;vertical-align:middle;margin-right:6px;" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg><strong>Ready to download!</strong> Enter a YouTube URL and
             select your preferred format.
           </p>
         </div>
@@ -317,7 +317,7 @@
               style="background: #f0f0f0; color: #333; padding: 10px"
               onclick="toggleAdvancedOptions()"
             >
-              ⚙️ Advanced Options
+              <svg style="width:14px;height:14px;vertical-align:middle;margin-right:4px;" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>Advanced Options
             </button>
           </div>
 
@@ -409,7 +409,7 @@
             </div>
           </div>
           <button type="submit" class="button btn-primary" id="downloadBtn">
-            🎬 Start Download
+            <svg style="width:16px;height:16px;vertical-align:middle;margin-right:6px;" viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>Start Download
           </button>
         </form>
 
@@ -569,7 +569,7 @@
       function displayDownloadReady(data, videoInfo) {
         const result = document.getElementById("result");
 
-        let html = "<h3>✅ Download Ready!</h3>";
+        let html = "<h3><svg style='width:20px;height:20px;vertical-align:middle;margin-right:6px;color:#34d399;' viewBox='0 0 24 24' fill='currentColor'><path d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/></svg>Download Ready!</h3>";
 
         // Video info section
         if (videoInfo && (videoInfo.title || videoInfo.image)) {
@@ -590,7 +590,7 @@
           const downloadId = Math.random().toString(36).substring(7);
           html += `
                     <button class="download-btn" onclick="autoDownloadFile('${data.download_url}', '${downloadId}')" style="cursor: pointer; border: none; width: 100%;">
-                        <span>📥 Download File (Auto-Download)</span>
+                        <span><svg style="width:16px;height:16px;vertical-align:middle;margin-right:6px;" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>Download File (Auto-Download)</span>
                         <span class="quality-badge">Ready</span>
                     </button>
                     <div id="download-status-${downloadId}" style="margin-top: 10px; font-size: 13px; color: #666;"></div>
@@ -601,7 +601,7 @@
         if (data.download_url) {
           html += `
                     <a href="${data.download_url}" class="download-btn" download target="_blank" style="opacity: 0.7;">
-                        <span>🔗 Direct Link (No Proxy)</span>
+                        <span><svg style="width:16px;height:16px;vertical-align:middle;margin-right:6px;" viewBox="0 0 24 24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>Direct Link (No Proxy)</span>
                         <span class="quality-badge">Direct</span>
                     </a>
                 `;
@@ -640,7 +640,7 @@
       function showError(message) {
         const result = document.getElementById("result");
         result.innerHTML = `
-                <h3>❌ Error</h3>
+                <h3><svg style='width:20px;height:20px;vertical-align:middle;margin-right:6px;color:#f87171;' viewBox='0 0 24 24' fill='currentColor'><path d='M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z'/></svg>Error</h3>
                 <p>${escapeHtml(message)}</p>
             `;
         result.className = "result error";
@@ -697,7 +697,7 @@
             throw new Error("Download failed");
           }
 
-          statusDiv.innerHTML = "💾 Downloading...";
+          statusDiv.innerHTML = "<svg style='width:16px;height:16px;vertical-align:middle;margin-right:6px;' viewBox='0 0 24 24' fill='currentColor'><path d='M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z'/></svg>Downloading...";
           const blob = await response.blob();
 
           // Get filename from Content-Disposition or use default
@@ -724,12 +724,12 @@
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
 
-          statusDiv.innerHTML = "✅ Download complete!";
+          statusDiv.innerHTML = "<svg style='width:16px;height:16px;vertical-align:middle;margin-right:6px;color:#34d399;' viewBox='0 0 24 24' fill='currentColor'><path d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/></svg>Download complete!";
           setTimeout(() => {
             statusDiv.innerHTML = "";
           }, 3000);
         } catch (error) {
-          statusDiv.innerHTML = `❌ Download failed: ${error.message}`;
+          statusDiv.innerHTML = `<svg style='width:16px;height:16px;vertical-align:middle;margin-right:6px;color:#f87171;' viewBox='0 0 24 24' fill='currentColor'><path d='M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z'/></svg>Download failed: ${error.message}`;
         }
       }
 
