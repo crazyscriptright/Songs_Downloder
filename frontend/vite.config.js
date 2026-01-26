@@ -1,10 +1,13 @@
 import { defineConfig, loadEnv } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "path";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
 
   return {
+    plugins: [react(), tailwindcss()],
     server: {
       port: 3000,
       open: true,
@@ -18,6 +21,11 @@ export default defineConfig(({ mode }) => {
         "/get_file": env.VITE_API_URL || "http://localhost:5000",
         "/jiosaavn_suggestions": env.VITE_API_URL || "http://localhost:5000",
         "/proxy_image": env.VITE_API_URL || "http://localhost:5000",
+        "/proxy": env.VITE_API_URL || "http://localhost:5000",
+        "/extract_playlist": env.VITE_API_URL || "http://localhost:5000",
+        "/download_status": env.VITE_API_URL || "http://localhost:5000",
+        "/bulk_download": env.VITE_API_URL || "http://localhost:5000",
+        "/bulk_status": env.VITE_API_URL || "http://localhost:5000",
       },
     },
     build: {
@@ -25,13 +33,12 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         input: {
           main: resolve(__dirname, "index.html"),
-          bulk: resolve(__dirname, "bulk.html"),
         },
       },
     },
     define: {
       "import.meta.env.VITE_API_URL": JSON.stringify(
-        env.VITE_API_URL || "http://localhost:5000"
+        env.VITE_API_URL || "http://localhost:5001"
       ),
     },
   };
