@@ -1409,9 +1409,130 @@
       .recommended-tracks-grid {
         animation: slideIn 0.5s ease;
       }
+
+      /* Toast Notifications */
+      .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10001;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        max-width: 400px;
+      }
+
+      .toast {
+        background: var(--bg-card);
+        border: 2px solid var(--border-color);
+        border-radius: 12px;
+        padding: 16px 20px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        animation: slideInRight 0.3s ease;
+        min-width: 300px;
+      }
+
+      .toast.success {
+        border-left: 4px solid var(--success-color);
+      }
+
+      .toast.error {
+        border-left: 4px solid var(--error-color);
+      }
+
+      .toast.info {
+        border-left: 4px solid var(--info-color);
+      }
+
+      .toast-icon {
+        font-size: 24px;
+        flex-shrink: 0;
+      }
+
+      .toast.success .toast-icon {
+        color: var(--success-color);
+      }
+
+      .toast.error .toast-icon {
+        color: var(--error-color);
+      }
+
+      .toast.info .toast-icon {
+        color: var(--info-color);
+      }
+
+      .toast-content {
+        flex: 1;
+      }
+
+      .toast-title {
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+      }
+
+      .toast-message {
+        font-size: 0.9em;
+        color: var(--text-secondary);
+        word-wrap: break-word;
+      }
+
+      .toast-close {
+        background: none;
+        border: none;
+        color: var(--text-tertiary);
+        cursor: pointer;
+        font-size: 20px;
+        padding: 0;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        transition: all 0.2s;
+        flex-shrink: 0;
+      }
+
+      .toast-close:hover {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+      }
+
+      @keyframes slideInRight {
+        from {
+          opacity: 0;
+          transform: translateX(100%);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+
+      @keyframes slideOutRight {
+        from {
+          opacity: 1;
+          transform: translateX(0);
+        }
+        to {
+          opacity: 0;
+          transform: translateX(100%);
+        }
+      }
+
+      .toast.removing {
+        animation: slideOutRight 0.3s ease;
+      }
     </style>
   </head>
   <body>
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
     <div class="container">
       <div class="header">
         <button class="theme-toggle" onclick="toggleTheme()">🌓 Theme</button>
@@ -1696,6 +1817,38 @@
       let allDownloads = {};
       let userSelectedTab = null; // Track user's manually selected tab
       let currentFilter = 'all'; // Track current download filter
+
+      // Toast notification system
+      function showToast(type, title, message, duration = 5000) {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        const icons = {
+          success: '✓',
+          error: '✕',
+          info: 'ℹ'
+        };
+        
+        toast.innerHTML = `
+          <div class="toast-icon">${icons[type] || 'ℹ'}</div>
+          <div class="toast-content">
+            <div class="toast-title">${title}</div>
+            <div class="toast-message">${message}</div>
+          </div>
+          <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+        `;
+        
+        container.appendChild(toast);
+        
+        // Auto remove after duration
+        if (duration > 0) {
+          setTimeout(() => {
+            toast.classList.add('removing');
+            setTimeout(() => toast.remove(), 300);
+          }, duration);
+        }
+      }
 
       // YouTube fallback download via proxy API
       async function downloadViaProxyAPI(
@@ -2179,11 +2332,14 @@
 
           if (response.ok) {
             showNotification(result.message, "info");
+            showToast('info', 'Download Cancelled', result.message || 'Download has been cancelled.', 3000);
           } else {
             showNotification(result.error, "error");
+            showToast('error', 'Cancel Failed', result.error || 'Could not cancel download.');
           }
         } catch (error) {
           showNotification("Failed to cancel download", "error");
+          showToast('error', 'Cancel Failed', 'Failed to cancel download.');
         }
       }
 
@@ -2204,6 +2360,7 @@
           downloadQueue.splice(queueIndex, 1);
 
           showNotification(`${item.title} removed from queue`, "info");
+          showToast('info', 'Removed from Queue', `${item.title} has been removed from the download queue.`, 3000);
           updateDownloadManager();
           updateDownloadBadge();
         }
@@ -2224,6 +2381,7 @@
         updateDownloadManager();
         updateDownloadBadge();
         showNotification("Finished downloads cleared", "success");
+        showToast('success', 'Downloads Cleared', 'All finished downloads have been removed from the list.', 3000);
       }
 
       // Handle browser back/forward navigation
@@ -2280,6 +2438,7 @@
           `${title} added to download queue (Position ${downloadQueue.length})`,
           "info",
         );
+        showToast('info', 'Added to Queue', `${title} will download when a slot is available. Position: ${downloadQueue.length}`, 4000);
 
         // Update download manager
         updateDownloadManager();
@@ -2963,7 +3122,10 @@
 
       async function performSearch() {
         const query = searchInput.value.trim();
-        if (!query) return;
+        if (!query) {
+          showToast('error', 'No Search Query', 'Please enter a song name or URL to search.');
+          return;
+        }
 
         // Reset user's tab selection for new search
         userSelectedTab = null;
@@ -2984,7 +3146,18 @@
             "Invalid URL!",
             "Only music platform URLs are supported (YouTube, SoundCloud, JioSaavn, Spotify, etc.)",
           );
+          showToast('error', 'Invalid URL', 'Only music platform URLs are supported (YouTube, SoundCloud, JioSaavn, Spotify, etc.).');
           return;
+        }
+
+        // Validate URL format if it's a music URL
+        if (isMusicUrl) {
+          try {
+            new URL(query);
+          } catch (e) {
+            showToast('error', 'Invalid URL Format', 'Please enter a valid URL.');
+            return;
+          }
         }
 
         // Update URL with search query
@@ -3047,6 +3220,7 @@
               "URL processing failed!",
               "Please check the URL and try again",
             );
+            showToast('error', 'URL Processing Failed', 'Please check the URL and try again.');
             searchBtn.disabled = false;
           }
         } else {
@@ -4532,6 +4706,9 @@
           };
           saveDownloadsToStorage();
           updateDownloadManager();
+          
+          // Show toast notification for download started
+          showToast('info', 'Download Started', `${title} has been queued for download.`, 3000);
 
           // Poll download status with timeout tracking
           if (button) {
@@ -4549,6 +4726,7 @@
             button.disabled = false;
           }
           showNotification(`❌ Download failed: ${error.message}`, "error");
+          showToast('error', 'Download Failed', `${title}: ${error.message}`);
 
           // Download finished (failed), process next in queue
           activeDownloads--;
@@ -4577,6 +4755,7 @@
           }
 
           showNotification(`⏱️ Download timeout: ${title}`, "error");
+          showToast('error', 'Download Timeout', `${title} took too long to process.`);
 
           // Download timed out, process next in queue
           cleanupOngoingDownload(url, title);
@@ -4644,6 +4823,7 @@
 
               console.log(`✅ Auto-downloaded: ${title}`);
               showNotification(`Downloaded: ${title}`, "success");
+              showToast('success', 'Download Complete', `${title} has been downloaded successfully.`, 4000);
             }
 
             // Download finished, process next in queue
@@ -4715,6 +4895,7 @@
                   `❌ Download failed: Both methods failed. ${fallbackError.message}`,
                   "error",
                 );
+                showToast('error', 'Download Failed', `${title}: Both download methods failed.`);
 
                 // Update download status
                 allDownloads[downloadId].status = "error";
@@ -4740,6 +4921,7 @@
               `❌ Download failed: ${data.error || "Unknown error"}`,
               "error",
             );
+            showToast('error', 'Download Failed', `${title}: ${data.error || "Unknown error"}`);
 
             // Download finished (failed), process next in queue
             cleanupOngoingDownload(url, title);
@@ -4867,6 +5049,7 @@
           }
 
           showNotification(`❌ Status check failed: ${errorMessage}`, "error");
+          showToast('error', 'Status Check Failed', `${title}: Could not verify download status.`);
 
           // Download failed, process next in queue
           cleanupOngoingDownload(url, title);
@@ -4875,49 +5058,29 @@
         }
       }
 
-      // Show notification
+      // Show notification - deprecated, use showToast instead
       function showNotification(message, type = "info") {
-        const notification = document.createElement("div");
-
-        // Use semantic colors
-        let bgColor, textColor, borderColor;
-
-        if (type === "success") {
-          bgColor = "var(--success-color)";
-          textColor = "white";
-          borderColor = "var(--success-color)";
-        } else if (type === "error") {
-          bgColor = "var(--error-color)";
-          textColor = "white";
-          borderColor = "var(--error-color)";
-        } else {
-          bgColor = "var(--accent-color)";
-          textColor = "white";
-          borderColor = "var(--accent-color)";
+        // Parse message to extract title if it contains emoji or special format
+        let title = type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info';
+        let msg = message;
+        
+        // Extract title from message if it has format like "✅ Title: message"
+        const match = message.match(/^[^\w\s]+\s*([^:]+):\s*(.+)$/);
+        if (match) {
+          title = match[1].trim();
+          msg = match[2].trim();
+        } else if (message.startsWith('❌')) {
+          title = 'Error';
+          msg = message.replace(/❌\s*/, '');
+        } else if (message.startsWith('✅')) {
+          title = 'Success';
+          msg = message.replace(/✅\s*/, '');
+        } else if (message.startsWith('⏱️')) {
+          title = 'Timeout';
+          msg = message.replace(/⏱️\s*/, '');
         }
-
-        notification.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                padding: 15px 20px;
-                background: ${bgColor};
-                color: ${textColor};
-                border: 1px solid ${borderColor};
-                border-radius: 10px;
-                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-                z-index: 10000;
-                animation: slideIn 0.3s ease-out;
-                max-width: 400px;
-                font-size: 14px;
-            `;
-        notification.innerHTML = message;
-        document.body.appendChild(notification);
-
-        setTimeout(() => {
-          notification.style.animation = "slideOut 0.3s ease-out";
-          setTimeout(() => notification.remove(), 300);
-        }, 5000);
+        
+        showToast(type, title, msg);
       }
 
       // Global event delegation for advanced buttons

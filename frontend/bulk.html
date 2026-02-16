@@ -1030,6 +1030,9 @@
     </style>
   </head>
   <body>
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
     <div class="container">
       <div class="header">
         <div class="nav-links">
@@ -1444,6 +1447,38 @@
       let playlistDownloadId = null;
       let downloadManagerVisible = false;
       let currentFilter = 'all'; // Track current download filter
+
+      // Toast notification system
+      function showToast(type, title, message, duration = 5000) {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        const icons = {
+          success: '✓',
+          error: '✕',
+          info: 'ℹ'
+        };
+        
+        toast.innerHTML = `
+          <div class="toast-icon">${icons[type] || 'ℹ'}</div>
+          <div class="toast-content">
+            <div class="toast-title">${title}</div>
+            <div class="toast-message">${message}</div>
+          </div>
+          <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+        `;
+        
+        container.appendChild(toast);
+        
+        // Auto remove after duration
+        if (duration > 0) {
+          setTimeout(() => {
+            toast.classList.add('removing');
+            setTimeout(() => toast.remove(), 300);
+          }, duration);
+        }
+      }
 
       // Load downloads from localStorage on page load
       function loadDownloadsFromStorage() {
@@ -1990,7 +2025,7 @@
         // Prevent duplicate bulk download calls
         if (ongoingBulkDownload) {
           console.error("⚠️ Bulk download already in progress");
-          alert("Bulk download already in progress. Please wait.");
+          showToast('error', 'Bulk Download In Progress', 'Please wait for the current bulk download to complete.');
           return;
         }
 
@@ -2001,10 +2036,44 @@
           .filter((url) => url.length > 0);
 
         if (urls.length === 0) {
-          alert("Please enter at least one URL");
+          showToast('error', 'No URLs Provided', 'Please enter at least one URL to download.');
           return;
         }
 
+        // Validate URLs
+        const invalidUrls = [];
+        const validUrls = [];
+        urls.forEach((url, index) => {
+          try {
+            const urlObj = new URL(url);
+            // Check if it's a valid HTTP/HTTPS URL
+            if (urlObj.protocol === 'http:' || urlObj.protocol === 'https:') {
+              validUrls.push(url);
+            } else {
+              invalidUrls.push(`Line ${index + 1}: ${url.substring(0, 50)}...`);
+            }
+          } catch (e) {
+            invalidUrls.push(`Line ${index + 1}: ${url.substring(0, 50)}...`);
+          }
+        });
+
+        // Show error if there are invalid URLs
+        if (invalidUrls.length > 0) {
+          const errorMessage = invalidUrls.length === 1 
+            ? `Invalid URL found: ${invalidUrls[0]}` 
+            : `${invalidUrls.length} invalid URL(s) found. First: ${invalidUrls[0]}`;
+          showToast('error', 'Invalid URL(s) Detected', errorMessage, 8000);
+          
+          // If all URLs are invalid, stop here
+          if (validUrls.length === 0) {
+            return;
+          }
+          
+          // Continue with valid URLs only
+          showToast('info', 'Continuing with Valid URLs', `Processing ${validUrls.length} valid URL(s)...`, 3000);
+        }
+
+        showToast('info', 'Bulk Download Started', `Processing ${validUrls.length} URL(s)...`);
         ongoingBulkDownload = true;
 
         // Get download type
@@ -2038,7 +2107,7 @@
         }
 
         // Initialize downloads
-        bulkDownloads = urls.map((url, index) => ({
+        bulkDownloads = validUrls.map((url, index) => ({
           url,
           title: `Item ${index + 1}`,
           status: "queued",
@@ -2056,21 +2125,23 @@
           const response = await fetch(`${getApiBaseUrl()}/bulk_download`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ urls, advancedOptions: options }),
+            body: JSON.stringify({ urls: validUrls, advancedOptions: options }),
           });
 
           const data = await response.json();
 
           if (data.bulk_id) {
+            showToast('success', 'Download Submitted', `Successfully submitted ${validUrls.length} URL(s) for download.`, 4000);
             // Poll for progress
             pollBulkProgress(data.bulk_id);
           } else {
+            showToast('error', 'Bulk Download Failed', 'Failed to start bulk download');
             ongoingBulkDownload = false;
           }
         } catch (error) {
           console.error("Bulk download error:", error);
+          showToast('error', 'Bulk Download Error', error.message || 'An unexpected error occurred');
           ongoingBulkDownload = false;
-          alert(`Error: ${error.message}`);
         }
       }
 
@@ -2126,12 +2197,31 @@
               clearInterval(bulkHeartbeatInterval);
               bulkHeartbeatInterval = null;
               ongoingBulkDownload = false;
-              alert('Bulk download stopped: Connection lost');
+              showToast('error', 'Bulk Download Timeout', 'Download timed out due to inactivity. Please stay on the page.');
               return;
             }
 
             if (data.downloads) {
+              // Track previous statuses to detect changes
+              const previousStatuses = {};
+              bulkDownloads.forEach((d, i) => {
+                previousStatuses[i] = d.status;
+              });
+
               bulkDownloads = data.downloads;
+              
+              // Show toast on status change
+              bulkDownloads.forEach((download, index) => {
+                const prevStatus = previousStatuses[index];
+                if (prevStatus && prevStatus !== download.status) {
+                  if (download.status === 'complete') {
+                    showToast('success', 'Download Complete', `${download.title || 'File'} downloaded successfully`);
+                  } else if (download.status === 'error') {
+                    showToast('error', 'Download Failed', `${download.title || 'File'}: ${download.error || 'Unknown error'}`);
+                  }
+                }
+              });
+
               saveDownloadsToStorage();
               renderBulkProgress();
               updateBulkStats();
@@ -2147,6 +2237,11 @@
                 clearInterval(bulkHeartbeatInterval);
                 bulkHeartbeatInterval = null;
                 ongoingBulkDownload = false; // Clear flag when bulk download completes
+                
+                // Show completion toast
+                const completed = bulkDownloads.filter(d => d.status === 'complete').length;
+                const failed = bulkDownloads.filter(d => d.status === 'error').length;
+                showToast('info', 'Bulk Download Complete', `Completed: ${completed}, Failed: ${failed}`);
               }
             }
           } catch (error) {
@@ -2274,7 +2369,24 @@
 
         const url = document.getElementById("playlistUrl").value.trim();
         if (!url) {
-          alert("Please enter a playlist URL");
+          showToast('error', 'No Playlist URL', 'Please enter a playlist URL to download.');
+          return;
+        }
+
+        // Validate playlist URL
+        try {
+          const urlObj = new URL(url);
+          if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+            showToast('error', 'Invalid Playlist URL', 'Please enter a valid HTTP/HTTPS URL.');
+            return;
+          }
+          // Check if it's a YouTube playlist URL
+          if (!url.includes('youtube.com/playlist') && !url.includes('youtu.be')) {
+            showToast('error', 'Invalid Playlist URL', 'Please enter a valid YouTube playlist URL.');
+            return;
+          }
+        } catch (e) {
+          showToast('error', 'Invalid Playlist URL', 'Please enter a valid URL format.');
           return;
         }
 
@@ -2289,9 +2401,7 @@
             // Validate playlist range format
             const validRange = /^(\d+|\d+-\d+)(,(\d+|\d+-\d+))*$/;
             if (!validRange.test(range)) {
-              alert(
-                "Invalid playlist range format. Use formats like: 1-5, 1,3,5, or 1-3,5-7"
-              );
+              showToast('error', 'Invalid Range Format', 'Use formats like: 1-5, 1,3,5, or 1-3,5-7');
               return;
             }
             playlistItems = range;
@@ -2303,6 +2413,8 @@
         try {
           // Step 1: Extract individual video URLs from playlist
           console.log("📋 Extracting playlist videos...");
+          showToast('info', 'Extracting Playlist', 'Extracting videos from playlist...', 3000);
+          
           const extractResponse = await fetch(
             `${getApiBaseUrl()}/extract_playlist`,
             {
@@ -2325,10 +2437,13 @@
           console.log(`✅ Extracted ${videos.length} videos from playlist`);
 
           if (videos.length === 0) {
-            alert("No videos found in playlist");
+            showToast('error', 'Playlist Empty', 'No videos found in playlist');
             ongoingPlaylistDownload = false;
             return;
           }
+
+          showToast('success', 'Playlist Extracted', `Successfully extracted ${videos.length} video(s) from playlist.`, 4000);
+          showToast('info', 'Playlist Download Started', `Downloading ${videos.length} video(s) from playlist...`);
 
           // Step 2: Download each video using API-based download
           const format =
@@ -2405,10 +2520,14 @@
           }
 
           console.log("🎉 Playlist download completed!");
+          const playlistVideos = bulkDownloads.filter(d => d.isPlaylist);
+          const completed = playlistVideos.filter(d => d.status === 'complete').length;
+          const failed = playlistVideos.filter(d => d.status === 'error').length;
+          showToast('info', 'Playlist Download Complete', `Completed: ${completed}, Failed: ${failed}`);
           ongoingPlaylistDownload = false;
         } catch (error) {
           console.error("Playlist download error:", error);
-          alert(`Error: ${error.message}`);
+          showToast('error', 'Playlist Download Error', error.message || 'Failed to download playlist');
           ongoingPlaylistDownload = false;
         }
       }
