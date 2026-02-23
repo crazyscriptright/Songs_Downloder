@@ -1,3 +1,7 @@
 venv/
 __pycache__/
-schedulestart.bat
+schedulestart.
+--init__.py
+*.log
+*.tmp
+*.md

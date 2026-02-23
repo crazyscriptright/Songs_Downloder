@@ -27,3 +27,4 @@ build
 node_modules
 venv
 .vite
+package-lock.json
