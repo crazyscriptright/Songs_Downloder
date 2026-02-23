@@ -1,36 +1,45 @@
 /* ================================================================
-   CSS Custom Properties (Variables)
+   CSS Custom Properties (Variables) — Vintage Palette
    ================================================================ */
 
+/* Vintage color tokens (from tailwind config) */
 :root {
-  /* Modern Light theme (default) */
-  --bg-primary: #fafafa;
-  --bg-secondary: #f5f5f5;
-  --bg-card: #ffffff;
-  --text-primary: #2d2d2d;
-  --text-secondary: #6b7280;
-  --text-tertiary: #9ca3af;
-  --accent-color: #10b981;
-  --accent-secondary: #059669;
-  --border-color: #e5e7eb;
-  --shadow-color: rgba(16, 185, 129, 0.15);
-  --success-color: #10b981;
-  --error-color: #ef4444;
-  --warning-color: #f59e0b;
-  --info-color: #8b5cf6;
-  --download-color: #a855f7;
-  --gradient-primary: linear-gradient(135deg, #a855f7 0%, #3b82f6 100%);
-  --gradient-secondary: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  --status-success-bg: rgba(16, 185, 129, 0.1);
-  --status-success-border: rgba(16, 185, 129, 0.3);
-  --status-error-bg: rgba(239, 68, 68, 0.1);
-  --status-error-border: rgba(239, 68, 68, 0.3);
-  --status-warning-bg: rgba(245, 158, 11, 0.1);
-  --status-warning-border: rgba(245, 158, 11, 0.3);
-  --status-info-bg: rgba(139, 92, 246, 0.1);
-  --status-info-border: rgba(139, 92, 246, 0.3);
-  --status-loading-bg: rgba(128, 128, 128, 0.03);
-  --status-loading-border: rgba(128, 128, 128, 0.15);
+  --vintage-dark:       #1B2021;
+  --vintage-olive:      #51513D;
+  --vintage-moss:       #A6A867;
+  --vintage-sand:       #E3DC95;
+  --vintage-paper:      #E3DCC2;
+  --vintage-paper-light:#F1EBDD;
+  --vintage-paper-deep: #D8CFB2;
+
+  /* Default = Light Vintage Paper */
+  --bg-primary:   #F1EBDD;
+  --bg-secondary: #E3DCC2;
+  --bg-card:      #FAF6EE;
+  --text-primary:    #1B2021;
+  --text-secondary:  #51513D;
+  --text-tertiary:   #8A8760;
+  --accent-color:    #51513D;
+  --accent-secondary:#A6A867;
+  --border-color:    #D8CFB2;
+  --shadow-color:    rgba(81, 81, 61, 0.18);
+  --success-color:   #5C7A3E;
+  --error-color:     #8B3A3A;
+  --warning-color:   #A07830;
+  --info-color:      #51513D;
+  --download-color:  #A6A867;
+  --gradient-primary: linear-gradient(135deg, #51513D 0%, #A6A867 100%);
+  --gradient-secondary: linear-gradient(135deg, #A6A867 0%, #E3DC95 100%);
+  --status-success-bg:     rgba(92, 122, 62, 0.12);
+  --status-success-border: rgba(92, 122, 62, 0.35);
+  --status-error-bg:     rgba(139, 58, 58, 0.12);
+  --status-error-border: rgba(139, 58, 58, 0.35);
+  --status-warning-bg:     rgba(160, 120, 48, 0.12);
+  --status-warning-border: rgba(160, 120, 48, 0.35);
+  --status-info-bg:     rgba(81, 81, 61, 0.1);
+  --status-info-border: rgba(81, 81, 61, 0.3);
+  --status-loading-bg:     rgba(81, 81, 61, 0.04);
+  --status-loading-border: rgba(81, 81, 61, 0.15);
 
   /* Typography */
   --font-sans: "Inter Variable", "Inter", system-ui, -apple-system, sans-serif;

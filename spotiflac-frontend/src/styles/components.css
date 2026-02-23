@@ -217,7 +217,7 @@
     var(--accent-color) 0%,
     var(--accent-secondary) 100%
   );
-  color: white;
+  color: var(--bg-primary);
   border: none;
   border-radius: 15px;
   cursor: pointer;
@@ -274,9 +274,10 @@
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.1),
+    var(--border-color),
     transparent
   );
+  opacity: 0.3;
   transition: left 0.5s ease;
 }
 
@@ -343,7 +344,7 @@
   display: inline-block;
   width: 20px;
   height: 20px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
+  border: 3px solid var(--border-color);
   border-radius: 50%;
   border-top-color: currentColor;
   animation: spin 1s linear infinite;
@@ -364,7 +365,7 @@
 
 .song-card {
   background: var(--bg-card);
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  border: 2px solid var(--border-color);
   border-radius: 10px;
   padding: 15px;
   transition: all 0.3s;
@@ -388,7 +389,7 @@
   object-fit: cover;
   border-radius: 8px;
   margin-bottom: 10px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-secondary);
   transition:
     opacity 0.3s ease,
     transform 0.3s ease;
@@ -402,9 +403,9 @@
   opacity: 0;
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.1) 25%,
-    rgba(255, 255, 255, 0.2) 50%,
-    rgba(255, 255, 255, 0.1) 75%
+    var(--bg-secondary) 25%,
+    var(--border-color) 50%,
+    var(--bg-secondary) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
@@ -424,9 +425,9 @@
   border-radius: 10px;
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.1) 25%,
-    rgba(255, 255, 255, 0.2) 50%,
-    rgba(255, 255, 255, 0.1) 75%
+    var(--bg-secondary) 25%,
+    var(--border-color) 50%,
+    var(--bg-secondary) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
@@ -455,7 +456,7 @@
   font-weight: bold;
   font-size: 1em;
   margin-bottom: 5px;
-  color: #fff;
+  color: var(--text-primary);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -464,7 +465,7 @@
 
 .song-artist {
   font-size: 0.9em;
-  color: #aaa;
+  color: var(--text-secondary);
   margin-bottom: 10px;
   display: -webkit-box;
   -webkit-line-clamp: 1;
@@ -474,7 +475,7 @@
 
 .song-metadata {
   font-size: 0.8em;
-  color: #888;
+  color: var(--text-tertiary);
   margin-bottom: 10px;
   display: flex;
   gap: 10px;
@@ -511,18 +512,18 @@
 }
 .download-btn.downloading {
   background: var(--warning-color);
-  color: #000;
+  color: var(--bg-primary);
   border-color: var(--warning-color);
 }
 .download-btn.queued {
   background: var(--text-secondary);
-  color: white;
+  color: var(--bg-primary);
   border-color: var(--text-secondary);
   opacity: 0.8;
 }
 .download-btn.complete {
   background: var(--success-color);
-  color: white;
+  color: var(--bg-primary);
   border-color: var(--success-color);
 }
 
@@ -676,7 +677,7 @@
   justify-content: space-between;
   align-items: center;
   background: var(--accent-color);
-  color: white;
+  color: var(--bg-primary);
   border-radius: 13px 13px 0 0;
 }
 
@@ -722,9 +723,9 @@
 }
 
 .download-manager-controls button {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.15);
   border: none;
-  color: white;
+  color: var(--bg-primary);
   border-radius: 5px;
   padding: 5px 8px;
   cursor: pointer;
@@ -733,7 +734,7 @@
 }
 
 .download-manager-controls button:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.25);
 }
 
 .download-list {
@@ -835,7 +836,7 @@
 
 .download-actions button:hover {
   background: var(--accent-color);
-  color: white;
+  color: var(--bg-primary);
   border-color: var(--accent-color);
 }
 
@@ -845,7 +846,7 @@
 }
 .download-actions button.cancel:hover {
   background: var(--error-color);
-  color: white;
+  color: var(--bg-primary);
 }
 
 .download-manager-toggle {
@@ -853,7 +854,7 @@
   bottom: 20px;
   right: 20px;
   background: var(--accent-color);
-  color: white;
+  color: var(--bg-primary);
   border: none;
   border-radius: 50%;
   width: 60px;
@@ -878,7 +879,7 @@
   top: -5px;
   right: -5px;
   background: var(--error-color);
-  color: white;
+  color: var(--bg-primary);
   border-radius: 50%;
   width: 20px;
   height: 20px;

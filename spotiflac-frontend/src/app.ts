@@ -73,6 +73,7 @@ export class App {
       this.toast.show(t, title, msg, dur);
 
     initLazyLoading();
+    this.initScrollOverlay();
 
     window.addEventListener("popstate", () => this.handlePopState());
 
@@ -99,6 +100,31 @@ export class App {
     setTimeout(() => {
       this.statusDiv.style.display = "none";
     }, 300);
+  }
+
+  /** Fade in a theme-colored overlay as the user scrolls past the hero area */
+  private initScrollOverlay(): void {
+    const update = () => {
+      // Start fading in after 80px, reach full overlay around 500px scroll
+      const scrollY = window.scrollY || document.documentElement.scrollTop;
+      const start = 80;
+      const end = 500;
+      const clamped = Math.min(Math.max((scrollY - start) / (end - start), 0), 1);
+      // Max overlay opacity ~0.85 so texture is still subtly visible
+      const opacity = +(clamped * 0.85).toFixed(3);
+      document.body.style.setProperty("--scroll-overlay-opacity", String(opacity));
+    };
+
+    let ticking = false;
+    window.addEventListener("scroll", () => {
+      if (!ticking) {
+        requestAnimationFrame(() => { update(); ticking = false; });
+        ticking = true;
+      }
+    }, { passive: true });
+
+    // Run once on load (in case page is already scrolled)
+    update();
   }
 
   async performSearch(): Promise<void> {

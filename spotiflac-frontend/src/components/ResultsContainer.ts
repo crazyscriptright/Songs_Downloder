@@ -127,7 +127,7 @@ export class ResultsContainer {
         <h2>${LINK_ICON}${info.source} - Loading...</h2>
       </div>
       <div class="url-result-card" style="background:var(--bg-card);padding:40px;border-radius:15px;border:2px solid var(--accent-color);text-align:center;">
-        <div style="display:inline-block;width:50px;height:50px;border:5px solid rgba(255,255,255,0.1);border-radius:50%;border-top-color:var(--accent-color);animation:spin 1s linear infinite;"></div>
+        <div style="display:inline-block;width:50px;height:50px;border:5px solid var(--border-color);border-radius:50%;border-top-color:var(--accent-color);animation:spin 1s linear infinite;"></div>
         <p style="color:var(--text-secondary);margin-top:20px;font-size:1.1em;">\u23F3 Fetching preview data...</p>
       </div>
     `;
@@ -439,9 +439,9 @@ export class ResultsContainer {
     if (isPlaylist) {
       const label = urlMode === "video" ? "Video" : "Song";
       html += `
-        <div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:15px;border-radius:10px;margin-bottom:20px;">
-          <h4 style="margin:0 0 10px;color:white;">Playlist Detected!</h4>
-          <p style="margin:0;color:rgba(255,255,255,0.9);font-size:0.9em;">Choose how to download.</p>
+        <div style="background:var(--gradient-primary);padding:15px;border-radius:10px;margin-bottom:20px;">
+          <h4 style="margin:0 0 10px;color:var(--bg-primary);">Playlist Detected!</h4>
+          <p style="margin:0;color:var(--bg-primary);opacity:0.9;font-size:0.9em;">Choose how to download.</p>
         </div>
         <div class="option-row">
           <div class="option-group"><label>Playlist Handling</label>
@@ -584,7 +584,7 @@ export class ResultsContainer {
       track.thumbnail !== "null";
     const thumbHTML = hasThumb
       ? `<img src="${track.thumbnail}" alt="${track.title}" loading="lazy" style="width:60px;height:60px;border-radius:6px;object-fit:cover;" />`
-      : '<div style="width:60px;height:60px;border-radius:6px;background:#2a2a2a;display:flex;align-items:center;justify-content:center;color:#777;font-size:24px;">\u266A</div>';
+      : '<div style="width:60px;height:60px;border-radius:6px;background:var(--bg-secondary);display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:24px;">\u266A</div>';
 
     const safeTitle = track.title.replace(/'/g, "\\'");
     const btnId = `rec-btn-${Math.random().toString(36).slice(2, 8)}`;

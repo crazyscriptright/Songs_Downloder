@@ -2,6 +2,9 @@
    Main CSS Entry Point — imports all partials in the correct order
    ================================================================ */
 
+/* Google Fonts — Vintage typography (must come before other rules) */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap');
+
 /* Tailwind CSS v4 */
 @import "tailwindcss";
 

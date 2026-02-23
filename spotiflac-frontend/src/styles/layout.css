@@ -19,13 +19,36 @@ label svg {
 
 body {
   font-family: var(--font-sans);
-  background: var(--bg-primary);
+  background-color: var(--bg-primary);
+  /* webp + gradient background is applied per-theme in theme-dark.css / theme-light.css */
+  background-size: cover;
+  background-attachment: fixed;
+  background-position: center;
   color: var(--text-primary);
   min-height: 100vh;
   padding: 20px;
-  transition: all 0.3s ease;
+  transition: color 0.3s ease, background-color 0.3s ease;
   line-height: 1.6;
   font-weight: 400;
+  --scroll-overlay-opacity: 0;
+  position: relative;
+}
+
+/* Scroll-driven overlay — starts transparent, fades in as you scroll */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(var(--scroll-overlay-color, 241, 235, 221), var(--scroll-overlay-opacity));
+  pointer-events: none;
+  z-index: 0;
+  transition: background 0.15s ease;
+}
+
+/* Ensure all body children sit above the overlay */
+body > * {
+  position: relative;
+  z-index: 1;
 }
 
 .container {
@@ -76,7 +99,7 @@ body {
   border-radius: 20px;
   padding: 40px;
   margin-bottom: 40px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 30px var(--shadow-color);
   border: 1px solid var(--border-color);
   max-width: 800px;
   width: 100%;
@@ -111,7 +134,7 @@ body {
 }
 
 .source-navigation {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-secondary);
   border-radius: 15px;
   padding: 15px;
   margin-bottom: 20px;
@@ -127,7 +150,7 @@ body {
 }
 
 .source-section {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-secondary);
   border-radius: 15px;
   padding: 20px;
   backdrop-filter: blur(10px);
@@ -144,7 +167,7 @@ body {
   justify-content: space-between;
   margin-bottom: 20px;
   padding-bottom: 15px;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 2px solid var(--border-color);
 }
 
 .source-header h2 {
