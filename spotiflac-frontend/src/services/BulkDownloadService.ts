@@ -1,9 +1,5 @@
 import { getApiBaseUrl } from "@/config";
 
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
-
 export type BulkDownloadStatus =
   | "queued"
   | "downloading"
@@ -23,6 +19,7 @@ export interface BulkDownloadItem {
   isPlaylist?: boolean;
   format?: string;
   quality?: string | null;
+  timestamp?: number;
 }
 
 export interface BulkAdvancedOptions {
@@ -42,12 +39,7 @@ export interface PlaylistVideo {
   title: string;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Service                                                            */
-/* ------------------------------------------------------------------ */
-
 export class BulkDownloadService {
-  /* ---- state ---- */
   downloads: BulkDownloadItem[] = [];
 
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
@@ -76,27 +68,36 @@ export class BulkDownloadService {
     this.showToast = showToast;
   }
 
-  /* ---- persistence ---- */
-
   loadFromStorage(): void {
     try {
       const stored = localStorage.getItem("allDownloads");
       if (!stored) return;
       const all = JSON.parse(stored) as Record<string, any>;
-      this.downloads = Object.values(all).map((d) => ({
-        url: d.url,
-        title: d.title,
-        status: (["queued", "downloading", "complete", "error"].includes(
-          d.status,
-        )
-          ? d.status
-          : "error") as BulkDownloadStatus,
-        progress: d.progress ?? 0,
-        error: d.error ?? null,
-        downloadId: d.id ?? null,
-        download_url: d.download_url ?? null,
-      }));
-      // mark all complete items as already auto-downloaded to prevent re-trigger
+
+      this.downloads = Object.values(all)
+        .filter((d: any) => {
+          if (d.isPlaylist) return true;
+
+          if (d.id && d.id.includes("bulk_")) return true;
+          if (d.id && d.id.includes("playlist_")) return true;
+          return false;
+        })
+        .map((d: any) => ({
+          url: d.url,
+          title: d.title,
+          status: (["queued", "downloading", "complete", "error"].includes(
+            d.status,
+          )
+            ? d.status
+            : "error") as BulkDownloadStatus,
+          progress: d.progress ?? 0,
+          error: d.error ?? null,
+          downloadId: d.id ?? null,
+          download_url: d.download_url ?? null,
+          isPlaylist: d.isPlaylist ?? false,
+          timestamp: d.timestamp ?? Date.now(),
+        }));
+
       this.downloads.forEach((d) => {
         if (d.status === "complete") {
           this.autoDownloadedIds.add(d.downloadId ?? d.download_id ?? d.url);
@@ -109,9 +110,11 @@ export class BulkDownloadService {
 
   saveToStorage(): void {
     try {
-      const all: Record<string, any> = {};
+      const existing = localStorage.getItem("allDownloads");
+      const all: Record<string, any> = existing ? JSON.parse(existing) : {};
+
       this.downloads.forEach((d) => {
-        const id = d.downloadId;
+        const id = d.downloadId || d.url;
         if (id) {
           all[id] = {
             id,
@@ -121,16 +124,18 @@ export class BulkDownloadService {
             progress: d.progress,
             error: d.error,
             download_url: d.download_url,
+            timestamp: all[id]?.timestamp || d.timestamp || Date.now(),
           };
         }
       });
+
       localStorage.setItem("allDownloads", JSON.stringify(all));
+
+      window.dispatchEvent(new CustomEvent("downloadsChanged"));
     } catch (e) {
       console.error("Error saving downloads to storage:", e);
     }
   }
-
-  /* ---- helpers ---- */
 
   static extractTitleFromUrl(url: string): string {
     try {
@@ -181,8 +186,6 @@ export class BulkDownloadService {
     };
   }
 
-  /* ---- bulk download ---- */
-
   async startBulkDownload(
     urls: string[],
     options: BulkAdvancedOptions,
@@ -196,7 +199,6 @@ export class BulkDownloadService {
       return;
     }
 
-    // validate
     const validUrls: string[] = [];
     const invalidUrls: string[] = [];
     urls.forEach((url, i) => {
@@ -243,14 +245,16 @@ export class BulkDownloadService {
     );
     this.ongoingBulk = true;
 
+    const bulkTimestamp = Date.now();
     this.downloads = validUrls.map((url, i) => ({
       url,
-      title: `Item ${i + 1}`,
+      title: BulkDownloadService.extractTitleFromUrl(url),
       status: "queued" as const,
       progress: 0,
       error: null,
-      downloadId: null,
+      downloadId: `bulk_${bulkTimestamp}_${i}`,
       download_url: null,
+      timestamp: bulkTimestamp,
     }));
     this.onChange();
 
@@ -325,7 +329,26 @@ export class BulkDownloadService {
 
         if (data.downloads) {
           const prevStatuses = this.downloads.map((d) => d.status);
-          this.downloads = data.downloads;
+          const prevIds = this.downloads.map((d) => d.downloadId);
+          const prevTitles = this.downloads.map((d) => d.title);
+          const prevTimestamps = this.downloads.map((d) => d.timestamp);
+
+          this.downloads = data.downloads.map((dl: any, i: number) => ({
+            ...dl,
+
+            title:
+              dl.title ||
+              prevTitles[i] ||
+              BulkDownloadService.extractTitleFromUrl(
+                dl.url || this.downloads[i]?.url || "",
+              ),
+            downloadId:
+              dl.downloadId ||
+              dl.download_id ||
+              prevIds[i] ||
+              `bulk_${Date.now()}_${i}`,
+            timestamp: prevTimestamps[i] || Date.now(),
+          }));
 
           this.downloads.forEach((dl, i) => {
             if (prevStatuses[i] && prevStatuses[i] !== dl.status) {
@@ -386,8 +409,6 @@ export class BulkDownloadService {
     }, 500 * index);
   }
 
-  /* ---- playlist download ---- */
-
   async startPlaylistDownload(
     playlistUrl: string,
     type: "audio" | "video",
@@ -402,7 +423,6 @@ export class BulkDownloadService {
   ): Promise<void> {
     if (this.ongoingPlaylist) return;
 
-    // validate
     try {
       const u = new URL(playlistUrl);
       if (u.protocol !== "http:" && u.protocol !== "https:") {
@@ -477,24 +497,25 @@ export class BulkDownloadService {
       const format = type === "video" ? videoOptions.quality : "mp3";
       const quality = type === "audio" ? audioOptions.quality || "128" : null;
 
+      const playlistTimestamp = Date.now();
       videos.forEach((video, i) => {
         this.downloads.push({
           url: video.url,
           title: video.title,
           status: "queued",
           progress: 0,
-          downloadId: `playlist_${Date.now()}_${i}`,
+          downloadId: `playlist_${playlistTimestamp}_${i}`,
           download_url: null,
           error: null,
           isPlaylist: true,
           format,
           quality,
+          timestamp: playlistTimestamp,
         });
       });
       this.saveToStorage();
       this.onChange();
 
-      // sequential download via proxy
       for (let i = 0; i < videos.length; i++) {
         const video = videos[i];
         const item = this.downloads.find(
@@ -541,8 +562,6 @@ export class BulkDownloadService {
     }
   }
 
-  /* ---- proxy download (YouTube fallback) ---- */
-
   private downloadViaProxy(
     url: string,
     title: string,
@@ -581,6 +600,10 @@ export class BulkDownloadService {
                   if (item) {
                     item.progress = pct;
                     item.status = pct >= 100 ? "complete" : "downloading";
+
+                    if (pd.title) {
+                      item.title = pd.title;
+                    }
                     this.saveToStorage();
                     this.onChange();
                   }
@@ -598,10 +621,14 @@ export class BulkDownloadService {
                     item.status = "complete";
                     item.progress = 100;
                     item.download_url = pd.download_url;
+
+                    if (pd.title) {
+                      item.title = pd.title;
+                    }
                     this.saveToStorage();
                     this.onChange();
                   }
-                  // auto-download
+
                   const fileUrl = `${base}/proxy/file?file_url=${encodeURIComponent(pd.download_url)}`;
                   const a = document.createElement("a");
                   a.href = fileUrl;
@@ -633,8 +660,6 @@ export class BulkDownloadService {
         .catch(reject);
     });
   }
-
-  /* ---- cleanup ---- */
 
   clearDownloads(): void {
     this.downloads = [];

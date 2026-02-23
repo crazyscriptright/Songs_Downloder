@@ -53,6 +53,14 @@ export class DownloadManager {
     clearBtn?.addEventListener("click", () =>
       this.downloadService.clearFinished(),
     );
+
+    // Listen for bulk download updates
+    window.addEventListener("downloadsChanged", () => {
+      if (this.downloadService) {
+        this.downloadService.loadFromStorage();
+        this.render();
+      }
+    });
   }
 
   /** Provide a reference to the DownloadService (avoids circular deps). */
@@ -180,9 +188,16 @@ export class DownloadManager {
             : "?";
           timeInfo = `Position ${pos} in queue`;
         } else {
-          timeInfo = dl.timestamp
-            ? new Date(dl.timestamp).toLocaleString()
-            : "";
+          if (dl.timestamp) {
+            const date = new Date(dl.timestamp);
+            const day = String(date.getDate()).padStart(2, "0");
+            const month = String(date.getMonth() + 1).padStart(2, "0");
+            const hours = String(date.getHours()).padStart(2, "0");
+            const minutes = String(date.getMinutes()).padStart(2, "0");
+            timeInfo = `${day}/${month} ${hours}:${minutes}`;
+          } else {
+            timeInfo = "";
+          }
         }
 
         return `

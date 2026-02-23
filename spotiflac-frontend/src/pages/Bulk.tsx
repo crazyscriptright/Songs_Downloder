@@ -12,7 +12,7 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from "react";
-import { IoDownloadOutline, IoMusicalNote, IoVideocam } from "react-icons/io5";
+import { IoMusicalNote, IoVideocam } from "react-icons/io5";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -30,47 +30,6 @@ function StatCard({ value, label }: { value: number; label: string }) {
     <div className="stat-card">
       <div className="stat-value">{value}</div>
       <div className="stat-label">{label}</div>
-    </div>
-  );
-}
-
-function ProgressItem({
-  dl,
-  index,
-  resolveUrl,
-}: {
-  dl: BulkDownloadItem;
-  index: number;
-  resolveUrl: (u: string) => string;
-}) {
-  const displayTitle =
-    dl.title && !dl.title.startsWith("Item ") ? dl.title : dl.url;
-  const statusText = dl.status.charAt(0).toUpperCase() + dl.status.slice(1);
-
-  return (
-    <div className={`download-item ${dl.status}`}>
-      <div className="download-header">
-        <div className="download-title">{displayTitle}</div>
-        <div className={`download-status status-${dl.status}`}>
-          {statusText}
-        </div>
-      </div>
-      <div className="progress-bar">
-        <div className="progress-fill" style={{ width: `${dl.progress}%` }} />
-      </div>
-      <div className="download-info">
-        <span>{dl.error || dl.speed || "Waiting..."}</span>
-        {dl.status === "complete" && dl.download_url && (
-          <a
-            href={resolveUrl(dl.download_url)}
-            className="download-link"
-            download
-          >
-            <IoDownloadOutline size={16} />
-            Download File
-          </a>
-        )}
-      </div>
     </div>
   );
 }
@@ -241,9 +200,6 @@ export default function Bulk() {
     setCustomRange("");
   };
 
-  const resolveUrl = (u: string) =>
-    serviceRef.current?.resolveDownloadUrl(u) ?? u;
-
   /* ---- render ---- */
 
   return (
@@ -301,7 +257,7 @@ export default function Bulk() {
                   onChange={() => setBulkDownloadType("music")}
                 />
                 <IoMusicalNote size={16} />
-                Music (Audio Only)
+                Music
               </label>
               <label className="radio-label">
                 <input
@@ -631,24 +587,6 @@ export default function Bulk() {
             <StatCard value={plStats.failed} label="Failed" />
           </div>
         </form>
-      )}
-
-      {/* ============== PROGRESS LIST ============== */}
-      {downloads.length > 0 && (
-        <div className="progress-section">
-          {downloads
-            .filter((d) =>
-              activeTab === "playlist" ? d.isPlaylist : !d.isPlaylist,
-            )
-            .map((dl, i) => (
-              <ProgressItem
-                key={dl.downloadId ?? dl.url + i}
-                dl={dl}
-                index={i}
-                resolveUrl={resolveUrl}
-              />
-            ))}
-        </div>
       )}
     </div>
   );

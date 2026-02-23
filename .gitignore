@@ -26,3 +26,4 @@ cookies.txt
 build
 node_modules
 venv
+.vite

@@ -1,18 +1,28 @@
-import { getApiBaseUrl, MAX_CONCURRENT_DOWNLOADS, MAX_POLL_ATTEMPTS, POLL_INTERVAL } from '@/config';
+import {
+  getApiBaseUrl,
+  MAX_CONCURRENT_DOWNLOADS,
+  MAX_POLL_ATTEMPTS,
+  POLL_INTERVAL,
+} from "@/config";
 import type {
-    AdvancedOptions,
-    DownloadItem,
-    DownloadRequestBody,
-    DownloadResponse,
-    DownloadStatusResponse,
-    QueueItem,
-    SearchType,
-} from '@/types';
-import { StorageService } from './StorageService';
-import { YouTubeService } from './YouTubeService';
+  AdvancedOptions,
+  DownloadItem,
+  DownloadRequestBody,
+  DownloadResponse,
+  DownloadStatusResponse,
+  QueueItem,
+  SearchType,
+} from "@/types";
+import { StorageService } from "./StorageService";
+import { YouTubeService } from "./YouTubeService";
 
 export type DownloadEventCallback = () => void;
-export type ToastFn = (type: 'success' | 'error' | 'info', title: string, message: string, duration?: number) => void;
+export type ToastFn = (
+  type: "success" | "error" | "info",
+  title: string,
+  message: string,
+  duration?: number,
+) => void;
 
 /**
  * Manages the download queue, active downloads, status polling, and proxy fallback.
@@ -33,7 +43,15 @@ export class DownloadService {
 
   /** Load persisted downloads from localStorage. */
   loadFromStorage(): void {
-    this.allDownloads = StorageService.loadDownloads();
+    const loaded = StorageService.loadDownloads();
+    // Ensure all downloads have timestamps
+    this.allDownloads = {};
+    for (const [id, download] of Object.entries(loaded)) {
+      this.allDownloads[id] = {
+        ...download,
+        timestamp: download.timestamp || Date.now(),
+      };
+    }
   }
 
   /** Persist current downloads to localStorage. */
@@ -43,17 +61,24 @@ export class DownloadService {
 
   /** Count of actively downloading + queued items. */
   get activeBadgeCount(): number {
-    const active = Object.values(this.allDownloads).filter((d) => d.status === 'downloading').length;
+    const active = Object.values(this.allDownloads).filter(
+      (d) => d.status === "downloading",
+    ).length;
     return active + this.downloadQueue.length;
   }
 
   /** Add a download to the queue. If slots are available, start immediately. */
-  queueDownload(url: string, title: string, button: HTMLButtonElement, useAdvanced = false): void {
+  queueDownload(
+    url: string,
+    title: string,
+    button: HTMLButtonElement,
+    useAdvanced = false,
+  ): void {
     const item: QueueItem = {
       url,
       title,
       useAdvanced,
-      status: 'queued',
+      status: "queued",
       timestamp: Date.now(),
       buttonId: button.id || `btn_${Date.now()}`,
     };
@@ -63,21 +88,31 @@ export class DownloadService {
     this.downloadQueue.push(item);
 
     button.disabled = true;
-    button.className = 'download-btn queued';
+    button.className = "download-btn queued";
     button.innerHTML = `<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"6\" y=\"4\" width=\"4\" height=\"16\"></rect><rect x=\"14\" y=\"4\" width=\"4\" height=\"16\"></rect></svg> Queued (${this.downloadQueue.length})`;
 
-    this.showToast('info', 'Added to Queue', `${title} will download when a slot is available. Position: ${this.downloadQueue.length}`, 4000);
+    this.showToast(
+      "info",
+      "Added to Queue",
+      `${title} will download when a slot is available. Position: ${this.downloadQueue.length}`,
+      4000,
+    );
     this.onChange();
     this.processQueue();
   }
 
   /** Try to start queued downloads if slots are available. */
   processQueue(): void {
-    while (this.activeDownloads < MAX_CONCURRENT_DOWNLOADS && this.downloadQueue.length > 0) {
+    while (
+      this.activeDownloads < MAX_CONCURRENT_DOWNLOADS &&
+      this.downloadQueue.length > 0
+    ) {
       const item = this.downloadQueue.shift()!;
-      const button = document.getElementById(item.buttonId) as HTMLButtonElement | null;
+      const button = document.getElementById(
+        item.buttonId,
+      ) as HTMLButtonElement | null;
       if (button) {
-        button.className = 'download-btn downloading';
+        button.className = "download-btn downloading";
         button.innerHTML = '<div class=\"spinner\"></div> Starting...';
       }
       this.activeDownloads++;
@@ -89,7 +124,12 @@ export class DownloadService {
   /**
    * Entry point: download a song. Queues if too many concurrent downloads.
    */
-  downloadSong(url: string, title: string, button: HTMLButtonElement, useAdvanced = false): void {
+  downloadSong(
+    url: string,
+    title: string,
+    button: HTMLButtonElement,
+    useAdvanced = false,
+  ): void {
     if (this.activeDownloads >= MAX_CONCURRENT_DOWNLOADS) {
       this.queueDownload(url, title, button, useAdvanced);
       return;
@@ -102,14 +142,21 @@ export class DownloadService {
   cancelQueuedDownload(queueIndex: number): void {
     if (queueIndex >= 0 && queueIndex < this.downloadQueue.length) {
       const item = this.downloadQueue[queueIndex];
-      const button = document.getElementById(item.buttonId) as HTMLButtonElement | null;
+      const button = document.getElementById(
+        item.buttonId,
+      ) as HTMLButtonElement | null;
       if (button) {
-        button.className = 'download-btn';
-        button.innerHTML = 'Download';
+        button.className = "download-btn";
+        button.innerHTML = "Download";
         button.disabled = false;
       }
       this.downloadQueue.splice(queueIndex, 1);
-      this.showToast('info', 'Removed from Queue', `${item.title} has been removed.`, 3000);
+      this.showToast(
+        "info",
+        "Removed from Queue",
+        `${item.title} has been removed.`,
+        3000,
+      );
       this.onChange();
     }
   }
@@ -117,20 +164,32 @@ export class DownloadService {
   /** Cancel an active download on the server. */
   async cancelDownload(downloadId: string): Promise<void> {
     try {
-      const response = await fetch(`${getApiBaseUrl()}/cancel_download/${downloadId}`, { method: 'POST' });
+      const response = await fetch(
+        `${getApiBaseUrl()}/cancel_download/${downloadId}`,
+        { method: "POST" },
+      );
       const result = await response.json();
       if (this.allDownloads[downloadId]) {
-        this.allDownloads[downloadId].status = 'cancelled';
+        this.allDownloads[downloadId].status = "cancelled";
         this.saveToStorage();
         this.onChange();
       }
       if (response.ok) {
-        this.showToast('info', 'Download Cancelled', result.message || 'Download has been cancelled.', 3000);
+        this.showToast(
+          "info",
+          "Download Cancelled",
+          result.message || "Download has been cancelled.",
+          3000,
+        );
       } else {
-        this.showToast('error', 'Cancel Failed', result.error || 'Could not cancel download.');
+        this.showToast(
+          "error",
+          "Cancel Failed",
+          result.error || "Could not cancel download.",
+        );
       }
     } catch {
-      this.showToast('error', 'Cancel Failed', 'Failed to cancel download.');
+      this.showToast("error", "Cancel Failed", "Failed to cancel download.");
     }
   }
 
@@ -138,13 +197,18 @@ export class DownloadService {
   clearFinished(): void {
     for (const id in this.allDownloads) {
       const s = this.allDownloads[id].status;
-      if (s === 'complete' || s === 'error' || s === 'cancelled') {
+      if (s === "complete" || s === "error" || s === "cancelled") {
         delete this.allDownloads[id];
       }
     }
     this.saveToStorage();
     this.onChange();
-    this.showToast('success', 'Downloads Cleared', 'All finished downloads have been removed.', 3000);
+    this.showToast(
+      "success",
+      "Downloads Cleared",
+      "All finished downloads have been removed.",
+      3000,
+    );
   }
 
   // ─── Private helpers ───────────────────────────────────────
@@ -162,37 +226,63 @@ export class DownloadService {
   /**
    * Build the advanced options object by reading from DOM elements.
    */
-  buildAdvancedOptions(url: string, useAdvanced: boolean, searchType: SearchType): AdvancedOptions {
+  buildAdvancedOptions(
+    url: string,
+    useAdvanced: boolean,
+    searchType: SearchType,
+  ): AdvancedOptions {
     let isVideoMode = false;
 
-    if (searchType === 'video') {
+    if (searchType === "video") {
       isVideoMode = true;
-    } else if (searchType === 'music') {
+    } else if (searchType === "music") {
       isVideoMode = false;
     } else {
       // 'all' — detect from DOM or URL
-      if (document.getElementById('videoQuality')) {
+      if (document.getElementById("videoQuality")) {
         isVideoMode = true;
-      } else if ((url.includes('youtube.com/watch') || url.includes('youtu.be/')) && !url.includes('music.youtube.com')) {
+      } else if (
+        (url.includes("youtube.com/watch") || url.includes("youtu.be/")) &&
+        !url.includes("music.youtube.com")
+      ) {
         isVideoMode = true;
       }
     }
 
     const opts: AdvancedOptions = {
       keepVideo: isVideoMode,
-      embedSubtitles: useAdvanced ? (document.getElementById('embedSubs') as HTMLInputElement)?.checked !== false : false,
-      addMetadata: useAdvanced ? (document.getElementById('addMetadata') as HTMLInputElement)?.checked !== false : true,
-      customArgs: '',
+      embedSubtitles: useAdvanced
+        ? (document.getElementById("embedSubs") as HTMLInputElement)
+            ?.checked !== false
+        : false,
+      addMetadata: useAdvanced
+        ? (document.getElementById("addMetadata") as HTMLInputElement)
+            ?.checked !== false
+        : true,
+      customArgs: "",
     };
 
     if (isVideoMode) {
-      opts.videoQuality = (document.getElementById('videoQuality') as HTMLSelectElement)?.value || '1080';
-      opts.videoFPS = (document.getElementById('videoFPS') as HTMLSelectElement)?.value || '30';
-      opts.videoFormat = (document.getElementById('videoFormat') as HTMLSelectElement)?.value || 'mkv';
+      opts.videoQuality =
+        (document.getElementById("videoQuality") as HTMLSelectElement)?.value ||
+        "1080";
+      opts.videoFPS =
+        (document.getElementById("videoFPS") as HTMLSelectElement)?.value ||
+        "30";
+      opts.videoFormat =
+        (document.getElementById("videoFormat") as HTMLSelectElement)?.value ||
+        "mkv";
     } else {
-      opts.audioFormat = (document.getElementById('audioFormat') as HTMLSelectElement)?.value || 'mp3';
-      opts.audioQuality = (document.getElementById('audioQuality') as HTMLSelectElement)?.value || '0';
-      opts.embedThumbnail = useAdvanced ? (document.getElementById('embedThumbnail') as HTMLInputElement)?.checked !== false : true;
+      opts.audioFormat =
+        (document.getElementById("audioFormat") as HTMLSelectElement)?.value ||
+        "mp3";
+      opts.audioQuality =
+        (document.getElementById("audioQuality") as HTMLSelectElement)?.value ||
+        "0";
+      opts.embedThumbnail = useAdvanced
+        ? (document.getElementById("embedThumbnail") as HTMLInputElement)
+            ?.checked !== false
+        : true;
     }
 
     return opts;
@@ -211,31 +301,37 @@ export class DownloadService {
 
     if (button) {
       button.disabled = true;
-      button.className = 'download-btn downloading';
-      button.innerHTML = '⏳ Starting...';
+      button.className = "download-btn downloading";
+      button.innerHTML = "⏳ Starting...";
     }
 
     try {
       const requestBody: DownloadRequestBody = { url, title };
 
       // Determine the current searchType from the DOM active button
-      let searchType: SearchType = 'music';
-      const activeBtn = document.querySelector('.type-btn.active') as HTMLElement | null;
+      let searchType: SearchType = "music";
+      const activeBtn = document.querySelector(
+        ".type-btn.active",
+      ) as HTMLElement | null;
       if (activeBtn) {
-        searchType = (activeBtn.dataset.type as SearchType) || 'music';
+        searchType = (activeBtn.dataset.type as SearchType) || "music";
       }
 
-      requestBody.advancedOptions = this.buildAdvancedOptions(url, useAdvanced, searchType);
+      requestBody.advancedOptions = this.buildAdvancedOptions(
+        url,
+        useAdvanced,
+        searchType,
+      );
 
       const response = await fetch(`${getApiBaseUrl()}/download`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
       });
 
       const data: DownloadResponse = await response.json();
       if (!response.ok || (data as any).error) {
-        throw new Error((data as any).error || 'Download request failed');
+        throw new Error((data as any).error || "Download request failed");
       }
 
       const downloadId = data.download_id;
@@ -244,14 +340,20 @@ export class DownloadService {
         id: downloadId,
         title,
         url,
-        status: 'downloading',
+        status: "downloading",
         progress: 0,
         requestBody,
+        timestamp: Date.now(),
       };
       this.saveToStorage();
       this.onChange();
 
-      this.showToast('info', 'Download Started', `${title} has been queued for download.`, 3000);
+      this.showToast(
+        "info",
+        "Download Started",
+        `${title} has been queued for download.`,
+        3000,
+      );
 
       if (button) {
         this.pollStatus(downloadId, button, title, url, 0);
@@ -259,11 +361,11 @@ export class DownloadService {
     } catch (error: any) {
       this.cleanupOngoing(url, title);
       if (button) {
-        button.className = 'download-btn';
-        button.innerHTML = '❌ Failed';
+        button.className = "download-btn";
+        button.innerHTML = "❌ Failed";
         button.disabled = false;
       }
-      this.showToast('error', 'Download Failed', `${title}: ${error.message}`);
+      this.showToast("error", "Download Failed", `${title}: ${error.message}`);
       this.activeDownloads--;
       this.processQueue();
     }
@@ -278,21 +380,23 @@ export class DownloadService {
     attemptCount: number,
   ): Promise<void> {
     if (attemptCount >= MAX_POLL_ATTEMPTS) {
-      button.className = 'download-btn';
-      button.innerHTML = '⏱️ Timeout';
+      button.className = "download-btn";
+      button.innerHTML = "⏱️ Timeout";
       button.disabled = false;
-      this.showToast('error', 'Download Timeout', `${title} took too long.`);
+      this.showToast("error", "Download Timeout", `${title} took too long.`);
       this.finishDownload(url, title);
       return;
     }
 
     try {
-      const response = await fetch(`${getApiBaseUrl()}/download_status/${downloadId}`);
+      const response = await fetch(
+        `${getApiBaseUrl()}/download_status/${downloadId}`,
+      );
       const data: DownloadStatusResponse = await response.json();
 
       if (!response.ok && (data as any).error) {
-        if ((data as any).error.toLowerCase().includes('not found')) {
-          (data as any).status = 'not_found';
+        if ((data as any).error.toLowerCase().includes("not found")) {
+          (data as any).status = "not_found";
         } else {
           throw new Error((data as any).error);
         }
@@ -309,49 +413,77 @@ export class DownloadService {
         download_url: data.download_url || null,
         speed: data.speed,
         eta: data.eta,
+        timestamp: this.allDownloads[downloadId]?.timestamp || Date.now(),
       };
       this.saveToStorage();
       this.onChange();
 
-      if (data.status === 'complete') {
-        button.className = 'download-btn complete';
-        button.innerHTML = '<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><polyline points=\"20 6 9 17 4 12\"></polyline></svg> Downloaded';
+      if (data.status === "complete") {
+        button.className = "download-btn complete";
+        button.innerHTML =
+          '<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><polyline points=\"20 6 9 17 4 12\"></polyline></svg> Downloaded';
         if (data.download_url) {
-          const link = document.createElement('a');
-          link.href = data.download_url.startsWith('http') ? data.download_url : `${getApiBaseUrl()}${data.download_url}`;
-          link.download = data.file || title || 'download';
-          link.style.display = 'none';
+          const link = document.createElement("a");
+          link.href = data.download_url.startsWith("http")
+            ? data.download_url
+            : `${getApiBaseUrl()}${data.download_url}`;
+          link.download = data.file || title || "download";
+          link.style.display = "none";
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          this.showToast('success', 'Download Complete', `${title} downloaded.`, 4000);
+          this.showToast(
+            "success",
+            "Download Complete",
+            `${title} downloaded.`,
+            4000,
+          );
         }
         this.finishDownload(url, title);
-      } else if (data.status === 'error') {
+      } else if (data.status === "error") {
         await this.handleDownloadError(downloadId, button, title, url, data);
-      } else if (data.status === 'cancelled') {
-        button.className = 'download-btn';
-        button.innerHTML = '🚫 Cancelled';
+      } else if (data.status === "cancelled") {
+        button.className = "download-btn";
+        button.innerHTML = "🚫 Cancelled";
         button.disabled = false;
         this.finishDownload(url, title);
-      } else if (data.status === 'downloading') {
+      } else if (data.status === "downloading") {
         const progress = data.progress || 0;
-        button.className = 'download-btn downloading';
-        button.innerHTML = `<div style=\"display:flex;flex-direction:column;align-items:center;gap:4px;\"><div>⏳ ${Math.round(progress)}%</div><div style=\"font-size:0.75em;opacity:0.8;\">${data.speed || 'N/A'} • ETA ${data.eta || 'N/A'}</div></div>`;
-        setTimeout(() => this.pollStatus(downloadId, button, title, url, attemptCount + 1), POLL_INTERVAL);
+        button.className = "download-btn downloading";
+        button.innerHTML = `<div style=\"display:flex;flex-direction:column;align-items:center;gap:4px;\"><div>⏳ ${Math.round(progress)}%</div><div style=\"font-size:0.75em;opacity:0.8;\">${data.speed || "N/A"} • ETA ${data.eta || "N/A"}</div></div>`;
+        setTimeout(
+          () =>
+            this.pollStatus(downloadId, button, title, url, attemptCount + 1),
+          POLL_INTERVAL,
+        );
       } else {
         // not_found, preparing, etc.
-        setTimeout(() => this.pollStatus(downloadId, button, title, url, attemptCount + 1), POLL_INTERVAL);
+        setTimeout(
+          () =>
+            this.pollStatus(downloadId, button, title, url, attemptCount + 1),
+          POLL_INTERVAL,
+        );
       }
     } catch (error: any) {
-      if (attemptCount < MAX_POLL_ATTEMPTS && (error.name === 'TypeError' || error.message?.includes('fetch'))) {
-        setTimeout(() => this.pollStatus(downloadId, button, title, url, attemptCount + 1), POLL_INTERVAL);
+      if (
+        attemptCount < MAX_POLL_ATTEMPTS &&
+        (error.name === "TypeError" || error.message?.includes("fetch"))
+      ) {
+        setTimeout(
+          () =>
+            this.pollStatus(downloadId, button, title, url, attemptCount + 1),
+          POLL_INTERVAL,
+        );
         return;
       }
-      button.className = 'download-btn';
-      button.innerHTML = '❌ Error';
+      button.className = "download-btn";
+      button.innerHTML = "❌ Error";
       button.disabled = false;
-      this.showToast('error', 'Status Check Failed', `${title}: ${error.message}`);
+      this.showToast(
+        "error",
+        "Status Check Failed",
+        `${title}: ${error.message}`,
+      );
       this.finishDownload(url, title);
     }
   }
@@ -364,7 +496,7 @@ export class DownloadService {
     url: string,
     data: DownloadStatusResponse,
   ): Promise<void> {
-    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+    const isYouTube = url.includes("youtube.com") || url.includes("youtu.be");
 
     if (isYouTube && !this.allDownloads[downloadId]?.fallbackAttempted) {
       this.allDownloads[downloadId].fallbackAttempted = true;
@@ -373,8 +505,10 @@ export class DownloadService {
       try {
         const req = this.allDownloads[downloadId]?.requestBody;
         const isVideo = req?.advancedOptions?.keepVideo === true;
-        const format = isVideo ? (req?.advancedOptions?.videoQuality || '360') : 'mp3';
-        const audioQuality = req?.advancedOptions?.audioQuality || '128';
+        const format = isVideo
+          ? req?.advancedOptions?.videoQuality || "360"
+          : "mp3";
+        const audioQuality = req?.advancedOptions?.audioQuality || "128";
 
         await YouTubeService.downloadViaProxy(
           url,
@@ -382,7 +516,7 @@ export class DownloadService {
           format,
           audioQuality,
           (percent, text) => {
-            button.className = 'download-btn downloading';
+            button.className = "download-btn downloading";
             button.innerHTML = `${percent}% ${text}`;
             if (this.allDownloads[downloadId]) {
               this.allDownloads[downloadId].progress = percent;
@@ -395,23 +529,34 @@ export class DownloadService {
 
         // Mark complete
         if (this.allDownloads[downloadId]) {
-          this.allDownloads[downloadId].status = 'complete';
+          this.allDownloads[downloadId].status = "complete";
           this.allDownloads[downloadId].progress = 100;
           this.saveToStorage();
           this.onChange();
         }
-        button.className = 'download-btn complete';
-        button.innerHTML = '<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><polyline points=\"20 6 9 17 4 12\"></polyline></svg> Downloaded';
-        this.showToast('success', 'Download Complete', `${title} downloaded via fallback.`, 4000);
+        button.className = "download-btn complete";
+        button.innerHTML =
+          '<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><polyline points=\"20 6 9 17 4 12\"></polyline></svg> Downloaded';
+        this.showToast(
+          "success",
+          "Download Complete",
+          `${title} downloaded via fallback.`,
+          4000,
+        );
         this.finishDownload(url, title);
         return;
       } catch (fallbackError: any) {
-        button.className = 'download-btn';
-        button.innerHTML = '❌ Failed';
+        button.className = "download-btn";
+        button.innerHTML = "❌ Failed";
         button.disabled = false;
-        this.showToast('error', 'Download Failed', `${title}: Both methods failed.`);
-        this.allDownloads[downloadId].status = 'error';
-        this.allDownloads[downloadId].error = `Both methods failed: ${fallbackError.message}`;
+        this.showToast(
+          "error",
+          "Download Failed",
+          `${title}: Both methods failed.`,
+        );
+        this.allDownloads[downloadId].status = "error";
+        this.allDownloads[downloadId].error =
+          `Both methods failed: ${fallbackError.message}`;
         this.saveToStorage();
         this.onChange();
         this.finishDownload(url, title);
@@ -420,10 +565,14 @@ export class DownloadService {
     }
 
     // Non-YouTube or fallback already attempted
-    button.className = 'download-btn';
-    button.innerHTML = '❌ Failed';
+    button.className = "download-btn";
+    button.innerHTML = "❌ Failed";
     button.disabled = false;
-    this.showToast('error', 'Download Failed', `${title}: ${data.error || 'Unknown error'}`);
+    this.showToast(
+      "error",
+      "Download Failed",
+      `${title}: ${data.error || "Unknown error"}`,
+    );
     this.finishDownload(url, title);
   }
 }

@@ -105,6 +105,9 @@ export class App {
     const query = this.searchBox.query;
     if (!query) return;
 
+    // Mark search as in progress to prevent suggestions
+    this.searchBox.setSearchInProgress(true);
+
     const isMusicUrlFlag = isMusicUrl(query);
 
     if (isMusicUrlFlag) {
@@ -116,6 +119,7 @@ export class App {
           "Invalid URL Format",
           "Please enter a valid URL.",
         );
+        this.searchBox.setSearchInProgress(false);
         return;
       }
     }
@@ -168,6 +172,7 @@ export class App {
         "Please check the URL and try again.",
       );
       this.searchBox.input.disabled = false;
+      this.searchBox.setSearchInProgress(false);
     }
   }
 
@@ -219,6 +224,7 @@ export class App {
         }
 
         this.searchBox.input.disabled = false;
+        this.searchBox.setSearchInProgress(false);
       } else {
         setTimeout(() => this.pollSearchResults(), 500);
       }
@@ -229,6 +235,7 @@ export class App {
         "Unable to fetch search results",
       );
       this.searchBox.input.disabled = false;
+      this.searchBox.setSearchInProgress(false);
     }
   }
 
@@ -305,6 +312,7 @@ export class App {
           );
         }
         this.searchBox.input.disabled = false;
+        this.searchBox.setSearchInProgress(false);
       }
     };
 
