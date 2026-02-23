@@ -5,7 +5,6 @@ print("=" * 60)
 print("SpotiFLAC Python - Installation Test")
 print("=" * 60)
 
-# Test 1: Python version
 print("\n[1/6] Checking Python version...")
 if sys.version_info >= (3, 8):
     print(f"  ✓ Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
@@ -13,7 +12,6 @@ else:
     print(f"  ✗ Python {sys.version_info.major}.{sys.version_info.minor} (3.8+ required)")
     sys.exit(1)
 
-# Test 2: Required packages
 print("\n[2/6] Checking required packages...")
 required_packages = {
     'requests': 'HTTP client',
@@ -37,12 +35,11 @@ if missing:
     print(f"\n  Install missing packages: pip install {' '.join(missing)}")
     sys.exit(1)
 
-# Test 3: FFmpeg
 print("\n[3/6] Checking FFmpeg...")
 import subprocess
 try:
-    result = subprocess.run(['ffmpeg', '-version'], 
-                          stdout=subprocess.PIPE, 
+    result = subprocess.run(['ffmpeg', '-version'],
+                          stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE,
                           timeout=5)
     if result.returncode == 0:
@@ -54,7 +51,6 @@ except (FileNotFoundError, subprocess.TimeoutExpired):
     print("  ⚠ FFmpeg not found (required for Amazon Music)")
     print("    Install from: https://ffmpeg.org/download.html")
 
-# Test 4: Module imports
 print("\n[4/6] Testing module imports...")
 try:
     from modules import spotify, songlink, tidal, qobuz, amazon, metadata, utils
@@ -63,7 +59,6 @@ except ImportError as e:
     print(f"  ✗ Module import failed: {e}")
     sys.exit(1)
 
-# Test 5: Configuration
 print("\n[5/6] Checking configuration...")
 try:
     import config
@@ -74,7 +69,6 @@ except Exception as e:
     print(f"  ✗ Configuration error: {e}")
     sys.exit(1)
 
-# Test 6: File system
 print("\n[6/6] Testing file system...")
 import os
 try:
@@ -88,7 +82,7 @@ print("\n" + "=" * 60)
 print("✓ Installation test complete!")
 print("\nYou're ready to use SpotiFLAC Python!")
 print("\nQuick start:")
-print('  python main.py "https://open.spotify.com/track/TRACK_ID"')
+print('  python main.py "https://open.spotify.com/track/30zuTmjdAFAeZJkYAbdLSy?si=cc9ff623f5be4ba8"')
 print("\nFor more help:")
 print("  python main.py --help")
 print("  See QUICKSTART.md for examples")

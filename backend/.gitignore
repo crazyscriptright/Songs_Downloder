@@ -5,3 +5,4 @@ schedulestart.
 *.log
 *.tmp
 *.md
+old/

@@ -3,7 +3,6 @@
    Responsive breakpoints
    ================================================================ */
 
-/* Override Tailwind v4 preflight: svg { display: block } */
 button svg,
 a svg,
 span svg,
@@ -35,7 +34,6 @@ body {
   position: relative;
 }
 
-/* Header */
 .header {
   text-align: center;
   padding: 30px 0;
@@ -73,7 +71,6 @@ body {
   margin-bottom: 0;
 }
 
-/* Search box layout */
 .search-box {
   background: var(--bg-card);
   border-radius: 20px;
@@ -101,7 +98,6 @@ body {
   justify-content: center;
 }
 
-/* Results layout */
 .results-container {
   display: grid;
   grid-template-columns: 1fr;
@@ -114,7 +110,6 @@ body {
   gap: 15px;
 }
 
-/* Source navigation */
 .source-navigation {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 15px;
@@ -131,7 +126,6 @@ body {
   display: flex;
 }
 
-/* Source sections */
 .source-section {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 15px;
@@ -166,14 +160,12 @@ body {
   font-size: 0.9em;
 }
 
-/* Options row */
 .option-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 10px;
 }
 
-/* YouTube iframe responsive */
 .youtube-iframe-container {
   position: relative;
   padding-bottom: 56.25%;
@@ -194,7 +186,6 @@ body {
   border-radius: 10px;
 }
 
-/* Loading */
 .loading {
   display: flex;
   align-items: center;
@@ -202,12 +193,7 @@ body {
   padding: 40px;
 }
 
-/* ================================================================
-   Responsive
-   ================================================================ */
-
 @media (max-width: 768px) {
-  /* Push title below the absolutely-positioned theme toggle */
   .header {
     padding-top: 75px;
     padding-bottom: 20px;
@@ -216,6 +202,9 @@ body {
 
   .header h1 {
     font-size: 1.8em;
+  }
+  .header p {
+    font-size: 1.1em;
   }
   .songs-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -333,13 +322,12 @@ body {
     font-size: 1em !important;
   }
 }
-/* Mobile — single column + stacked search */
+
 @media (max-width: 480px) {
   body {
     padding: 10px;
   }
 
-  /* Switch header to flex-column so theme toggle flows above title */
   .header {
     display: flex;
     flex-direction: column;
@@ -350,7 +338,9 @@ body {
     margin-right: 10px;
     position: relative;
   }
-
+  .header p {
+    font-size: 1em;
+  }
   .header-title-link {
     margin-top: 15%;
     font-size: 1.5em;
