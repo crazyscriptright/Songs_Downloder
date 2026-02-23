@@ -27,7 +27,9 @@ body {
   color: var(--text-primary);
   min-height: 100vh;
   padding: 20px;
-  transition: color 0.3s ease, background-color 0.3s ease;
+  transition:
+    color 0.3s ease,
+    background-color 0.3s ease;
   line-height: 1.6;
   font-weight: 400;
   --scroll-overlay-opacity: 0;
@@ -36,10 +38,13 @@ body {
 
 /* Scroll-driven overlay — starts transparent, fades in as you scroll */
 body::before {
-  content: '';
+  content: "";
   position: fixed;
   inset: 0;
-  background: rgba(var(--scroll-overlay-color, 241, 235, 221), var(--scroll-overlay-opacity));
+  background: rgba(
+    var(--scroll-overlay-color, 241, 235, 221),
+    var(--scroll-overlay-opacity)
+  );
   pointer-events: none;
   z-index: 0;
   transition: background 0.15s ease;

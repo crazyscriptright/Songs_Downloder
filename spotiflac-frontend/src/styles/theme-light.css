@@ -4,39 +4,39 @@
 
 :root.light-theme body,
 body.light-theme {
-  --bg-primary:      #F1EBDD;
-  --bg-secondary:    #E3DCC2;
-  --bg-card:         #FAF6EE;
-  --text-primary:    #1B2021;
-  --text-secondary:  #51513D;
-  --text-tertiary:   #8A8760;
-  --accent-color:    #51513D;
-  --accent-secondary:#A6A867;
-  --border-color:    #D8CFB2;
-  --shadow-color:    rgba(81, 81, 61, 0.18);
-  --success-color:   #5C7A3E;
-  --error-color:     #8B3A3A;
-  --warning-color:   #A07830;
-  --info-color:      #51513D;
-  --download-color:  #A6A867;
-  --gradient-primary: linear-gradient(135deg, #51513D 0%, #A6A867 100%);
-  --gradient-secondary: linear-gradient(135deg, #A6A867 0%, #E3DC95 100%);
-  --status-success-bg:     rgba(92, 122, 62, 0.12);
+  --bg-primary: #f1ebdd;
+  --bg-secondary: #e3dcc2;
+  --bg-card: #faf6ee;
+  --text-primary: #1b2021;
+  --text-secondary: #51513d;
+  --text-tertiary: #8a8760;
+  --accent-color: #51513d;
+  --accent-secondary: #a6a867;
+  --border-color: #d8cfb2;
+  --shadow-color: rgba(81, 81, 61, 0.18);
+  --success-color: #5c7a3e;
+  --error-color: #8b3a3a;
+  --warning-color: #a07830;
+  --info-color: #51513d;
+  --download-color: #a6a867;
+  --gradient-primary: linear-gradient(135deg, #51513d 0%, #a6a867 100%);
+  --gradient-secondary: linear-gradient(135deg, #a6a867 0%, #e3dc95 100%);
+  --status-success-bg: rgba(92, 122, 62, 0.12);
   --status-success-border: rgba(92, 122, 62, 0.35);
-  --status-error-bg:     rgba(139, 58, 58, 0.12);
+  --status-error-bg: rgba(139, 58, 58, 0.12);
   --status-error-border: rgba(139, 58, 58, 0.35);
-  --status-warning-bg:     rgba(160, 120, 48, 0.12);
+  --status-warning-bg: rgba(160, 120, 48, 0.12);
   --status-warning-border: rgba(160, 120, 48, 0.35);
-  --status-info-bg:     rgba(81, 81, 61, 0.1);
+  --status-info-bg: rgba(81, 81, 61, 0.1);
   --status-info-border: rgba(81, 81, 61, 0.3);
-  --status-loading-bg:     rgba(81, 81, 61, 0.04);
+  --status-loading-bg: rgba(81, 81, 61, 0.04);
   --status-loading-border: rgba(81, 81, 61, 0.15);
 }
 
 /* Light vintage paper background with webp texture */
 body.light-theme {
   --scroll-overlay-color: 241, 235, 221; /* paper-light RGB for overlay */
-  background-image: url('/light.webp');
+  background-image: url("/light.webp");
   background-size: cover;
   background-attachment: fixed;
   background-position: center top;
@@ -45,6 +45,6 @@ body.light-theme {
 /* Mobile: portrait-optimised background */
 @media (max-width: 768px) {
   body.light-theme {
-    background-image: url('/mobile_light.webp');
+    background-image: url("/mobile_light.webp");
   }
 }

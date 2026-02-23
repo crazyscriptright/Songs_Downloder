@@ -4,39 +4,39 @@
 
 :root:not(.light-theme) body,
 body:not(.light-theme) {
-  --bg-primary:      #1A1714;
-  --bg-secondary:    #252019;
-  --bg-card:         #2D271F;
-  --text-primary:    #E3DCC2;
-  --text-secondary:  #A6A867;
-  --text-tertiary:   #7A7558;
-  --accent-color:    #A6A867;
-  --accent-secondary:#E3DC95;
-  --border-color:    #4A4231;
-  --shadow-color:    rgba(166, 168, 103, 0.18);
-  --success-color:   #A6A867;
-  --error-color:     #C97B7B;
-  --warning-color:   #C8A856;
-  --info-color:      #A6A867;
-  --download-color:  #E3DC95;
-  --gradient-primary: linear-gradient(135deg, #51513D 0%, #A6A867 100%);
-  --gradient-secondary: linear-gradient(135deg, #A6A867 0%, #E3DC95 100%);
-  --status-success-bg:     rgba(166, 168, 103, 0.15);
+  --bg-primary: #1a1714;
+  --bg-secondary: #252019;
+  --bg-card: #2d271f;
+  --text-primary: #e3dcc2;
+  --text-secondary: #a6a867;
+  --text-tertiary: #7a7558;
+  --accent-color: #a6a867;
+  --accent-secondary: #e3dc95;
+  --border-color: #4a4231;
+  --shadow-color: rgba(166, 168, 103, 0.18);
+  --success-color: #a6a867;
+  --error-color: #c97b7b;
+  --warning-color: #c8a856;
+  --info-color: #a6a867;
+  --download-color: #e3dc95;
+  --gradient-primary: linear-gradient(135deg, #51513d 0%, #a6a867 100%);
+  --gradient-secondary: linear-gradient(135deg, #a6a867 0%, #e3dc95 100%);
+  --status-success-bg: rgba(166, 168, 103, 0.15);
   --status-success-border: rgba(166, 168, 103, 0.4);
-  --status-error-bg:     rgba(201, 123, 123, 0.15);
+  --status-error-bg: rgba(201, 123, 123, 0.15);
   --status-error-border: rgba(201, 123, 123, 0.4);
-  --status-warning-bg:     rgba(200, 168, 86, 0.15);
+  --status-warning-bg: rgba(200, 168, 86, 0.15);
   --status-warning-border: rgba(200, 168, 86, 0.4);
-  --status-info-bg:     rgba(166, 168, 103, 0.12);
+  --status-info-bg: rgba(166, 168, 103, 0.12);
   --status-info-border: rgba(166, 168, 103, 0.35);
-  --status-loading-bg:     rgba(166, 168, 103, 0.05);
+  --status-loading-bg: rgba(166, 168, 103, 0.05);
   --status-loading-border: rgba(166, 168, 103, 0.18);
 }
 
 /* Dark vinyl background with webp texture */
 body:not(.light-theme) {
   --scroll-overlay-color: 26, 23, 20; /* warm dark brown RGB for overlay */
-  background-image: url('/dark.webp');
+  background-image: url("/dark.webp");
   background-size: cover;
   background-attachment: fixed;
   background-position: center;
@@ -45,6 +45,6 @@ body:not(.light-theme) {
 /* Mobile: portrait-optimised background */
 @media (max-width: 768px) {
   body:not(.light-theme) {
-    background-image: url('/mobile_dark.webp');
+    background-image: url("/mobile_dark.webp");
   }
 }
