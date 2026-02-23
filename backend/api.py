@@ -3162,13 +3162,16 @@ def get_responsive_image_url(image_url, size='medium'):
     
     # YouTube thumbnails (ytimg.com) - use quality levels
     elif 'ytimg.com' in image_url or 'youtube.com' in image_url:
+        # Strip signed query params (sqp, rs) — they're tied to the original
+        # filename and will 403 if you swap the quality level filename
+        base_url = image_url.split('?')[0]
         if size == 'large':
-            image_url = image_url.replace('mqdefault.jpg', 'maxresdefault.jpg').replace('default.jpg', 'maxresdefault.jpg')
+            base_url = re.sub(r'/(default|mqdefault|sddefault|hqdefault)\.jpg$', '/maxresdefault.jpg', base_url)
         elif size == 'medium':
-            image_url = image_url.replace('default.jpg', 'hqdefault.jpg').replace('maxresdefault.jpg', 'hqdefault.jpg')
-        # small keeps default or mqdefault
-    
-    return image_url
+            base_url = re.sub(r'/(default|mqdefault|sddefault|maxresdefault)\.jpg$', '/hqdefault.jpg', base_url)
+        else:  # small
+            base_url = re.sub(r'/(mqdefault|sddefault|hqdefault|maxresdefault)\.jpg$', '/mqdefault.jpg', base_url)
+        return base_url
 
 
 @app.route('/api/proxy-image', methods=['GET'])
@@ -3193,7 +3196,7 @@ def proxy_image():
             'Accept': 'image/avif,image/webp,*/*',
             'Accept-Language': 'en-US,en;q=0.5',
             'DNT': '1',
-            'Referer': 'https://www.google.com/',
+            'Referer': 'https://www.youtube.com/' if 'ytimg.com' in responsive_url or 'youtube.com' in responsive_url else 'https://www.google.com/',
         }
         
         # Use proxy if available
@@ -3203,6 +3206,11 @@ def proxy_image():
         } if os.getenv('HTTP_PROXY') or os.getenv('HTTPS_PROXY') else None
         
         response = requests.get(responsive_url, headers=headers, proxies=proxies, timeout=10)
+        
+        # YouTube maxresdefault often 404s for older/smaller videos — fall back to hqdefault
+        if response.status_code == 404 and 'ytimg.com' in responsive_url and 'maxresdefault' in responsive_url:
+            fallback_url = responsive_url.replace('maxresdefault.jpg', 'hqdefault.jpg')
+            response = requests.get(fallback_url, headers=headers, proxies=proxies, timeout=10)
         
         if response.status_code == 200:
             # Return image with proper content type and caching

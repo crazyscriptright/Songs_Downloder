@@ -23,3 +23,6 @@ frontend/.DS_Store
 backend/.DS_Store
 backend/__pycache__/
 cookies.txt
+build
+node_modules
+venv

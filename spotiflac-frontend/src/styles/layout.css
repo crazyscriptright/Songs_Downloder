@@ -1,0 +1,414 @@
+/* ================================================================
+   Layout – Reset, Body, Container, Header, Search Box, Grid, 
+   Responsive breakpoints
+   ================================================================ */
+
+/* Override Tailwind v4 preflight: svg { display: block } */
+button svg,
+a svg,
+span svg,
+label svg {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  padding: 20px;
+  transition: all 0.3s ease;
+  line-height: 1.6;
+  font-weight: 400;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* Header */
+.header {
+  text-align: center;
+  padding: 30px 0;
+  margin-bottom: 30px;
+  position: relative;
+}
+
+.header h1 {
+  font-size: 3em;
+  font-family: var(--font-display);
+  color: var(--accent-color);
+  font-weight: 700;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.header h1 a {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: auto;
+  transition: all 0.3s ease;
+}
+
+.header h1 a svg {
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.header p {
+  color: var(--text-secondary);
+  font-size: 1.2em;
+  text-align: center;
+  margin-bottom: 0;
+}
+
+/* Search box layout */
+.search-box {
+  background: var(--bg-card);
+  border-radius: 20px;
+  padding: 40px;
+  margin-bottom: 40px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-color);
+  max-width: 800px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
+.search-input-group {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.search-type-selector {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  justify-content: center;
+}
+
+/* Results layout */
+.results-container {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+.songs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 15px;
+}
+
+/* Source navigation */
+.source-navigation {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 15px;
+  padding: 15px;
+  margin-bottom: 20px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.source-navigation.active {
+  display: flex;
+}
+
+/* Source sections */
+.source-section {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 15px;
+  padding: 20px;
+  backdrop-filter: blur(10px);
+  display: none;
+}
+
+.source-section.active {
+  display: block;
+}
+
+.source-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.source-header h2 {
+  font-size: 1.5em;
+  color: var(--accent-color);
+}
+
+.source-header .count {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 5px 15px;
+  border-radius: 20px;
+  font-size: 0.9em;
+}
+
+/* Options row */
+.option-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+/* YouTube iframe responsive */
+.youtube-iframe-container {
+  position: relative;
+  padding-bottom: 56.25%;
+  height: 0;
+  overflow: hidden;
+  max-width: 100%;
+  border-radius: 10px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.youtube-iframe-container iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 10px;
+}
+
+/* Loading */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+/* ================================================================
+   Responsive
+   ================================================================ */
+
+@media (max-width: 768px) {
+  /* Push title below the absolutely-positioned theme toggle */
+  .header {
+    padding-top: 75px;
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+  }
+
+  .header h1 {
+    font-size: 1.8em;
+  }
+  .songs-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .search-box {
+    padding: 25px 20px;
+  }
+
+  .search-type-selector {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .type-btn {
+    padding: 8px 15px;
+    font-size: 0.9em;
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .type-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .url-result-card {
+    padding: 15px !important;
+  }
+
+  .url-result-card .preview-grid {
+    grid-template-columns: 1fr !important;
+    gap: 15px !important;
+  }
+
+  .youtube-iframe-container {
+    margin-bottom: 15px;
+  }
+
+  .recommended-tracks-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .preview-grid-generic,
+  .soundcloud-main-track {
+    grid-template-columns: 1fr !important;
+    gap: 15px !important;
+  }
+
+  .preview-grid-generic img,
+  .soundcloud-main-track img {
+    max-width: 250px;
+    margin: 0 auto;
+    display: block;
+  }
+
+  .option-row {
+    flex-direction: column !important;
+    gap: 15px !important;
+  }
+
+  .option-group {
+    width: 100% !important;
+  }
+
+  .download-btn,
+  .advanced-toggle {
+    font-size: 1em !important;
+    padding: 12px !important;
+  }
+
+  .source-header h2 {
+    font-size: 1.3em !important;
+    word-break: break-word;
+  }
+
+  .recommended-track-card > div {
+    flex-direction: column !important;
+    text-align: center;
+  }
+
+  .recommended-track-card img,
+  .recommended-track-card > div > div:first-child > div {
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 1 / 1;
+    max-width: 200px;
+    margin: 0 auto;
+  }
+
+  .recommended-track-card h5,
+  .recommended-track-card p,
+  .recommended-track-card div {
+    text-align: center;
+  }
+
+  .options-tabs {
+    flex-wrap: wrap;
+  }
+
+  .tab-btn {
+    flex: 1 1 45%;
+    min-width: 120px;
+  }
+
+  h3 {
+    font-size: 1.2em !important;
+  }
+  h4 {
+    font-size: 1.1em !important;
+  }
+  h5 {
+    font-size: 1em !important;
+  }
+}
+/* Mobile — single column + stacked search */
+@media (max-width: 480px) {
+  body {
+    padding: 10px;
+  }
+
+  /* Switch header to flex-column so theme toggle flows above title */
+  .header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 15px 0;
+    margin-bottom: 15px;
+    margin-left: 10px;
+    margin-right: 10px;
+    position: relative;
+  }
+
+  .header-title-link {
+    margin-top: 15%;
+    font-size: 1.5em;
+  }
+
+  .header-title-icon {
+    display: none !important;
+  }
+
+  .songs-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .search-box {
+    padding: 16px 12px;
+    border-radius: 14px;
+  }
+
+  .search-type-selector {
+    gap: 4px;
+    margin-bottom: 14px;
+    width: 100%;
+  }
+
+  .type-btn {
+    flex-direction: column;
+    padding: 8px 4px;
+    font-size: 0.72em;
+    flex: 1 1 0;
+    min-width: 0;
+    gap: 4px;
+    white-space: nowrap;
+  }
+
+  .type-btn svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+  .search-input-group {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  #searchInput {
+    width: 100%;
+    font-size: 1em;
+    padding: 12px 15px;
+  }
+
+  #searchBtn {
+    width: 100%;
+    min-width: unset;
+    padding: 12px 20px;
+    font-size: 1em;
+  }
+
+  .query-hint {
+    font-size: 0.78em;
+  }
+}

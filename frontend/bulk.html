@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -7,10 +7,10 @@
     <link rel="icon" type="image/png" href="static/fevicon2.png" />
     <script>
       // Apply theme immediately to prevent flash
-      (function() {
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme === 'light') {
-          document.documentElement.className = 'light-theme';
+      (function () {
+        const savedTheme = localStorage.getItem("theme");
+        if (savedTheme === "light") {
+          document.documentElement.className = "light-theme";
         }
       })();
     </script>
@@ -65,8 +65,13 @@
       }
 
       body {
-        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-          system-ui, sans-serif;
+        font-family:
+          "Inter",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          system-ui,
+          sans-serif;
         background: var(--bg-primary);
         color: var(--text-primary);
         min-height: 100vh;
@@ -1089,7 +1094,22 @@
                   style="margin-right: 8px"
                   onchange="toggleBulkDownloadOptions()"
                 />
-                <span><svg style="width:16px;height:16px;vertical-align:middle;margin-right:6px;" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>Music (Audio Only)</span>
+                <span
+                  ><svg
+                    style="
+                      width: 16px;
+                      height: 16px;
+                      vertical-align: middle;
+                      margin-right: 6px;
+                    "
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path
+                      d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"
+                    /></svg
+                  >Music (Audio Only)</span
+                >
               </label>
               <label
                 style="display: flex; align-items: center; cursor: pointer"
@@ -1101,7 +1121,22 @@
                   style="margin-right: 8px"
                   onchange="toggleBulkDownloadOptions()"
                 />
-                <span><svg style="width:16px;height:16px;vertical-align:middle;margin-right:6px;" viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>Video</span>
+                <span
+                  ><svg
+                    style="
+                      width: 16px;
+                      height: 16px;
+                      vertical-align: middle;
+                      margin-right: 6px;
+                    "
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path
+                      d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"
+                    /></svg
+                  >Video</span
+                >
               </label>
             </div>
           </div>
@@ -1373,8 +1408,20 @@
     <div id="downloadManager" class="download-manager">
       <div class="download-manager-header">
         <h3>Downloads</h3>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <select id="downloadFilter" onchange="filterDownloads(this.value)" style="background: rgba(255, 255, 255, 0.2); border: none; color: rgb(26, 26, 26); border-radius: 5px; padding: 5px 10px; cursor: pointer; font-size: 0.85em;">
+        <div style="display: flex; gap: 8px; align-items: center">
+          <select
+            id="downloadFilter"
+            onchange="filterDownloads(this.value)"
+            style="
+              background: rgba(255, 255, 255, 0.2);
+              border: none;
+              color: rgb(26, 26, 26);
+              border-radius: 5px;
+              padding: 5px 10px;
+              cursor: pointer;
+              font-size: 0.85em;
+            "
+          >
             <option value="all">All</option>
             <option value="downloading">Downloading</option>
             <option value="queued">Queued</option>
@@ -1382,8 +1429,8 @@
             <option value="error">Failed</option>
           </select>
           <button class="close-manager-btn" onclick="toggleDownloadManager()">
-          Close
-        </button>
+            Close
+          </button>
         </div>
       </div>
       <div class="download-manager-list" id="downloadManagerList">
@@ -1446,35 +1493,35 @@
       let currentDownloadIndex = 0;
       let playlistDownloadId = null;
       let downloadManagerVisible = false;
-      let currentFilter = 'all'; // Track current download filter
+      let currentFilter = "all"; // Track current download filter
 
       // Toast notification system
       function showToast(type, title, message, duration = 5000) {
-        const container = document.getElementById('toastContainer');
-        const toast = document.createElement('div');
+        const container = document.getElementById("toastContainer");
+        const toast = document.createElement("div");
         toast.className = `toast ${type}`;
-        
+
         const icons = {
-          success: '✓',
-          error: '✕',
-          info: 'ℹ'
+          success: "✓",
+          error: "✕",
+          info: "ℹ",
         };
-        
+
         toast.innerHTML = `
-          <div class="toast-icon">${icons[type] || 'ℹ'}</div>
+          <div class="toast-icon">${icons[type] || "ℹ"}</div>
           <div class="toast-content">
             <div class="toast-title">${title}</div>
             <div class="toast-message">${message}</div>
           </div>
           <button class="toast-close" onclick="this.parentElement.remove()">×</button>
         `;
-        
+
         container.appendChild(toast);
-        
+
         // Auto remove after duration
         if (duration > 0) {
           setTimeout(() => {
-            toast.classList.add('removing');
+            toast.classList.add("removing");
             setTimeout(() => toast.remove(), 300);
           }, duration);
         }
@@ -1494,10 +1541,10 @@
                 download.status === "queued"
                   ? "queued"
                   : download.status === "downloading"
-                  ? "downloading"
-                  : download.status === "complete"
-                  ? "complete"
-                  : "error",
+                    ? "downloading"
+                    : download.status === "complete"
+                      ? "complete"
+                      : "error",
               progress: download.progress || 0,
               error: download.error || null,
               downloadId: download.id,
@@ -1552,7 +1599,7 @@
         title,
         downloadId,
         format = "mp3",
-        quality = "360"
+        quality = "360",
       ) {
         try {
           const encodedUrl = encodeURIComponent(url);
@@ -1574,7 +1621,7 @@
           const pollInterval = setInterval(async () => {
             try {
               const progressResponse = await fetch(
-                `${getApiBaseUrl()}/proxy/progress?progress_id=${progressId}`
+                `${getApiBaseUrl()}/proxy/progress?progress_id=${progressId}`,
               );
               const progressData = await progressResponse.json();
 
@@ -1583,7 +1630,7 @@
                 const rawProgress = progressData.progress || 0;
                 const progressPercent = Math.min(
                   Math.round((rawProgress / 1000) * 100),
-                  100
+                  100,
                 );
 
                 // Determine status text based on progress ranges
@@ -1604,7 +1651,7 @@
 
                   // Update bulk downloads array
                   const downloadIndex = bulkDownloads.findIndex(
-                    (d) => d.downloadId === downloadId
+                    (d) => d.downloadId === downloadId,
                   );
                   if (downloadIndex !== -1) {
                     bulkDownloads[downloadIndex].progress = progressPercent;
@@ -1627,13 +1674,13 @@
                     progressData.download_url === "null"
                   ) {
                     throw new Error(
-                      "Download failed: Code 1805 - Download URL is null"
+                      "Download failed: Code 1805 - Download URL is null",
                     );
                   }
 
                   // Update download status
                   const downloadIndex = bulkDownloads.findIndex(
-                    (d) => d.downloadId === downloadId
+                    (d) => d.downloadId === downloadId,
                   );
                   if (downloadIndex !== -1) {
                     bulkDownloads[downloadIndex].status = "complete";
@@ -1647,7 +1694,7 @@
 
                   // Auto-download the file
                   const fileUrl = `${getApiBaseUrl()}/proxy/file?file_url=${encodeURIComponent(
-                    progressData.download_url
+                    progressData.download_url,
                   )}`;
                   const link = document.createElement("a");
                   link.href = fileUrl;
@@ -1666,7 +1713,7 @@
 
               // Update download status to error
               const downloadIndex = bulkDownloads.findIndex(
-                (d) => d.downloadId === downloadId
+                (d) => d.downloadId === downloadId,
               );
               if (downloadIndex !== -1) {
                 bulkDownloads[downloadIndex].status = "error";
@@ -1682,7 +1729,7 @@
 
           // Update download status to error
           const downloadIndex = bulkDownloads.findIndex(
-            (d) => d.downloadId === downloadId
+            (d) => d.downloadId === downloadId,
           );
           if (downloadIndex !== -1) {
             bulkDownloads[downloadIndex].status = "error";
@@ -1750,20 +1797,21 @@
           (d) =>
             d.status === "downloading" ||
             d.status === "queued" ||
-            d.status === "complete"
+            d.status === "complete",
         );
-        
+
         // Count downloads by status
         const counts = {
           all: bulkDownloads.length,
-          downloading: bulkDownloads.filter(d => d.status === 'downloading').length,
-          queued: bulkDownloads.filter(d => d.status === 'queued').length,
-          complete: bulkDownloads.filter(d => d.status === 'complete').length,
-          error: bulkDownloads.filter(d => d.status === 'error').length
+          downloading: bulkDownloads.filter((d) => d.status === "downloading")
+            .length,
+          queued: bulkDownloads.filter((d) => d.status === "queued").length,
+          complete: bulkDownloads.filter((d) => d.status === "complete").length,
+          error: bulkDownloads.filter((d) => d.status === "error").length,
         };
-        
+
         // Update dropdown options with counts
-        const filterSelect = document.getElementById('downloadFilter');
+        const filterSelect = document.getElementById("downloadFilter");
         if (filterSelect) {
           filterSelect.innerHTML = `
             <option value="all">All (${counts.all})</option>
@@ -1774,17 +1822,20 @@
           `;
           filterSelect.value = currentFilter;
         }
-        
+
         // Filter downloads based on current filter
         let filteredDownloads = bulkDownloads;
-        if (currentFilter !== 'all') {
-          filteredDownloads = bulkDownloads.filter(d => d.status === currentFilter);
+        if (currentFilter !== "all") {
+          filteredDownloads = bulkDownloads.filter(
+            (d) => d.status === currentFilter,
+          );
         }
 
         if (filteredDownloads.length === 0) {
-          const emptyMessage = currentFilter === 'all'
-            ? 'No active downloads'
-            : `No ${currentFilter} downloads`;
+          const emptyMessage =
+            currentFilter === "all"
+              ? "No active downloads"
+              : `No ${currentFilter} downloads`;
           managerList.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-tertiary);">${emptyMessage}</div>`;
           badge.style.display = "none";
           return;
@@ -1824,16 +1875,20 @@
           let statusIcon = "";
           switch (download.status) {
             case "queued":
-              statusIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+              statusIcon =
+                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
               break;
             case "downloading":
-              statusIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7,10 12,15 17,10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
+              statusIcon =
+                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7,10 12,15 17,10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
               break;
             case "complete":
-              statusIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+              statusIcon =
+                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
               break;
             case "error":
-              statusIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+              statusIcon =
+                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
               break;
           }
 
@@ -1849,8 +1904,8 @@
                 download.status === "complete"
                   ? "Complete"
                   : download.status === "error"
-                  ? "Failed"
-                  : `${Math.round(download.progress)}%`
+                    ? "Failed"
+                    : `${Math.round(download.progress)}%`
               }</span>
               ${downloadButton}
             </div>
@@ -1873,12 +1928,12 @@
       // Load saved theme and downloads
       window.addEventListener("DOMContentLoaded", () => {
         const savedTheme = localStorage.getItem("theme");
-        
+
         // Default to dark theme if no preference saved
         if (!savedTheme) {
           localStorage.setItem("theme", "dark");
         }
-        
+
         // Apply theme class from saved preference
         if (savedTheme === "light") {
           document.documentElement.classList.add("light-theme");
@@ -1886,7 +1941,7 @@
         }
         loadDownloadsFromStorage();
       });
-      
+
       // Clean up heartbeat when page is closed or navigated away
       window.addEventListener("beforeunload", () => {
         if (bulkHeartbeatInterval) {
@@ -1894,13 +1949,15 @@
           bulkHeartbeatInterval = null;
         }
       });
-      
+
       // Also handle visibility change (tab switching)
       document.addEventListener("visibilitychange", () => {
         // When tab becomes hidden and stays hidden for more than 30 seconds,
         // heartbeat will stop and server will timeout the bulk download
         if (document.hidden) {
-          console.log("⚠️ Page hidden - heartbeat will continue but download may timeout if hidden too long");
+          console.log(
+            "⚠️ Page hidden - heartbeat will continue but download may timeout if hidden too long",
+          );
         } else {
           console.log("✅ Page visible again");
         }
@@ -1985,7 +2042,7 @@
       // Update bulk stats
       function updateBulkStats() {
         const completed = bulkDownloads.filter(
-          (d) => d.status === "complete"
+          (d) => d.status === "complete",
         ).length;
         const failed = bulkDownloads.filter((d) => d.status === "error").length;
         document.getElementById("completedDownloads").textContent = completed;
@@ -2003,7 +2060,7 @@
       // Toggle bulk download options based on type
       function toggleBulkDownloadOptions() {
         const downloadType = document.querySelector(
-          'input[name="bulkDownloadType"]:checked'
+          'input[name="bulkDownloadType"]:checked',
         ).value;
         const audioOptions = document.getElementById("bulkAudioOptions");
         const videoOptions = document.getElementById("bulkVideoOptions");
@@ -2025,7 +2082,11 @@
         // Prevent duplicate bulk download calls
         if (ongoingBulkDownload) {
           console.error("⚠️ Bulk download already in progress");
-          showToast('error', 'Bulk Download In Progress', 'Please wait for the current bulk download to complete.');
+          showToast(
+            "error",
+            "Bulk Download In Progress",
+            "Please wait for the current bulk download to complete.",
+          );
           return;
         }
 
@@ -2036,7 +2097,11 @@
           .filter((url) => url.length > 0);
 
         if (urls.length === 0) {
-          showToast('error', 'No URLs Provided', 'Please enter at least one URL to download.');
+          showToast(
+            "error",
+            "No URLs Provided",
+            "Please enter at least one URL to download.",
+          );
           return;
         }
 
@@ -2047,7 +2112,7 @@
           try {
             const urlObj = new URL(url);
             // Check if it's a valid HTTP/HTTPS URL
-            if (urlObj.protocol === 'http:' || urlObj.protocol === 'https:') {
+            if (urlObj.protocol === "http:" || urlObj.protocol === "https:") {
               validUrls.push(url);
             } else {
               invalidUrls.push(`Line ${index + 1}: ${url.substring(0, 50)}...`);
@@ -2059,26 +2124,36 @@
 
         // Show error if there are invalid URLs
         if (invalidUrls.length > 0) {
-          const errorMessage = invalidUrls.length === 1 
-            ? `Invalid URL found: ${invalidUrls[0]}` 
-            : `${invalidUrls.length} invalid URL(s) found. First: ${invalidUrls[0]}`;
-          showToast('error', 'Invalid URL(s) Detected', errorMessage, 8000);
-          
+          const errorMessage =
+            invalidUrls.length === 1
+              ? `Invalid URL found: ${invalidUrls[0]}`
+              : `${invalidUrls.length} invalid URL(s) found. First: ${invalidUrls[0]}`;
+          showToast("error", "Invalid URL(s) Detected", errorMessage, 8000);
+
           // If all URLs are invalid, stop here
           if (validUrls.length === 0) {
             return;
           }
-          
+
           // Continue with valid URLs only
-          showToast('info', 'Continuing with Valid URLs', `Processing ${validUrls.length} valid URL(s)...`, 3000);
+          showToast(
+            "info",
+            "Continuing with Valid URLs",
+            `Processing ${validUrls.length} valid URL(s)...`,
+            3000,
+          );
         }
 
-        showToast('info', 'Bulk Download Started', `Processing ${validUrls.length} URL(s)...`);
+        showToast(
+          "info",
+          "Bulk Download Started",
+          `Processing ${validUrls.length} URL(s)...`,
+        );
         ongoingBulkDownload = true;
 
         // Get download type
         const downloadType = document.querySelector(
-          'input[name="bulkDownloadType"]:checked'
+          'input[name="bulkDownloadType"]:checked',
         ).value;
         const isVideoMode = downloadType === "video";
 
@@ -2131,45 +2206,58 @@
           const data = await response.json();
 
           if (data.bulk_id) {
-            showToast('success', 'Download Submitted', `Successfully submitted ${validUrls.length} URL(s) for download.`, 4000);
+            showToast(
+              "success",
+              "Download Submitted",
+              `Successfully submitted ${validUrls.length} URL(s) for download.`,
+              4000,
+            );
             // Poll for progress
             pollBulkProgress(data.bulk_id);
           } else {
-            showToast('error', 'Bulk Download Failed', 'Failed to start bulk download');
+            showToast(
+              "error",
+              "Bulk Download Failed",
+              "Failed to start bulk download",
+            );
             ongoingBulkDownload = false;
           }
         } catch (error) {
           console.error("Bulk download error:", error);
-          showToast('error', 'Bulk Download Error', error.message || 'An unexpected error occurred');
+          showToast(
+            "error",
+            "Bulk Download Error",
+            error.message || "An unexpected error occurred",
+          );
           ongoingBulkDownload = false;
         }
       }
 
       // Poll bulk download progress
       let bulkHeartbeatInterval = null;
-      
+
       async function pollBulkProgress(bulkId) {
         // Start heartbeat to keep the bulk download alive
         if (bulkHeartbeatInterval) {
           clearInterval(bulkHeartbeatInterval);
         }
-        
+
         // Send heartbeat every 10 seconds (server timeout is 30 seconds)
         bulkHeartbeatInterval = setInterval(async () => {
           try {
             await fetch(`${getApiBaseUrl()}/bulk_heartbeat/${bulkId}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' }
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
             });
           } catch (error) {
-            console.error('Heartbeat error:', error);
+            console.error("Heartbeat error:", error);
           }
         }, 10000);
-        
+
         const pollInterval = setInterval(async () => {
           try {
             const response = await fetch(
-              `${getApiBaseUrl()}/bulk_status/${bulkId}`
+              `${getApiBaseUrl()}/bulk_status/${bulkId}`,
             );
 
             // Always parse JSON even on error responses
@@ -2189,15 +2277,21 @@
               console.error("Bulk download not found yet, retrying...");
               return; // Continue polling
             }
-            
+
             // Check if download timed out due to no heartbeat
-            if (data.status === 'timeout') {
-              console.error('⏱️ Bulk download timed out - no heartbeat received');
+            if (data.status === "timeout") {
+              console.error(
+                "⏱️ Bulk download timed out - no heartbeat received",
+              );
               clearInterval(pollInterval);
               clearInterval(bulkHeartbeatInterval);
               bulkHeartbeatInterval = null;
               ongoingBulkDownload = false;
-              showToast('error', 'Bulk Download Timeout', 'Download timed out due to inactivity. Please stay on the page.');
+              showToast(
+                "error",
+                "Bulk Download Timeout",
+                "Download timed out due to inactivity. Please stay on the page.",
+              );
               return;
             }
 
@@ -2209,15 +2303,23 @@
               });
 
               bulkDownloads = data.downloads;
-              
+
               // Show toast on status change
               bulkDownloads.forEach((download, index) => {
                 const prevStatus = previousStatuses[index];
                 if (prevStatus && prevStatus !== download.status) {
-                  if (download.status === 'complete') {
-                    showToast('success', 'Download Complete', `${download.title || 'File'} downloaded successfully`);
-                  } else if (download.status === 'error') {
-                    showToast('error', 'Download Failed', `${download.title || 'File'}: ${download.error || 'Unknown error'}`);
+                  if (download.status === "complete") {
+                    showToast(
+                      "success",
+                      "Download Complete",
+                      `${download.title || "File"} downloaded successfully`,
+                    );
+                  } else if (download.status === "error") {
+                    showToast(
+                      "error",
+                      "Download Failed",
+                      `${download.title || "File"}: ${download.error || "Unknown error"}`,
+                    );
                   }
                 }
               });
@@ -2229,19 +2331,27 @@
 
               // Check if all done
               const allDone = bulkDownloads.every(
-                (d) => d.status === "complete" || d.status === "error"
+                (d) => d.status === "complete" || d.status === "error",
               );
 
-              if (allDone || data.status === 'complete') {
+              if (allDone || data.status === "complete") {
                 clearInterval(pollInterval);
                 clearInterval(bulkHeartbeatInterval);
                 bulkHeartbeatInterval = null;
                 ongoingBulkDownload = false; // Clear flag when bulk download completes
-                
+
                 // Show completion toast
-                const completed = bulkDownloads.filter(d => d.status === 'complete').length;
-                const failed = bulkDownloads.filter(d => d.status === 'error').length;
-                showToast('info', 'Bulk Download Complete', `Completed: ${completed}, Failed: ${failed}`);
+                const completed = bulkDownloads.filter(
+                  (d) => d.status === "complete",
+                ).length;
+                const failed = bulkDownloads.filter(
+                  (d) => d.status === "error",
+                ).length;
+                showToast(
+                  "info",
+                  "Bulk Download Complete",
+                  `Completed: ${completed}, Failed: ${failed}`,
+                );
               }
             }
           } catch (error) {
@@ -2362,31 +2472,50 @@
         // Prevent duplicate playlist downloads
         if (ongoingPlaylistDownload) {
           console.log(
-            "Playlist download already in progress, ignoring duplicate request"
+            "Playlist download already in progress, ignoring duplicate request",
           );
           return;
         }
 
         const url = document.getElementById("playlistUrl").value.trim();
         if (!url) {
-          showToast('error', 'No Playlist URL', 'Please enter a playlist URL to download.');
+          showToast(
+            "error",
+            "No Playlist URL",
+            "Please enter a playlist URL to download.",
+          );
           return;
         }
 
         // Validate playlist URL
         try {
           const urlObj = new URL(url);
-          if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
-            showToast('error', 'Invalid Playlist URL', 'Please enter a valid HTTP/HTTPS URL.');
+          if (urlObj.protocol !== "http:" && urlObj.protocol !== "https:") {
+            showToast(
+              "error",
+              "Invalid Playlist URL",
+              "Please enter a valid HTTP/HTTPS URL.",
+            );
             return;
           }
           // Check if it's a YouTube playlist URL
-          if (!url.includes('youtube.com/playlist') && !url.includes('youtu.be')) {
-            showToast('error', 'Invalid Playlist URL', 'Please enter a valid YouTube playlist URL.');
+          if (
+            !url.includes("youtube.com/playlist") &&
+            !url.includes("youtu.be")
+          ) {
+            showToast(
+              "error",
+              "Invalid Playlist URL",
+              "Please enter a valid YouTube playlist URL.",
+            );
             return;
           }
         } catch (e) {
-          showToast('error', 'Invalid Playlist URL', 'Please enter a valid URL format.');
+          showToast(
+            "error",
+            "Invalid Playlist URL",
+            "Please enter a valid URL format.",
+          );
           return;
         }
 
@@ -2401,7 +2530,11 @@
             // Validate playlist range format
             const validRange = /^(\d+|\d+-\d+)(,(\d+|\d+-\d+))*$/;
             if (!validRange.test(range)) {
-              showToast('error', 'Invalid Range Format', 'Use formats like: 1-5, 1,3,5, or 1-3,5-7');
+              showToast(
+                "error",
+                "Invalid Range Format",
+                "Use formats like: 1-5, 1,3,5, or 1-3,5-7",
+              );
               return;
             }
             playlistItems = range;
@@ -2413,8 +2546,13 @@
         try {
           // Step 1: Extract individual video URLs from playlist
           console.log("📋 Extracting playlist videos...");
-          showToast('info', 'Extracting Playlist', 'Extracting videos from playlist...', 3000);
-          
+          showToast(
+            "info",
+            "Extracting Playlist",
+            "Extracting videos from playlist...",
+            3000,
+          );
+
           const extractResponse = await fetch(
             `${getApiBaseUrl()}/extract_playlist`,
             {
@@ -2424,7 +2562,7 @@
                 url,
                 playlistItems: playlistItems,
               }),
-            }
+            },
           );
 
           const extractData = await extractResponse.json();
@@ -2437,13 +2575,22 @@
           console.log(`✅ Extracted ${videos.length} videos from playlist`);
 
           if (videos.length === 0) {
-            showToast('error', 'Playlist Empty', 'No videos found in playlist');
+            showToast("error", "Playlist Empty", "No videos found in playlist");
             ongoingPlaylistDownload = false;
             return;
           }
 
-          showToast('success', 'Playlist Extracted', `Successfully extracted ${videos.length} video(s) from playlist.`, 4000);
-          showToast('info', 'Playlist Download Started', `Downloading ${videos.length} video(s) from playlist...`);
+          showToast(
+            "success",
+            "Playlist Extracted",
+            `Successfully extracted ${videos.length} video(s) from playlist.`,
+            4000,
+          );
+          showToast(
+            "info",
+            "Playlist Download Started",
+            `Downloading ${videos.length} video(s) from playlist...`,
+          );
 
           // Step 2: Download each video using API-based download
           const format =
@@ -2479,14 +2626,14 @@
           for (let i = 0; i < videos.length; i++) {
             const video = videos[i];
             const downloadItem = bulkDownloads.find(
-              (d) => d.url === video.url && d.title === video.title
+              (d) => d.url === video.url && d.title === video.title,
             );
 
             if (!downloadItem) continue;
 
             try {
               console.log(
-                `⬇️ Downloading ${i + 1}/${videos.length}: ${video.title}`
+                `⬇️ Downloading ${i + 1}/${videos.length}: ${video.title}`,
               );
 
               // Update status to downloading
@@ -2503,11 +2650,11 @@
                 downloadItem.downloadId,
                 format,
                 null,
-                quality
+                quality,
               );
 
               console.log(
-                `✅ Completed ${i + 1}/${videos.length}: ${video.title}`
+                `✅ Completed ${i + 1}/${videos.length}: ${video.title}`,
               );
             } catch (error) {
               console.error(`❌ Failed to download ${video.title}:`, error);
@@ -2520,14 +2667,26 @@
           }
 
           console.log("🎉 Playlist download completed!");
-          const playlistVideos = bulkDownloads.filter(d => d.isPlaylist);
-          const completed = playlistVideos.filter(d => d.status === 'complete').length;
-          const failed = playlistVideos.filter(d => d.status === 'error').length;
-          showToast('info', 'Playlist Download Complete', `Completed: ${completed}, Failed: ${failed}`);
+          const playlistVideos = bulkDownloads.filter((d) => d.isPlaylist);
+          const completed = playlistVideos.filter(
+            (d) => d.status === "complete",
+          ).length;
+          const failed = playlistVideos.filter(
+            (d) => d.status === "error",
+          ).length;
+          showToast(
+            "info",
+            "Playlist Download Complete",
+            `Completed: ${completed}, Failed: ${failed}`,
+          );
           ongoingPlaylistDownload = false;
         } catch (error) {
           console.error("Playlist download error:", error);
-          showToast('error', 'Playlist Download Error', error.message || 'Failed to download playlist');
+          showToast(
+            "error",
+            "Playlist Download Error",
+            error.message || "Failed to download playlist",
+          );
           ongoingPlaylistDownload = false;
         }
       }
@@ -2539,10 +2698,10 @@
         const playlistVideos = bulkDownloads.filter((d) => d.isPlaylist);
         const total = playlistVideos.length;
         const completed = playlistVideos.filter(
-          (d) => d.status === "complete"
+          (d) => d.status === "complete",
         ).length;
         const failed = playlistVideos.filter(
-          (d) => d.status === "error"
+          (d) => d.status === "error",
         ).length;
 
         updatePlaylistStats(total, completed, failed);

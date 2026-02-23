@@ -7,10 +7,10 @@
     <link rel="icon" type="image/png" href="static/fevicon2.png" />
     <script>
       // Apply theme immediately to prevent flash
-      (function() {
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme === 'light') {
-          document.documentElement.className = 'light-theme';
+      (function () {
+        const savedTheme = localStorage.getItem("theme");
+        if (savedTheme === "light") {
+          document.documentElement.className = "light-theme";
         }
       })();
     </script>
@@ -1705,7 +1705,19 @@
             Downloads
           </h3>
           <div class="download-manager-controls">
-            <select id="downloadFilter" onchange="filterDownloads(this.value)" style="background: rgba(255, 255, 255, 0.2); border: none; color: rgb(20, 20, 20); border-radius: 5px; padding: 5px 8px; cursor: pointer; font-size: 0.8em;">
+            <select
+              id="downloadFilter"
+              onchange="filterDownloads(this.value)"
+              style="
+                background: rgba(255, 255, 255, 0.2);
+                border: none;
+                color: rgb(20, 20, 20);
+                border-radius: 5px;
+                padding: 5px 8px;
+                cursor: pointer;
+                font-size: 0.8em;
+              "
+            >
               <option value="all">All</option>
               <option value="downloading">Downloading</option>
               <option value="queued">Queued</option>
@@ -1769,22 +1781,23 @@
     <script>
       // Helper to get responsive image URL based on size
       function getResponsiveImageUrl(url, width) {
-        if (!url || !url.trim() || url === 'null' || url === 'undefined') return '';
-        
+        if (!url || !url.trim() || url === "null" || url === "undefined")
+          return "";
+
         // Determine size based on width
-        let size = 'medium';  // Default
+        let size = "medium"; // Default
         if (width < 200) {
-          size = 'small';   // 150x150
+          size = "small"; // 150x150
         } else if (width >= 200 && width <= 400) {
-          size = 'medium';  // 250x250
+          size = "medium"; // 250x250
         } else {
-          size = 'large';   // 500x500
+          size = "large"; // 500x500
         }
-        
+
         // Always proxy through backend
         return `${getApiBaseUrl()}/api/proxy-image?url=${encodeURIComponent(url)}&size=${size}`;
       }
-      
+
       // Helper to get API base URL with fallback
       function getApiBaseUrl() {
         let url;
@@ -1816,35 +1829,35 @@
       let downloadManagerVisible = false;
       let allDownloads = {};
       let userSelectedTab = null; // Track user's manually selected tab
-      let currentFilter = 'all'; // Track current download filter
+      let currentFilter = "all"; // Track current download filter
 
       // Toast notification system
       function showToast(type, title, message, duration = 5000) {
-        const container = document.getElementById('toastContainer');
-        const toast = document.createElement('div');
+        const container = document.getElementById("toastContainer");
+        const toast = document.createElement("div");
         toast.className = `toast ${type}`;
-        
+
         const icons = {
-          success: '✓',
-          error: '✕',
-          info: 'ℹ'
+          success: "✓",
+          error: "✕",
+          info: "ℹ",
         };
-        
+
         toast.innerHTML = `
-          <div class="toast-icon">${icons[type] || 'ℹ'}</div>
+          <div class="toast-icon">${icons[type] || "ℹ"}</div>
           <div class="toast-content">
             <div class="toast-title">${title}</div>
             <div class="toast-message">${message}</div>
           </div>
           <button class="toast-close" onclick="this.parentElement.remove()">×</button>
         `;
-        
+
         container.appendChild(toast);
-        
+
         // Auto remove after duration
         if (duration > 0) {
           setTimeout(() => {
-            toast.classList.add('removing');
+            toast.classList.add("removing");
             setTimeout(() => toast.remove(), 300);
           }, duration);
         }
@@ -2152,18 +2165,19 @@
         ]);
 
         const allItems = [...downloads, ...queuedItems];
-        
+
         // Count downloads by status
         const counts = {
           all: allItems.length,
-          downloading: allItems.filter(([_, d]) => d.status === 'downloading').length,
-          queued: allItems.filter(([_, d]) => d.status === 'queued').length,
-          complete: allItems.filter(([_, d]) => d.status === 'complete').length,
-          error: allItems.filter(([_, d]) => d.status === 'error').length
+          downloading: allItems.filter(([_, d]) => d.status === "downloading")
+            .length,
+          queued: allItems.filter(([_, d]) => d.status === "queued").length,
+          complete: allItems.filter(([_, d]) => d.status === "complete").length,
+          error: allItems.filter(([_, d]) => d.status === "error").length,
         };
-        
+
         // Update dropdown options with counts
-        const filterSelect = document.getElementById('downloadFilter');
+        const filterSelect = document.getElementById("downloadFilter");
         if (filterSelect) {
           filterSelect.innerHTML = `
             <option value="all">All (${counts.all})</option>
@@ -2174,17 +2188,20 @@
           `;
           filterSelect.value = currentFilter;
         }
-        
+
         // Filter downloads based on current filter
         let filteredItems = allItems;
-        if (currentFilter !== 'all') {
-          filteredItems = allItems.filter(([_, d]) => d.status === currentFilter);
+        if (currentFilter !== "all") {
+          filteredItems = allItems.filter(
+            ([_, d]) => d.status === currentFilter,
+          );
         }
 
         if (filteredItems.length === 0) {
-          const emptyMessage = currentFilter === 'all' 
-            ? 'No downloads yet'
-            : `No ${currentFilter} downloads`;
+          const emptyMessage =
+            currentFilter === "all"
+              ? "No downloads yet"
+              : `No ${currentFilter} downloads`;
           downloadList.innerHTML = `
             <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
               ${emptyMessage}
@@ -2332,14 +2349,23 @@
 
           if (response.ok) {
             showNotification(result.message, "info");
-            showToast('info', 'Download Cancelled', result.message || 'Download has been cancelled.', 3000);
+            showToast(
+              "info",
+              "Download Cancelled",
+              result.message || "Download has been cancelled.",
+              3000,
+            );
           } else {
             showNotification(result.error, "error");
-            showToast('error', 'Cancel Failed', result.error || 'Could not cancel download.');
+            showToast(
+              "error",
+              "Cancel Failed",
+              result.error || "Could not cancel download.",
+            );
           }
         } catch (error) {
           showNotification("Failed to cancel download", "error");
-          showToast('error', 'Cancel Failed', 'Failed to cancel download.');
+          showToast("error", "Cancel Failed", "Failed to cancel download.");
         }
       }
 
@@ -2360,7 +2386,12 @@
           downloadQueue.splice(queueIndex, 1);
 
           showNotification(`${item.title} removed from queue`, "info");
-          showToast('info', 'Removed from Queue', `${item.title} has been removed from the download queue.`, 3000);
+          showToast(
+            "info",
+            "Removed from Queue",
+            `${item.title} has been removed from the download queue.`,
+            3000,
+          );
           updateDownloadManager();
           updateDownloadBadge();
         }
@@ -2381,7 +2412,12 @@
         updateDownloadManager();
         updateDownloadBadge();
         showNotification("Finished downloads cleared", "success");
-        showToast('success', 'Downloads Cleared', 'All finished downloads have been removed from the list.', 3000);
+        showToast(
+          "success",
+          "Downloads Cleared",
+          "All finished downloads have been removed from the list.",
+          3000,
+        );
       }
 
       // Handle browser back/forward navigation
@@ -2438,7 +2474,12 @@
           `${title} added to download queue (Position ${downloadQueue.length})`,
           "info",
         );
-        showToast('info', 'Added to Queue', `${title} will download when a slot is available. Position: ${downloadQueue.length}`, 4000);
+        showToast(
+          "info",
+          "Added to Queue",
+          `${title} will download when a slot is available. Position: ${downloadQueue.length}`,
+          4000,
+        );
 
         // Update download manager
         updateDownloadManager();
@@ -2720,12 +2761,12 @@
         const savedTheme = localStorage.getItem("theme");
         const themeIcon = document.getElementById("themeIcon");
         const themeText = document.getElementById("themeText");
-        
+
         // Default to dark theme if no preference saved
         if (!savedTheme) {
           localStorage.setItem("theme", "dark");
         }
-        
+
         // Apply theme class from saved preference
         if (savedTheme === "light") {
           document.documentElement.classList.add("light-theme");
@@ -3123,7 +3164,11 @@
       async function performSearch() {
         const query = searchInput.value.trim();
         if (!query) {
-          showToast('error', 'No Search Query', 'Please enter a song name or URL to search.');
+          showToast(
+            "error",
+            "No Search Query",
+            "Please enter a song name or URL to search.",
+          );
           return;
         }
 
@@ -3146,7 +3191,11 @@
             "Invalid URL!",
             "Only music platform URLs are supported (YouTube, SoundCloud, JioSaavn, Spotify, etc.)",
           );
-          showToast('error', 'Invalid URL', 'Only music platform URLs are supported (YouTube, SoundCloud, JioSaavn, Spotify, etc.).');
+          showToast(
+            "error",
+            "Invalid URL",
+            "Only music platform URLs are supported (YouTube, SoundCloud, JioSaavn, Spotify, etc.).",
+          );
           return;
         }
 
@@ -3155,7 +3204,11 @@
           try {
             new URL(query);
           } catch (e) {
-            showToast('error', 'Invalid URL Format', 'Please enter a valid URL.');
+            showToast(
+              "error",
+              "Invalid URL Format",
+              "Please enter a valid URL.",
+            );
             return;
           }
         }
@@ -3220,7 +3273,11 @@
               "URL processing failed!",
               "Please check the URL and try again",
             );
-            showToast('error', 'URL Processing Failed', 'Please check the URL and try again.');
+            showToast(
+              "error",
+              "URL Processing Failed",
+              "Please check the URL and try again.",
+            );
             searchBtn.disabled = false;
           }
         } else {
@@ -3534,7 +3591,9 @@
         sources.forEach((source, index) => {
           const btn = document.createElement("button");
           // Check if user has manually selected a tab, use that; otherwise use first tab
-          const isActive = userSelectedTab ? source.id === userSelectedTab : index === 0;
+          const isActive = userSelectedTab
+            ? source.id === userSelectedTab
+            : index === 0;
           btn.className = "source-nav-btn" + (isActive ? " active" : "");
           btn.innerHTML = `${source.name} <span class="count">${source.count}</span>`;
           btn.onclick = () => switchSource(source.id);
@@ -3549,7 +3608,9 @@
             source.id,
           );
           // Check if user has manually selected a tab, use that; otherwise use first tab
-          const isActive = userSelectedTab ? source.id === userSelectedTab : index === 0;
+          const isActive = userSelectedTab
+            ? source.id === userSelectedTab
+            : index === 0;
           section.className = "source-section" + (isActive ? " active" : "");
           resultsDiv.appendChild(section);
         });
@@ -3563,7 +3624,7 @@
       function switchSource(sourceId) {
         // Track user's manual tab selection
         userSelectedTab = sourceId;
-        
+
         // Update navigation buttons
         document.querySelectorAll(".source-nav-btn").forEach((btn) => {
           btn.classList.remove("active");
@@ -3848,7 +3909,9 @@
                                     ? `<p style="margin: 5px 0;"><strong><svg style="width:14px;height:14px;vertical-align:middle;margin-right:4px;" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14.5c-2.49 0-4.5-2.01-4.5-4.5S9.51 7.5 12 7.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5zm0-5.5c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/></svg>Album:</strong> ${previewData.album}</p>`
                                     : ""
                                 }
-                                ${ previewData.language? `<p style="margin: 5px 0;"><strong><svg style="width:14px;height:14px;vertical-align:middle;margin-right:4px;" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm6.93 6h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.84.63 3.37 1.91 4.33 3.56zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2 0 .68.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56-1.84-.63-3.37-1.9-4.33-3.56zm2.95-8H5.08c.96-1.66 2.49-2.93 4.33-3.56C8.81 5.55 8.35 6.75 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2 0-.68.07-1.35.16-2h4.68c.09.65.16 1.32.16 2 0 .68-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.65-2.49 2.93-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2 0-.68-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z"/></svg>Language:</strong> ${previewData.language}</p>`
+                                ${
+                                  previewData.language
+                                    ? `<p style="margin: 5px 0;"><strong><svg style="width:14px;height:14px;vertical-align:middle;margin-right:4px;" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm6.93 6h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.84.63 3.37 1.91 4.33 3.56zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2 0 .68.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56-1.84-.63-3.37-1.9-4.33-3.56zm2.95-8H5.08c.96-1.66 2.49-2.93 4.33-3.56C8.81 5.55 8.35 6.75 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2 0-.68.07-1.35.16-2h4.68c.09.65.16 1.32.16 2 0 .68-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.65-2.49 2.93-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2 0-.68-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z"/></svg>Language:</strong> ${previewData.language}</p>`
                                     : ""
                                 }
                                 ${
@@ -4387,9 +4450,18 @@
 
         if (sourceId === "soundcloud") {
           const parts = [];
-          if (song.duration) parts.push(`<svg style="width:14px;height:14px;vertical-align:middle;margin-right:3px;" viewBox="0 0 24 24" fill="currentColor"><path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>${song.duration}`);
-          if (song.plays) parts.push(`<svg style="width:14px;height:14px;vertical-align:middle;margin-right:3px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>${song.plays.toLocaleString()}`);
-          if (song.likes) parts.push(`<svg style="width:14px;height:14px;vertical-align:middle;margin-right:3px;" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>${song.likes.toLocaleString()}`);
+          if (song.duration)
+            parts.push(
+              `<svg style="width:14px;height:14px;vertical-align:middle;margin-right:3px;" viewBox="0 0 24 24" fill="currentColor"><path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>${song.duration}`,
+            );
+          if (song.plays)
+            parts.push(
+              `<svg style="width:14px;height:14px;vertical-align:middle;margin-right:3px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>${song.plays.toLocaleString()}`,
+            );
+          if (song.likes)
+            parts.push(
+              `<svg style="width:14px;height:14px;vertical-align:middle;margin-right:3px;" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>${song.likes.toLocaleString()}`,
+            );
           if (song.genre)
             parts.push(
               `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline; margin-right: 3px;"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>${song.genre}`,
@@ -4402,9 +4474,18 @@
           }
         } else if (sourceId === "jiosaavn") {
           const parts = [];
-          if (song.year) parts.push(`<svg style="width:14px;height:14px;vertical-align:middle;margin-right:3px;" viewBox="0 0 24 24" fill="currentColor"><path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/></svg>${song.year}`);
-          if (song.language) parts.push(`<svg style="width:14px;height:14px;vertical-align:middle;margin-right:3px;" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm6.93 6h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.84.63 3.37 1.91 4.33 3.56zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2 0 .68.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56-1.84-.63-3.37-1.9-4.33-3.56zm2.95-8H5.08c.96-1.66 2.49-2.93 4.33-3.56C8.81 5.55 8.35 6.75 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2 0-.68.07-1.35.16-2h4.68c.09.65.16 1.32.16 2 0 .68-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.65-2.49 2.93-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2 0-.68-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z"/></svg>${song.language}`);
-          if (song.subtitle) parts.push(`<svg style="width:14px;height:14px;vertical-align:middle;margin-right:3px;" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14.5c-2.49 0-4.5-2.01-4.5-4.5S9.51 7.5 12 7.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5zm0-5.5c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/></svg>${song.subtitle}`);
+          if (song.year)
+            parts.push(
+              `<svg style="width:14px;height:14px;vertical-align:middle;margin-right:3px;" viewBox="0 0 24 24" fill="currentColor"><path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/></svg>${song.year}`,
+            );
+          if (song.language)
+            parts.push(
+              `<svg style="width:14px;height:14px;vertical-align:middle;margin-right:3px;" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm6.93 6h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.84.63 3.37 1.91 4.33 3.56zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2 0 .68.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56-1.84-.63-3.37-1.9-4.33-3.56zm2.95-8H5.08c.96-1.66 2.49-2.93 4.33-3.56C8.81 5.55 8.35 6.75 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2 0-.68.07-1.35.16-2h4.68c.09.65.16 1.32.16 2 0 .68-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.65-2.49 2.93-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2 0-.68-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z"/></svg>${song.language}`,
+            );
+          if (song.subtitle)
+            parts.push(
+              `<svg style="width:14px;height:14px;vertical-align:middle;margin-right:3px;" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14.5c-2.49 0-4.5-2.01-4.5-4.5S9.51 7.5 12 7.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5zm0-5.5c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/></svg>${song.subtitle}`,
+            );
 
           if (parts.length > 0) {
             metadataHTML = `<div class="song-metadata">${parts
@@ -4706,9 +4787,14 @@
           };
           saveDownloadsToStorage();
           updateDownloadManager();
-          
+
           // Show toast notification for download started
-          showToast('info', 'Download Started', `${title} has been queued for download.`, 3000);
+          showToast(
+            "info",
+            "Download Started",
+            `${title} has been queued for download.`,
+            3000,
+          );
 
           // Poll download status with timeout tracking
           if (button) {
@@ -4726,7 +4812,7 @@
             button.disabled = false;
           }
           showNotification(`❌ Download failed: ${error.message}`, "error");
-          showToast('error', 'Download Failed', `${title}: ${error.message}`);
+          showToast("error", "Download Failed", `${title}: ${error.message}`);
 
           // Download finished (failed), process next in queue
           activeDownloads--;
@@ -4755,7 +4841,11 @@
           }
 
           showNotification(`⏱️ Download timeout: ${title}`, "error");
-          showToast('error', 'Download Timeout', `${title} took too long to process.`);
+          showToast(
+            "error",
+            "Download Timeout",
+            `${title} took too long to process.`,
+          );
 
           // Download timed out, process next in queue
           cleanupOngoingDownload(url, title);
@@ -4823,7 +4913,12 @@
 
               console.log(`✅ Auto-downloaded: ${title}`);
               showNotification(`Downloaded: ${title}`, "success");
-              showToast('success', 'Download Complete', `${title} has been downloaded successfully.`, 4000);
+              showToast(
+                "success",
+                "Download Complete",
+                `${title} has been downloaded successfully.`,
+                4000,
+              );
             }
 
             // Download finished, process next in queue
@@ -4895,7 +4990,11 @@
                   `❌ Download failed: Both methods failed. ${fallbackError.message}`,
                   "error",
                 );
-                showToast('error', 'Download Failed', `${title}: Both download methods failed.`);
+                showToast(
+                  "error",
+                  "Download Failed",
+                  `${title}: Both download methods failed.`,
+                );
 
                 // Update download status
                 allDownloads[downloadId].status = "error";
@@ -4921,7 +5020,11 @@
               `❌ Download failed: ${data.error || "Unknown error"}`,
               "error",
             );
-            showToast('error', 'Download Failed', `${title}: ${data.error || "Unknown error"}`);
+            showToast(
+              "error",
+              "Download Failed",
+              `${title}: ${data.error || "Unknown error"}`,
+            );
 
             // Download finished (failed), process next in queue
             cleanupOngoingDownload(url, title);
@@ -5049,7 +5152,11 @@
           }
 
           showNotification(`❌ Status check failed: ${errorMessage}`, "error");
-          showToast('error', 'Status Check Failed', `${title}: Could not verify download status.`);
+          showToast(
+            "error",
+            "Status Check Failed",
+            `${title}: Could not verify download status.`,
+          );
 
           // Download failed, process next in queue
           cleanupOngoingDownload(url, title);
@@ -5061,25 +5168,26 @@
       // Show notification - deprecated, use showToast instead
       function showNotification(message, type = "info") {
         // Parse message to extract title if it contains emoji or special format
-        let title = type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info';
+        let title =
+          type === "success" ? "Success" : type === "error" ? "Error" : "Info";
         let msg = message;
-        
+
         // Extract title from message if it has format like "✅ Title: message"
         const match = message.match(/^[^\w\s]+\s*([^:]+):\s*(.+)$/);
         if (match) {
           title = match[1].trim();
           msg = match[2].trim();
-        } else if (message.startsWith('❌')) {
-          title = 'Error';
-          msg = message.replace(/❌\s*/, '');
-        } else if (message.startsWith('✅')) {
-          title = 'Success';
-          msg = message.replace(/✅\s*/, '');
-        } else if (message.startsWith('⏱️')) {
-          title = 'Timeout';
-          msg = message.replace(/⏱️\s*/, '');
+        } else if (message.startsWith("❌")) {
+          title = "Error";
+          msg = message.replace(/❌\s*/, "");
+        } else if (message.startsWith("✅")) {
+          title = "Success";
+          msg = message.replace(/✅\s*/, "");
+        } else if (message.startsWith("⏱️")) {
+          title = "Timeout";
+          msg = message.replace(/⏱️\s*/, "");
         }
-        
+
         showToast(type, title, msg);
       }
 
@@ -5127,23 +5235,26 @@
 
         // Get the actual rendered width of the image element
         const renderedWidth = img.clientWidth || img.offsetWidth || 150;
-        
+
         // Determine size based on rendered width
-        let size = 'medium';
+        let size = "medium";
         if (renderedWidth < 200) {
-          size = 'small';
+          size = "small";
         } else if (renderedWidth >= 200 && renderedWidth <= 400) {
-          size = 'medium';
+          size = "medium";
         } else {
-          size = 'large';
+          size = "large";
         }
-        
+
         // Update the src with correct size if it's a proxied image
         let finalSrc = src;
-        if (src.includes('/api/proxy-image?')) {
+        if (src.includes("/api/proxy-image?")) {
           // Replace or add size parameter based on actual rendered size
-          if (src.includes('&size=')) {
-            finalSrc = src.replace(/&size=(small|medium|large)/, `&size=${size}`);
+          if (src.includes("&size=")) {
+            finalSrc = src.replace(
+              /&size=(small|medium|large)/,
+              `&size=${size}`,
+            );
           } else {
             finalSrc = `${src}&size=${size}`;
           }
@@ -5229,29 +5340,24 @@
 
         // Determine image size from className and style
         let width = 150; // default medium
-        
+
         // Check for explicit size in style
         const widthMatch = style.match(/width:\s*(\d+)px/);
         if (widthMatch) {
           width = parseInt(widthMatch[1]);
-        } 
+        }
         // Check className for size hints
-        else if (className.includes('video-thumbnail')) {
+        else if (className.includes("video-thumbnail")) {
           width = 320; // larger for video thumbnails (16:9 aspect ratio, typically 280-320px wide)
-        } 
-        else if (className.includes('song-thumbnail')) {
+        } else if (className.includes("song-thumbnail")) {
           width = 280; // standard song card thumbnail (grid is minmax(280px, 1fr))
-        }
-        else if (style.includes('60px') || style.includes('width: 60')) {
+        } else if (style.includes("60px") || style.includes("width: 60")) {
           width = 60;
-        } 
-        else if (style.includes('80px') || style.includes('width: 80')) {
+        } else if (style.includes("80px") || style.includes("width: 80")) {
           width = 80;
-        } 
-        else if (style.includes('120px') || style.includes('width: 120')) {
+        } else if (style.includes("120px") || style.includes("width: 120")) {
           width = 120;
-        }
-        else if (style.includes('400px') || style.includes('width: 400')) {
+        } else if (style.includes("400px") || style.includes("width: 400")) {
           width = 400;
         }
 
