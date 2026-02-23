@@ -46,11 +46,9 @@ export class DownloadManager {
 
     this.toggleBtn?.addEventListener("click", () => this.toggle());
 
-    // Close button inside the panel
     const closeBtn = document.getElementById("closeDownloadManager");
     closeBtn?.addEventListener("click", () => this.toggle());
 
-    // Clear button
     const clearBtn = document.getElementById("clearFinished");
     clearBtn?.addEventListener("click", () =>
       this.downloadService.clearFinished(),
@@ -96,7 +94,6 @@ export class DownloadManager {
 
     const downloads = Object.entries(this.downloadService.allDownloads);
 
-    // Merge queued items
     const queuedItems: [string, DownloadItem][] =
       this.downloadService.downloadQueue.map(
         (item: QueueItem, index: number) => [
@@ -114,7 +111,6 @@ export class DownloadManager {
 
     const allItems: [string, DownloadItem][] = [...downloads, ...queuedItems];
 
-    // Counts
     const counts = {
       all: allItems.length,
       downloading: allItems.filter(([, d]) => d.status === "downloading")
@@ -124,7 +120,6 @@ export class DownloadManager {
       error: allItems.filter(([, d]) => d.status === "error").length,
     };
 
-    // Update filter dropdown
     if (this.filterSelect) {
       this.filterSelect.innerHTML = `
         <option value="all">All (${counts.all})</option>
@@ -136,7 +131,6 @@ export class DownloadManager {
       this.filterSelect.value = this.currentFilter;
     }
 
-    // Filter
     let filtered = allItems;
     if (this.currentFilter !== "all") {
       filtered = allItems.filter(([, d]) => d.status === this.currentFilter);
@@ -151,7 +145,6 @@ export class DownloadManager {
       return;
     }
 
-    // Sort newest first
     filtered.sort((a, b) => {
       const tA = new Date(a[1].timestamp || 0).getTime();
       const tB = new Date(b[1].timestamp || 0).getTime();
@@ -209,7 +202,6 @@ export class DownloadManager {
       })
       .join("");
 
-    // Bind action buttons
     this.downloadList
       .querySelectorAll<HTMLButtonElement>("[data-action]")
       .forEach((btn) => {

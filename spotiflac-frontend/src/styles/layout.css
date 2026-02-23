@@ -3,6 +3,15 @@
    Responsive breakpoints
    ================================================================ */
 
+/* Override Tailwind v4 preflight: svg { display: block } */
+button svg,
+a svg,
+span svg,
+label svg {
+  display: inline-block;
+  vertical-align: middle;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -46,8 +55,15 @@ body {
 .header h1 a {
   display: inline-flex !important;
   align-items: center;
+  justify-content: center;
+  gap: 10px;
   width: auto;
   transition: all 0.3s ease;
+}
+
+.header h1 a svg {
+  display: inline-block;
+  flex-shrink: 0;
 }
 
 .header p {
@@ -66,8 +82,10 @@ body {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
   border: 1px solid var(--border-color);
   max-width: 800px;
+  width: 100%;
   margin-left: auto;
   margin-right: auto;
+  box-sizing: border-box;
 }
 
 .search-input-group {
@@ -189,31 +207,41 @@ body {
    ================================================================ */
 
 @media (max-width: 768px) {
+  /* Push title below the absolutely-positioned theme toggle */
+  .header {
+    padding-top: 75px;
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+  }
+
   .header h1 {
     font-size: 1.8em;
   }
   .songs-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .search-box {
+    padding: 25px 20px;
   }
 
   .search-type-selector {
-    margin: 0 10px 20px 10px;
+    flex-wrap: wrap;
     gap: 8px;
+    margin-bottom: 16px;
   }
 
   .type-btn {
     padding: 8px 15px;
     font-size: 0.9em;
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
+    justify-content: center;
   }
 
   .type-btn svg {
     width: 14px;
     height: 14px;
-  }
-  .search-input-group {
-    flex-direction: column;
   }
 
   .url-result-card {
@@ -303,5 +331,84 @@ body {
   }
   h5 {
     font-size: 1em !important;
+  }
+}
+/* Mobile — single column + stacked search */
+@media (max-width: 480px) {
+  body {
+    padding: 10px;
+  }
+
+  /* Switch header to flex-column so theme toggle flows above title */
+  .header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 15px 0;
+    margin-bottom: 15px;
+    margin-left: 10px;
+    margin-right: 10px;
+    position: relative;
+  }
+
+  .header-title-link {
+    margin-top: 15%;
+    font-size: 1.5em;
+  }
+
+  .header-title-icon {
+    display: none !important;
+  }
+
+  .songs-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .search-box {
+    padding: 16px 12px;
+    border-radius: 14px;
+  }
+
+  .search-type-selector {
+    gap: 4px;
+    margin-bottom: 14px;
+    width: 100%;
+  }
+
+  .type-btn {
+    flex-direction: column;
+    padding: 8px 4px;
+    font-size: 0.72em;
+    flex: 1 1 0;
+    min-width: 0;
+    gap: 4px;
+    white-space: nowrap;
+  }
+
+  .type-btn svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+  .search-input-group {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  #searchInput {
+    width: 100%;
+    font-size: 1em;
+    padding: 12px 15px;
+  }
+
+  #searchBtn {
+    width: 100%;
+    min-width: unset;
+    padding: 12px 20px;
+    font-size: 1em;
+  }
+
+  .query-hint {
+    font-size: 0.78em;
   }
 }

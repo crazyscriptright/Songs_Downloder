@@ -1,4 +1,10 @@
-export type DownloadStatus = 'queued' | 'downloading' | 'complete' | 'error' | 'cancelled' | 'not_found';
+export type DownloadStatus =
+  | "queued"
+  | "downloading"
+  | "complete"
+  | "error"
+  | "cancelled"
+  | "not_found";
 
 export interface DownloadItem {
   id: string;
@@ -21,7 +27,7 @@ export interface QueueItem {
   url: string;
   title: string;
   useAdvanced: boolean;
-  status: 'queued';
+  status: "queued";
   timestamp: number;
   buttonId: string;
 }

@@ -1,7 +1,7 @@
-import { DirectUrlInfo, Song } from './song';
+import { DirectUrlInfo, Song } from "./song";
 
-export type SearchType = 'music' | 'video' | 'all';
-export type SourceId = 'jiosaavn' | 'soundcloud' | 'ytmusic' | 'ytvideo';
+export type SearchType = "music" | "video" | "all";
+export type SourceId = "jiosaavn" | "soundcloud" | "ytmusic" | "ytvideo";
 
 export interface SearchResults {
   jiosaavn: Song[];
@@ -9,7 +9,7 @@ export interface SearchResults {
   ytmusic: Song[];
   ytvideo: Song[];
   direct_url?: DirectUrlInfo[];
-  query_type?: 'url' | 'search';
+  query_type?: "url" | "search";
   search_id?: string;
   status?: string;
 }

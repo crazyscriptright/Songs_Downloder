@@ -11,10 +11,6 @@ import { SearchBox } from "@/components/SearchBox";
 import { SourceNavigation } from "@/components/SourceNavigation";
 import { ToastNotification } from "@/components/ToastNotification";
 
-/* ------------------------------------------------------------------ */
-/* Status bar helper                                                   */
-/* ------------------------------------------------------------------ */
-
 const STATUS_DEFAULT_ICONS: Record<string, string> = {
   success:
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>',
@@ -26,16 +22,10 @@ const STATUS_DEFAULT_ICONS: Record<string, string> = {
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
 };
 
-/* ================================================================== */
-/* App class                                                           */
-/* ================================================================== */
-
 export class App {
-  /* State */
   private searchType: SearchType = "music";
   private currentSearchId: string | null = null;
 
-  /* UI */
   private statusDiv: HTMLElement;
   private toast: ToastNotification;
   private searchBox: SearchBox;
@@ -43,21 +33,17 @@ export class App {
   private results: ResultsContainer;
   private downloadMgr: DownloadManager;
 
-  /* Services */
   private downloadService: DownloadService;
 
   constructor() {
-    /* DOM refs */
     this.statusDiv = document.getElementById("status") as HTMLElement;
 
-    /* Components */
     this.toast = new ToastNotification();
     this.searchBox = new SearchBox();
     this.sourceNav = new SourceNavigation();
     this.results = new ResultsContainer(this.sourceNav);
     this.downloadMgr = new DownloadManager();
 
-    /* Services */
     this.downloadService = new DownloadService(
       () => this.downloadMgr.render(),
       (t, title, msg, dur) => this.toast.show(t, title, msg, dur),
@@ -65,23 +51,16 @@ export class App {
     this.downloadMgr.setService(this.downloadService);
   }
 
-  /* ================================================================ */
-  /* Bootstrap                                                         */
-  /* ================================================================ */
-
   init(): void {
-    /* Restore persisted downloads */
     this.downloadService.loadFromStorage();
     this.downloadMgr.render();
 
-    /* Search box callbacks */
     this.searchBox.onSearch = () => this.performSearch();
     this.searchBox.onTypeChange = (type: SearchType) => {
       this.searchType = type;
       this.results.setSearchType(type);
     };
 
-    /* Results callbacks */
     this.results.onDownload = (url, title, btn, adv) =>
       this.downloadService.downloadSong(url, title, btn, adv);
     this.results.onAdvanced = (url, title, _btn) => {
@@ -93,19 +72,12 @@ export class App {
     this.results.showToast = (t, title, msg, dur) =>
       this.toast.show(t, title, msg, dur);
 
-    /* Lazy loading */
     initLazyLoading();
 
-    /* Browser history */
     window.addEventListener("popstate", () => this.handlePopState());
 
-    /* Check URL params on load */
     this.handlePopState();
   }
-
-  /* ================================================================ */
-  /* Status bar                                                        */
-  /* ================================================================ */
 
   private showStatus(type: string, title: string, subtitle = ""): void {
     this.statusDiv.className = `status ${type} show`;
@@ -129,17 +101,12 @@ export class App {
     }, 300);
   }
 
-  /* ================================================================ */
-  /* Search                                                            */
-  /* ================================================================ */
-
   async performSearch(): Promise<void> {
     const query = this.searchBox.query;
     if (!query) return;
 
     const isMusicUrlFlag = isMusicUrl(query);
 
-    // Validate URL
     if (isMusicUrlFlag) {
       try {
         new URL(query);
@@ -153,13 +120,11 @@ export class App {
       }
     }
 
-    // Push to history
     const newUrl = new URL(window.location.href);
     newUrl.searchParams.set("q", encodeURIComponent(query));
     newUrl.searchParams.set("type", this.searchType);
     window.history.pushState({}, "", newUrl.toString());
 
-    // Reset
     this.results.clear();
 
     if (isMusicUrlFlag) {
@@ -168,8 +133,6 @@ export class App {
       await this.searchByKeyword(query);
     }
   }
-
-  /* ----- URL-based search (single endpoint) ----- */
 
   private async searchByUrl(query: string): Promise<void> {
     this.showStatus(
@@ -215,7 +178,6 @@ export class App {
       const data = await SearchService.pollSearchStatus(this.currentSearchId);
 
       if (data.status === "complete") {
-        // Direct URL result
         if (
           data.query_type === "url" &&
           data.direct_url &&
@@ -258,7 +220,6 @@ export class App {
 
         this.searchBox.input.disabled = false;
       } else {
-        // Keep polling
         setTimeout(() => this.pollSearchResults(), 500);
       }
     } catch {
@@ -270,8 +231,6 @@ export class App {
       this.searchBox.input.disabled = false;
     }
   }
-
-  /* ----- Keyword-based parallel search ----- */
 
   private async searchByKeyword(query: string): Promise<void> {
     this.showStatus(
@@ -306,7 +265,6 @@ export class App {
 
       if (completed === 1) clearTimeout(timeoutId);
 
-      // Build progress status
       const names: string[] = [];
       if (allResults.jiosaavn.length)
         names.push(`JioSaavn (${allResults.jiosaavn.length})`);
@@ -350,7 +308,6 @@ export class App {
       }
     };
 
-    // Parallel requests
     await SearchService.searchParallel(
       query,
       this.searchType,
@@ -358,10 +315,6 @@ export class App {
     );
     clearTimeout(timeoutId);
   }
-
-  /* ================================================================ */
-  /* History/URL management                                            */
-  /* ================================================================ */
 
   private handlePopState(): void {
     const params = new URLSearchParams(window.location.search);

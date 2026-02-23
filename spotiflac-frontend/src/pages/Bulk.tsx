@@ -12,7 +12,7 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from "react";
-import { Link } from "react-router-dom";
+import { IoDownloadOutline, IoMusicalNote, IoVideocam } from "react-icons/io5";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -66,18 +66,7 @@ function ProgressItem({
             className="download-link"
             download
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
+            <IoDownloadOutline size={16} />
             Download File
           </a>
         )}
@@ -259,13 +248,6 @@ export default function Bulk() {
 
   return (
     <div className="bulk-page">
-      {/* Navigation */}
-      <div className="bulk-nav">
-        <Link to="/" className="nav-link">
-          ← Home
-        </Link>
-      </div>
-
       <h2 className="bulk-title">Bulk &amp; Playlist Downloader</h2>
       <p className="bulk-subtitle">
         Download multiple songs or entire playlists at once
@@ -318,14 +300,7 @@ export default function Bulk() {
                   checked={bulkDownloadType === "music"}
                   onChange={() => setBulkDownloadType("music")}
                 />
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z" />
-                </svg>
+                <IoMusicalNote size={16} />
                 Music (Audio Only)
               </label>
               <label className="radio-label">
@@ -336,14 +311,7 @@ export default function Bulk() {
                   checked={bulkDownloadType === "video"}
                   onChange={() => setBulkDownloadType("video")}
                 />
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z" />
-                </svg>
+                <IoVideocam size={16} />
                 Video
               </label>
             </div>

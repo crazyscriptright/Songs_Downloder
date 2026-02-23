@@ -35,7 +35,7 @@ export interface YouTubeUrlData {
  * Convert YouTube Music URLs to regular YouTube URLs and extract video ID.
  */
 export function convertYouTubeMusicUrl(url: string): YouTubeUrlData {
-  let convertedUrl = url.replace('music.youtube.com', 'youtube.com');
+  let convertedUrl = url.replace("music.youtube.com", "youtube.com");
 
   let videoId: string | null = null;
   const patterns = [
@@ -53,7 +53,9 @@ export function convertYouTubeMusicUrl(url: string): YouTubeUrlData {
   }
 
   return {
-    convertedUrl: videoId ? `https://youtube.com/watch?v=${videoId}` : convertedUrl,
+    convertedUrl: videoId
+      ? `https://youtube.com/watch?v=${videoId}`
+      : convertedUrl,
     videoId,
     embedUrl: videoId ? `https://youtube.com/embed/${videoId}` : null,
   };

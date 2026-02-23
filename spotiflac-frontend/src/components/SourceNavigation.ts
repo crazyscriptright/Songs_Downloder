@@ -1,4 +1,4 @@
-import type { SourceId, SourceInfo } from '@/types';
+import type { SourceId, SourceInfo } from "@/types";
 
 export type SwitchSourceCallback = (sourceId: SourceId) => void;
 
@@ -13,23 +13,24 @@ export class SourceNavigation {
   userSelectedTab: SourceId | null = null;
 
   constructor() {
-    this.container = document.getElementById('sourceNavigation') as HTMLElement;
+    this.container = document.getElementById("sourceNavigation") as HTMLElement;
   }
 
   /** Render navigation buttons for the given sources. */
   render(sources: SourceInfo[]): void {
-    this.container.innerHTML = '';
-    this.container.className = sources.length > 0 ? 'source-navigation active' : 'source-navigation';
+    this.container.innerHTML = "";
+    this.container.className =
+      sources.length > 0 ? "source-navigation active" : "source-navigation";
 
     sources.forEach((source, index) => {
       const isActive = this.userSelectedTab
         ? source.id === this.userSelectedTab
         : index === 0;
 
-      const btn = document.createElement('button');
-      btn.className = 'source-nav-btn' + (isActive ? ' active' : '');
+      const btn = document.createElement("button");
+      btn.className = "source-nav-btn" + (isActive ? " active" : "");
       btn.innerHTML = `${source.name} <span class="count">${source.count}</span>`;
-      btn.addEventListener('click', () => {
+      btn.addEventListener("click", () => {
         this.userSelectedTab = source.id;
         this.setActive(source.id);
         this.onSwitch(source.id);
@@ -40,14 +41,18 @@ export class SourceNavigation {
 
   /** Highlight a specific source button (and deactivate others). */
   setActive(sourceId: SourceId): void {
-    this.container.querySelectorAll<HTMLButtonElement>('.source-nav-btn').forEach((btn) => {
-      btn.classList.remove('active');
-    });
-    // Find button whose text starts with the source name
-    const btns = Array.from(this.container.querySelectorAll<HTMLButtonElement>('.source-nav-btn'));
+    this.container
+      .querySelectorAll<HTMLButtonElement>(".source-nav-btn")
+      .forEach((btn) => {
+        btn.classList.remove("active");
+      });
+
+    const btns = Array.from(
+      this.container.querySelectorAll<HTMLButtonElement>(".source-nav-btn"),
+    );
     for (const btn of btns) {
       if (btn.textContent?.includes(sourceId)) {
-        btn.classList.add('active');
+        btn.classList.add("active");
       }
     }
   }
@@ -55,7 +60,7 @@ export class SourceNavigation {
   /** Reset user selection (e.g. for a new search). */
   reset(): void {
     this.userSelectedTab = null;
-    this.container.innerHTML = '';
-    this.container.className = 'source-navigation';
+    this.container.innerHTML = "";
+    this.container.className = "source-navigation";
   }
 }
