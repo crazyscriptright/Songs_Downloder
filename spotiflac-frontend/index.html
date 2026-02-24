@@ -75,19 +75,44 @@
 
     <meta name="theme-color" content="#10b981" />
 
+    <!-- Preload background textures for instant display -->
     <script>
-      // Apply theme class synchronously before React renders to prevent FOUC
+      // Apply theme + preload correct background images before first paint
       (function () {
         var theme = localStorage.getItem("theme");
-        if (theme === "light") {
+        var isLight = theme === "light";
+        if (isLight) {
           document.documentElement.classList.add("light-theme");
           document.body && document.body.classList.add("light-theme");
         }
+        // Preload only the active theme's backgrounds
+        var isMobile = window.innerWidth <= 768;
+        var bg = isLight
+          ? isMobile
+            ? "/mobile_light.webp"
+            : "/light.webp"
+          : isMobile
+            ? "/mobile_dark.webp"
+            : "/dark.webp";
+        var link = document.createElement("link");
+        link.rel = "preload";
+        link.as = "image";
+        link.type = "image/webp";
+        link.href = bg;
+        document.head.appendChild(link);
       })();
     </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Register service worker for image caching
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker.register("/sw.js").catch(function () {});
+        });
+      }
+    </script>
   </body>
 </html>

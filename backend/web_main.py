@@ -2,15 +2,17 @@
 Universal Music Downloader - Flask Web Interface
 """
 
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, make_response
 from flask_cors import CORS
 import threading
 import os
 import json
 import re
+import hashlib
 from datetime import datetime
 import requests
 from io import BytesIO
+from functools import lru_cache
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,7 +22,7 @@ try:
     from ytmusic_dynamic_video_tokens import YouTubeMusicVideoAPI
     from jiosaavn_search import JioSaavnAPI
     import soundcloud
-    from bs4 import BeautifulSoup  # Add BeautifulSoup for JioSaavn URL extraction
+    from bs4 import BeautifulSoup
 except ImportError as e:
     print(f"⚠ Import Error: {e}")
     print("Make sure all required modules are in the same directory!")
@@ -28,7 +30,6 @@ except ImportError as e:
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 
-# Configure CORS
 allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5000').split(',')
 CORS(app, resources={
     r"/*": {
@@ -38,48 +39,41 @@ CORS(app, resources={
     }
 })
 
-# Use /tmp for Heroku (ephemeral storage)
-if os.getenv('DYNO'):  # Running on Heroku
+if os.getenv('DYNO'):
     app.config['DOWNLOAD_FOLDER'] = '/tmp/downloads'
 else:
     app.config['DOWNLOAD_FOLDER'] = os.path.join(os.path.expanduser("~"), "Downloads", "Music")
 
 os.makedirs(app.config['DOWNLOAD_FOLDER'], exist_ok=True)
 
-
 def cleanup_tmp_directory():
     """Clean up /tmp directory when it's getting full (Heroku has limited space)"""
     if not os.getenv('DYNO'):
-        return  # Only run on Heroku
-    
+        return
+
     try:
         tmp_dir = '/tmp'
-        
-        # Get disk usage
+
         import shutil
         total, used, free = shutil.disk_usage(tmp_dir)
         usage_percent = (used / total) * 100
-        
-        # If more than 80% full, clean up
+
         if usage_percent > 80:
             print(f"⚠️ /tmp is {usage_percent:.1f}% full, cleaning up...")
-            
-            # Get all files in /tmp (excluding .json files)
+
             files_to_delete = []
             for root, dirs, files in os.walk(tmp_dir):
                 for file in files:
                     file_path = os.path.join(root, file)
-                    # Keep .json cache files, delete everything else
+
                     if not file.endswith('.json'):
                         try:
                             files_to_delete.append(file_path)
                         except:
                             pass
-            
-            # Sort by modification time (oldest first)
+
             files_to_delete.sort(key=lambda x: os.path.getmtime(x) if os.path.exists(x) else 0)
-            
-            # Delete old files
+
             deleted_count = 0
             for file_path in files_to_delete:
                 try:
@@ -88,25 +82,22 @@ def cleanup_tmp_directory():
                         deleted_count += 1
                 except Exception as e:
                     pass
-            
-            # Clean up empty directories
+
             for root, dirs, files in os.walk(tmp_dir, topdown=False):
                 for name in dirs:
                     try:
                         os.rmdir(os.path.join(root, name))
                     except OSError:
-                        pass # Directory not empty
+                        pass
 
             print(f"✅ Cleaned up {deleted_count} old files from /tmp")
-            
-            # Check new usage
+
             total, used, free = shutil.disk_usage(tmp_dir)
             new_usage = (used / total) * 100
             print(f"📊 /tmp usage: {new_usage:.1f}% (freed {usage_percent - new_usage:.1f}%)")
-    
+
     except Exception as e:
         print(f"⚠️ Error cleaning /tmp: {e}")
-
 
 ytmusic_api = None
 ytvideo_api = None
@@ -116,8 +107,7 @@ search_results = {}
 download_status = {}
 active_processes = {}
 
-# Use /tmp for cache files on Heroku (ephemeral storage)
-if os.getenv('DYNO'):  # Running on Heroku
+if os.getenv('DYNO'):
     CACHE_DIR = '/tmp'
 else:
     CACHE_DIR = '.'
@@ -126,14 +116,12 @@ UNIFIED_CACHE_FILE = os.path.join(CACHE_DIR, "music_api_cache.json")
 DOWNLOAD_QUEUE_FILE = os.path.join(CACHE_DIR, "download_queue.json")
 DOWNLOAD_STATUS_FILE = os.path.join(CACHE_DIR, "download_status.json")
 
-
 def get_apis():
     """Initialize APIs with unified cache and headless mode"""
     global ytmusic_api, ytvideo_api, jiosaavn_api
-    
-    # Always use headless mode (required for Heroku, good for local too)
+
     headless_mode = True
-    
+
     if not ytmusic_api:
         ytmusic_api = YouTubeMusicAPI(
             cache_file=UNIFIED_CACHE_FILE,
@@ -148,9 +136,8 @@ def get_apis():
         )
     if not jiosaavn_api:
         jiosaavn_api = JioSaavnAPI()
-    
-    return ytmusic_api, ytvideo_api, jiosaavn_api
 
+    return ytmusic_api, ytvideo_api, jiosaavn_api
 
 def load_persistent_data():
     """Load download status if available (from /tmp on Heroku)"""
@@ -164,40 +151,37 @@ def load_persistent_data():
         print(f"⚠ Could not load download status: {e}")
         download_status = {}
 
-
 def save_download_status():
     """Save download status (only in /tmp on Heroku)"""
     try:
         with open(DOWNLOAD_STATUS_FILE, 'w') as f:
             json.dump(download_status, f, indent=2)
     except (IOError, OSError, PermissionError) as e:
-        # Read-only filesystem - skip saving
+
         print(f"Warning: Could not save download status: {e}")
         pass
-
 
 def cleanup_old_downloads():
     """Clean up old downloads"""
     try:
         current_time = datetime.now()
         to_remove = []
-        
+
         for download_id, status in download_status.items():
             if 'timestamp' in status:
                 download_time = datetime.fromisoformat(status['timestamp'])
                 if (current_time - download_time).total_seconds() > 86400:
                     if status.get('status') in ['complete', 'error', 'cancelled']:
                         to_remove.append(download_id)
-        
+
         for download_id in to_remove:
             del download_status[download_id]
-        
+
         if to_remove:
             save_download_status()
-    
+
     except Exception as e:
         print(f"Warning: Could not cleanup old downloads: {e}")
-
 
 def search_ytmusic(query):
     """Search YouTube Music"""
@@ -206,7 +190,7 @@ def search_ytmusic(query):
         ytmusic, _, _ = get_apis()
         data = ytmusic.search(query, use_fresh_tokens=True, retry_on_error=True)
         songs = ytmusic.parse_search_results(data) if data else []
-        
+
         for song in songs:
             results.append({
                 'title': song['title'],
@@ -219,20 +203,19 @@ def search_ytmusic(query):
             })
     except Exception as e:
         print(f"YT Music error: {e}")
-    
-    return results
 
+    return results
 
 def search_ytvideo(query):
     """Search YouTube Music for videos"""
     results = []
     try:
         _, ytvideo, _ = get_apis()
-        
+
         data = ytvideo.search_videos(query, use_fresh_tokens=True, retry_on_error=True)
-        
+
         videos = ytvideo.parse_video_results(data) if data else []
-        
+
         for video in videos:
             results.append({
                 'title': video['title'],
@@ -245,40 +228,37 @@ def search_ytvideo(query):
             })
     except Exception as e:
         print(f"YT Video error: {e}")
-    
-    return results
 
+    return results
 
 def extract_soundcloud_metadata_with_recommendations(soundcloud_url):
     """Extract metadata from SoundCloud URL including main track and recommendations"""
     try:
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        
-        # Convert desktop URL to mobile URL for better compatibility
+
         if soundcloud_url.startswith("https://soundcloud.com/"):
             mobile_url = soundcloud_url.replace("https://soundcloud.com/", "https://m.soundcloud.com/")
             url = mobile_url
         else:
             url = soundcloud_url
-        
+
         response = requests.get(url, headers=headers, timeout=10)
         if response.status_code != 200:
             return None
-        
+
         soup = BeautifulSoup(response.text, "html.parser")
-        
-        # Find script tags containing tracks data
+
         tracks_scripts = []
         for i, script in enumerate(soup.find_all("script")):
             if script.string and '"tracks":' in script.string:
                 tracks_scripts.append((i, script))
-        
+
         if tracks_scripts:
-            # Sort by script length and pick the largest one
+
             tracks_scripts.sort(key=lambda x: len(x[1].string), reverse=True)
             script_index, script_tag = tracks_scripts[0]
         else:
-            # Fallback: look for large scripts
+
             script_tag = None
             for script in soup.find_all("script"):
                 if script.string and len(script.string) > 50000:
@@ -286,31 +266,26 @@ def extract_soundcloud_metadata_with_recommendations(soundcloud_url):
                     if any(keyword in script_content for keyword in ['soundcloud', 'track', 'audio']):
                         script_tag = script
                         break
-        
+
         if not script_tag:
             return None
-        
-        # Parse JSON data
+
         try:
             data = json.loads(script_tag.string)
-            
-            # Try different structures for tracks data
+
             tracks_data = None
-            users_data = None  # Add users data for artist name lookup
-            
-            # Method 1: Mobile/new structure
+            users_data = None
+
             initial_store = data.get("props", {}).get("pageProps", {}).get("initialStoreState", {})
             entities = initial_store.get("entities", {})
             if entities and "tracks" in entities:
                 tracks_data = entities.get("tracks", {})
-                users_data = entities.get("users", {})  # Get users data too
-            
-            # Method 2: Direct tracks access
+                users_data = entities.get("users", {})
+
             elif "tracks" in data:
                 tracks_data = data.get("tracks", {})
-                users_data = data.get("users", {})  # Try to get users too
-            
-            # Method 3: Recursive search
+                users_data = data.get("users", {})
+
             else:
                 def find_tracks_recursive(obj):
                     if isinstance(obj, dict):
@@ -328,36 +303,30 @@ def extract_soundcloud_metadata_with_recommendations(soundcloud_url):
                             if result:
                                 return result
                     return None
-                
+
                 tracks_data = find_tracks_recursive(data)
-            
+
             if not tracks_data:
                 return None
-            
-            # Extract SoundCloud tracks
+
             soundcloud_tracks = []
             for key, value in tracks_data.items():
                 if key.startswith("soundcloud:tracks"):
                     track_data = value.get("data", {})
-                    
-                    # Get duration
+
                     duration_ms = track_data.get('duration', 0)
                     duration_str = "0:00"
-                    
-                    # Format duration
+
                     if duration_ms:
                         minutes = duration_ms // 60000
                         seconds = (duration_ms % 60000) // 1000
                         duration_str = f"{minutes}:{seconds:02d}"
-                    
-                    # Format counts
+
                     plays = track_data.get('playback_count', 0)
                     likes = track_data.get('likes_count', 0)
-                    
-                    # Extract artist name
+
                     artist_name = "Unknown Artist"
-                    
-                    # First try direct user field
+
                     if 'user' in track_data and isinstance(track_data['user'], dict):
                         artist_name = track_data['user'].get('username', 'Unknown Artist')
                     elif 'uploader' in track_data:
@@ -365,23 +334,23 @@ def extract_soundcloud_metadata_with_recommendations(soundcloud_url):
                     elif 'artist' in track_data:
                         artist_name = track_data['artist']
                     else:
-                        # Try to find user via user_id lookup in users_data
+
                         user_id = track_data.get('user_id')
                         if user_id and users_data:
-                            # Look for user in users_data by user_id
+
                             user_key = f"soundcloud:users:{user_id}"
                             if user_key in users_data:
                                 user_info = users_data[user_key].get('data', {})
                                 artist_name = user_info.get('username', user_info.get('display_name', 'Unknown Artist'))
                             else:
-                                # Try direct user_id lookup
+
                                 for key, user_data in users_data.items():
                                     if key.startswith("soundcloud:users:"):
                                         user_info = user_data.get('data', {})
                                         if user_info.get('id') == user_id:
                                             artist_name = user_info.get('username', user_info.get('display_name', 'Unknown Artist'))
                                             break
-                    
+
                     soundcloud_tracks.append({
                         'title': track_data.get('title', 'Unknown Title'),
                         'artist': artist_name,
@@ -394,23 +363,22 @@ def extract_soundcloud_metadata_with_recommendations(soundcloud_url):
                         'created_at': track_data.get('created_at', ''),
                         'source': 'SoundCloud'
                     })
-            
+
             if soundcloud_tracks:
                 return {
                     'main_track': soundcloud_tracks[0] if soundcloud_tracks else None,
                     'recommended_tracks': soundcloud_tracks[1:] if len(soundcloud_tracks) > 1 else [],
                     'total_tracks': len(soundcloud_tracks)
                 }
-            
+
         except json.JSONDecodeError:
             return None
         except Exception:
             return None
-            
+
     except Exception as e:
         print(f"SoundCloud metadata extraction error: {e}")
         return None
-
 
 def extract_jiosaavn_metadata(jiosaavn_url):
     """Extract metadata from JioSaavn URL using web scraping"""
@@ -418,121 +386,110 @@ def extract_jiosaavn_metadata(jiosaavn_url):
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
-        
+
         response = requests.get(jiosaavn_url, headers=headers, timeout=10)
         if response.status_code != 200:
             return None
-        
+
         soup = BeautifulSoup(response.text, "html.parser")
-        
+
         metadata = {}
-        
-        # Extract image source
+
         img_element = soup.find("img", {"id": "songHeaderImage"})
         if img_element:
             metadata['thumbnail'] = img_element.get("src")
-        
-        # Extract song title
+
         song_title_element = soup.find("h1", class_="u-h2 u-margin-bottom-tiny@sm")
         if song_title_element:
             song_title = song_title_element.get_text(strip=True)
-            # Remove "Lyrics" suffix if present
+
             if song_title.endswith("Lyrics"):
                 song_title = song_title[:-6].strip()
             metadata['title'] = song_title
-        
-        # Extract album name and artists
+
         album_para = soup.find("p", class_="u-color-js-gray u-ellipsis@lg u-margin-bottom-tiny@sm")
         if album_para:
-            # Extract album
+
             album_link = album_para.find("a", {"screen_name": "song_screen", "href": lambda x: x and "/album/" in x})
             if album_link:
                 metadata['album'] = album_link.get_text(strip=True)
-            
-            # Extract artists
+
             artist_links = album_para.find_all("a", {"screen_name": "song_screen", "href": lambda x: x and "/artist/" in x})
             artists = []
             for link in artist_links:
                 artist_name = link.get_text(strip=True)
                 if artist_name:
                     artists.append(artist_name)
-            
+
             if artists:
                 metadata['artist'] = ", ".join(artists)
-        
-        # Extract PID from page content
+
         pid_value = None
-        
-        # Method 1: Search in script tags for JSON containing "pid"
+
         script_tags = soup.find_all("script")
         for script in script_tags:
             if script.string and '"pid"' in script.string:
                 try:
-                    # Try to find PID using regex pattern
+
                     pid_match = re.search(r'"pid"\s*:\s*"([^"]+)"', script.string)
                     if pid_match:
                         pid_value = pid_match.group(1)
                         break
                     else:
-                        # Try to find PID with single quotes
+
                         pid_match = re.search(r"'pid'\s*:\s*'([^']+)'", script.string)
                         if pid_match:
                             pid_value = pid_match.group(1)
                             break
                 except Exception:
                     continue
-        
-        # Method 2: Search in the entire page source if not found in scripts
+
         if not pid_value:
             page_content = response.text
             pid_match = re.search(r'"pid"\s*:\s*"([^"]+)"', page_content)
             if pid_match:
                 pid_value = pid_match.group(1)
             else:
-                # Try with single quotes
+
                 pid_match = re.search(r"'pid'\s*:\s*'([^']+)'", page_content)
                 if pid_match:
                     pid_value = pid_match.group(1)
-        
+
         if pid_value:
             metadata['pid'] = pid_value
-        
-        # Extract language from page content
+
         language_value = None
-        
-        # Method 1: Search in script tags for JSON containing "language"
+
         for script in script_tags:
             if script.string and '"language"' in script.string:
                 try:
-                    # Try to find language using regex pattern
+
                     language_match = re.search(r'"language"\s*:\s*"([^"]+)"', script.string)
                     if language_match:
                         language_value = language_match.group(1)
                         break
                     else:
-                        # Try to find language with single quotes
+
                         language_match = re.search(r"'language'\s*:\s*'([^']+)'", script.string)
                         if language_match:
                             language_value = language_match.group(1)
                             break
                 except Exception:
                     continue
-        
-        # Method 2: Search in the entire page source if not found in scripts
+
         if not language_value:
             page_content = response.text
             language_match = re.search(r'"language"\s*:\s*"([^"]+)"', page_content)
             if language_match:
                 language_value = language_match.group(1)
             else:
-                # Try with single quotes
+
                 language_match = re.search(r"'language'\s*:\s*'([^']+)'", page_content)
                 if language_match:
                     language_value = language_match.group(1)
-        
-        # Method 3: Extract from URL structure (fallback)
+
         if not language_value:
-            # Look for language indicators in URL or page structure
+
             if 'english' in jiosaavn_url.lower() or 'english' in response.text.lower():
                 language_value = 'english'
             elif 'hindi' in jiosaavn_url.lower() or 'hindi' in response.text.lower():
@@ -543,37 +500,36 @@ def extract_jiosaavn_metadata(jiosaavn_url):
                 language_value = 'telugu'
             elif 'punjabi' in jiosaavn_url.lower() or 'punjabi' in response.text.lower():
                 language_value = 'punjabi'
-        
+
         if language_value:
             metadata['language'] = language_value
         else:
-            # Default fallback if no language detected
-            metadata['language'] = 'hindi'  # Most common on JioSaavn
-        
+
+            metadata['language'] = 'hindi'
+
         return metadata
-        
+
     except Exception as e:
         print(f"JioSaavn metadata extraction error: {e}")
         return None
-
 
 def search_jiosaavn(query):
     """Search JioSaavn"""
     results = []
     try:
         _, _, jiosaavn = get_apis()
-        
+
         data = jiosaavn.search_songs(query)
         songs = jiosaavn.parse_results(data) if data else []
-        
+
         for song in songs:
             artist = (
-                song.get('primary_artists') or 
-                song.get('singers') or 
+                song.get('primary_artists') or
+                song.get('singers') or
                 song.get('subtitle', '').split(' - ')[0] if ' - ' in song.get('subtitle', '') else
                 'Unknown Artist'
             )
-            
+
             results.append({
                 'title': song['title'],
                 'artist': artist,
@@ -591,27 +547,26 @@ def search_jiosaavn(query):
         print(f"JioSaavn error: {e}")
         import traceback
         traceback.print_exc()
-    
-    return results
 
+    return results
 
 def search_soundcloud(query):
     """Search SoundCloud with unified cache"""
     results = []
     try:
         tracks = soundcloud.soundcloud_search(query, limit=20)
-        
+
         for track in tracks:
             duration_ms = track.get('duration_ms', 0)
             if duration_ms:
                 duration = f"{duration_ms // 60000}:{(duration_ms % 60000) // 1000:02d}"
             else:
                 duration = "0:00"
-            
+
             artwork_url = track.get('artwork_url', '')
             if artwork_url:
                 artwork_url = artwork_url.replace('-large.', '-t500x500.')
-            
+
             results.append({
                 'title': track.get('title', 'Unknown'),
                 'artist': track.get('uploader', 'Unknown Artist'),
@@ -629,9 +584,8 @@ def search_soundcloud(query):
         print(f"SoundCloud error: {e}")
         import traceback
         traceback.print_exc()
-    
-    return results
 
+    return results
 
 def is_url(query):
     """Check if query is a MUSIC-related URL (not just any URL)"""
@@ -648,7 +602,6 @@ def is_url(query):
     ]
     return any(re.search(pattern, query, re.IGNORECASE) for pattern in music_url_patterns)
 
-
 def validate_url_simple(url):
     """Simple URL validation - just check if it's a supported platform"""
     supported_patterns = [
@@ -660,7 +613,7 @@ def validate_url_simple(url):
         r'saavn\.com/',
         r'spotify\.com/',
     ]
-    
+
     for pattern in supported_patterns:
         if re.search(pattern, url, re.IGNORECASE):
             if 'soundcloud.com' in url.lower():
@@ -671,14 +624,14 @@ def validate_url_simple(url):
                 source = "Spotify"
             else:
                 source = "YouTube"
-            
+
             is_playlist = bool(re.search(r'[?&]list=([^&]+)', url))
             playlist_id = None
             if is_playlist:
                 playlist_match = re.search(r'[?&]list=([^&]+)', url)
                 if playlist_match:
                     playlist_id = playlist_match.group(1)
-            
+
             return {
                 'is_valid': True,
                 'url': url,
@@ -687,13 +640,12 @@ def validate_url_simple(url):
                 'is_playlist': is_playlist,
                 'playlist_id': playlist_id
             }
-    
+
     return {
         'is_valid': False,
         'error': 'Unsupported URL - Only YouTube, SoundCloud, JioSaavn, and Spotify are supported',
         'url': url
     }
-
 
 def extract_video_id_from_url(url):
     """Extract video ID from YouTube URLs"""
@@ -702,18 +654,17 @@ def extract_video_id_from_url(url):
         r'(?:embed\/)([0-9A-Za-z_-]{11})',
         r'(?:watch\?v=)([0-9A-Za-z_-]{11})'
     ]
-    
+
     for pattern in patterns:
         match = re.search(pattern, url)
         if match:
             return match.group(1)
     return None
 
-
 def search_all_sources(query, search_id, search_type='music'):
     """Search all sources in parallel or validate and process URL"""
     global search_results
-    
+
     all_results = {
         'ytmusic': [],
         'ytvideo': [],
@@ -723,14 +674,14 @@ def search_all_sources(query, search_id, search_type='music'):
         'status': 'searching',
         'query_type': 'url' if is_url(query) else 'search'
     }
-    
+
     if is_url(query):
-        
+
         all_results['status'] = 'validating'
         search_results[search_id] = all_results
-        
+
         video_info = validate_url_simple(query)
-        
+
         if video_info and video_info.get('is_valid'):
             all_results['direct_url'] = [video_info]
             all_results['status'] = 'complete'
@@ -739,14 +690,14 @@ def search_all_sources(query, search_id, search_type='music'):
             all_results['status'] = 'error'
             all_results['error'] = video_info.get('error', 'Invalid URL')
             all_results['message'] = f"Unable to process URL: {video_info.get('error', 'Unknown error')}"
-        
+
         all_results['timestamp'] = datetime.now().isoformat()
         search_results[search_id] = all_results
         return all_results
-    
+
     threads = []
     results_lock = threading.Lock()
-    
+
     def search_and_store(source_name, search_func):
         try:
             results = search_func(query)
@@ -754,47 +705,44 @@ def search_all_sources(query, search_id, search_type='music'):
                 all_results[source_name] = results
         except Exception as e:
             print(f"Error searching {source_name}: {e}")
-    
+
     if search_type == 'music':
-        # Search music sources
+
         t1 = threading.Thread(target=search_and_store, args=('ytmusic', search_ytmusic))
         t3 = threading.Thread(target=search_and_store, args=('jiosaavn', search_jiosaavn))
         t4 = threading.Thread(target=search_and_store, args=('soundcloud', search_soundcloud))
         threads = [t1, t3, t4]
     elif search_type == 'video':
-        # Search video sources
+
         t2 = threading.Thread(target=search_and_store, args=('ytvideo', search_ytvideo))
         threads = [t2]
     else:
-        # Search all sources
+
         t1 = threading.Thread(target=search_and_store, args=('ytmusic', search_ytmusic))
         t2 = threading.Thread(target=search_and_store, args=('ytvideo', search_ytvideo))
         t3 = threading.Thread(target=search_and_store, args=('jiosaavn', search_jiosaavn))
         t4 = threading.Thread(target=search_and_store, args=('soundcloud', search_soundcloud))
         threads = [t1, t2, t3, t4]
-    
+
     for t in threads:
         t.start()
-    
-    # Wait for all to complete
+
     for t in threads:
         t.join()
-    
+
     all_results['status'] = 'complete'
     all_results['timestamp'] = datetime.now().isoformat()
-    
-    search_results[search_id] = all_results
-    
-    return all_results
 
+    search_results[search_id] = all_results
+
+    return all_results
 
 def download_song(url, title, download_id, advanced_options=None):
     """Download song/video using yt-dlp with optional advanced parameters and progress tracking"""
     global download_status, active_processes
-    
-    # Clean up /tmp if getting full (Heroku)
+
     cleanup_tmp_directory()
-    
+
     download_status[download_id] = {
         'status': 'downloading',
         'progress': 0,
@@ -806,39 +754,31 @@ def download_song(url, title, download_id, advanced_options=None):
         'advanced_options': advanced_options
     }
     save_download_status()
-    
+
     try:
         import subprocess
         import re as regex
         import shlex
-        
-        # SECURITY: Validate and sanitize URL to prevent command injection
+
         if not url or not isinstance(url, str):
             raise ValueError("Invalid URL")
-        
-        # Only allow URLs (no local files or shell commands)
+
         if not url.startswith(('http://', 'https://')):
             raise ValueError("Only HTTP/HTTPS URLs are allowed")
-        
-        # SECURITY: Validate title (prevent dangerous characters in title only)
+
         DANGEROUS_CHARS_TITLE = ['&&', '||', ';', '|', '`', '$', '<', '>', '\n', '\r']
         for dangerous_char in DANGEROUS_CHARS_TITLE:
             if dangerous_char in title:
                 raise ValueError(f"Security: Dangerous character '{dangerous_char}' detected in title")
-        
-        # Sanitize filename
+
         safe_title = re.sub(r'[<>:"/\\|?*]', '_', title)
-        
-        # Base command - using list format for subprocess (safer than shell=True)
+
         cmd = ['yt-dlp']
-        
-        # SECURITY: Whitelist of allowed audio formats
+
         ALLOWED_AUDIO_FORMATS = ['mp3', 'm4a', 'opus', 'vorbis', 'wav', 'flac']
-        
-        # SECURITY: Whitelist of allowed quality values
+
         ALLOWED_QUALITIES = ['0', '2', '5', '9']
-        
-        # Apply advanced options if provided
+
         if advanced_options:
             audio_format = advanced_options.get('audioFormat', 'mp3')
             audio_quality = advanced_options.get('audioQuality', '0')
@@ -847,125 +787,113 @@ def download_song(url, title, download_id, advanced_options=None):
             embed_subtitles = advanced_options.get('embedSubtitles', False)
             keep_video = advanced_options.get('keepVideo', False)
             custom_args = advanced_options.get('customArgs', '')
-            
-            # Video quality options (new)
+
             video_quality = advanced_options.get('videoQuality', '1080')
             video_fps = advanced_options.get('videoFPS', '30')
             video_format = advanced_options.get('videoFormat', 'mkv')
-            
-            # SECURITY: Validate audio format against whitelist
+
             if audio_format not in ALLOWED_AUDIO_FORMATS:
-                audio_format = 'mp3'  # Default to safe value
-            
-            # SECURITY: Validate quality against whitelist
+                audio_format = 'mp3'
+
             if audio_quality not in ALLOWED_QUALITIES:
-                audio_quality = '0'  # Default to safe value
-            
-            # SECURITY: Validate video format
+                audio_quality = '0'
+
             ALLOWED_VIDEO_FORMATS = ['mkv', 'mp4', 'webm']
             if video_format not in ALLOWED_VIDEO_FORMATS:
                 video_format = 'mkv'
-            
+
             if keep_video:
-                # Video download with customizable quality
-                # Build format string based on user selection
+
                 if video_quality == 'best':
                     format_selector = 'bestvideo+bestaudio/best'
                 else:
-                    # Specific resolution
+
                     if video_fps == '60':
                         format_selector = f'bestvideo[height<={video_quality}][fps<=60]+bestaudio/best[height<={video_quality}]'
                     elif video_fps == '30':
                         format_selector = f'bestvideo[height<={video_quality}][fps<=30]+bestaudio/best[height<={video_quality}]'
-                    else:  # any fps
+                    else:
                         format_selector = f'bestvideo[height<={video_quality}]+bestaudio/best[height<={video_quality}]'
-                
+
                 cmd.extend([
                     '-f', format_selector,
                     '--merge-output-format', video_format,
                 ])
-                
-                # Add subtitle options if enabled
+
                 if embed_subtitles:
                     cmd.extend([
                         '--embed-subs',
                         '--write-auto-subs',
                         '--sub-langs', 'en.*,hi.*,all',
                     ])
-                
+
                 output_template = os.path.join(app.config['DOWNLOAD_FOLDER'], f"%(title)s.%(ext)s")
             else:
-                # Audio download
+
                 cmd.extend([
                     '-x',
                     '--audio-format', audio_format,
                     '--audio-quality', audio_quality,
                 ])
                 output_template = os.path.join(app.config['DOWNLOAD_FOLDER'], f"%(title)s.%(ext)s")
-            
-            # Metadata options
+
             if add_metadata:
                 cmd.append('--embed-metadata')
-            
+
             if embed_thumbnail and not keep_video:
                 cmd.append('--embed-thumbnail')
-            
-            # SECURITY: Custom arguments - STRICT WHITELIST ONLY
+
             if custom_args:
-                # SECURITY: Block shell operators in custom args (but allow URLs)
+
                 DANGEROUS_CHARS_ARGS = ['&&', '||', ';', '|', '`', '$', '\n', '\r']
                 for dangerous_char in DANGEROUS_CHARS_ARGS:
                     if dangerous_char in custom_args:
-                        # Security: Block dangerous characters
-                        custom_args = ''  # Clear the dangerous input
+
+                        custom_args = ''
                         break
-                
-                if custom_args:  # Only proceed if not cleared
-                    # Whitelist of safe yt-dlp arguments for advanced audio downloads
+
+                if custom_args:
+
                     SAFE_ARGS = [
-                        # Network & Geo
+
                         '--geo-bypass',
                         '--geo-bypass-country',
                         '--prefer-free-formats',
-                        
-                        # Playlist handling
+
                         '--no-playlist',
                         '--yes-playlist',
                         '--playlist-items',
                         '--playlist-start',
                         '--playlist-end',
                         '--max-downloads',
-                        
-                        # Quality & Format
+
                         '--windows-filenames',
                         '--format-sort',
                         '--prefer-free-formats',
-                        
+
                         '--max-filesize',
                         '--min-filesize',
                         '--limit-rate',
                         '--throttled-rate',
-                        
+
                         '--retries',
                         '--fragment-retries',
                         '--skip-unavailable-fragments',
                         '--abort-on-unavailable-fragment',
                         '--keep-fragments',
-                        
-                        # Subtitles
+
                         '--write-subs',
                         '--write-auto-subs',
                         '--sub-langs',
                         '--sub-format',
                         '--convert-subs',
-                        
-                        # Metadata & Post-processing
+
                         '--add-chapters',
                         '--split-chapters',
                         '--no-embed-chapters',
                         '--xattrs',
                         '--concat-playlist',
-                        
+
                         '--no-overwrites',
                         '--continue',
                         '--no-continue',
@@ -974,8 +902,7 @@ def download_song(url, title, download_id, advanced_options=None):
                         '--write-description',
                         '--write-info-json',
                         '--write-playlist-metafiles',
-                        
-                        # Workarounds
+
                         '--encoding',
                         '--legacy-server-connect',
                         '--no-check-certificates',
@@ -986,27 +913,25 @@ def download_song(url, title, download_id, advanced_options=None):
                         '--max-sleep-interval',
                         '--sleep-subtitles',
                     ]
-                    
-                    # Parse custom args safely
+
                     try:
                         parsed_args = shlex.split(custom_args)
                         for arg in parsed_args:
-                            # Additional security: check each arg for dangerous chars
+
                             has_danger = any(dc in arg for dc in DANGEROUS_CHARS_ARGS)
                             if has_danger:
-                                # Security: Block dangerous argument
+
                                 continue
-                            
-                            # Only allow whitelisted arguments
+
                             arg_name = arg.split('=')[0] if '=' in arg else arg
                             if arg_name in SAFE_ARGS:
                                 cmd.append(arg)
-                            # Security: Block unsafe argument
+
                     except Exception as e:
-                        # Security: Failed to parse custom args (ignored)
+
                         pass
         else:
-            # Default: Audio download with best quality and metadata
+
             cmd.extend([
                 '--audio-format', 'mp3',
                 '-x',
@@ -1015,65 +940,56 @@ def download_song(url, title, download_id, advanced_options=None):
                 '--embed-thumbnail',
             ])
             output_template = os.path.join(app.config['DOWNLOAD_FOLDER'], f"%(title)s.%(ext)s")
-        
-        # Create a unique directory for this download to avoid filename collisions
+
         download_dir = os.path.join(app.config['DOWNLOAD_FOLDER'], download_id)
         os.makedirs(download_dir, exist_ok=True)
 
-        # Common options with newline progress for parsing
         cmd.extend([
             '-P', download_dir,
             '-o', '%(title)s.%(ext)s',
-            '--newline',  # Progress on new lines for easier parsing
+            '--newline',
             url
         ])
-        
-        
+
         creation_flags = 0
-        if os.name == 'nt':  # Windows
+        if os.name == 'nt':
             creation_flags = subprocess.BELOW_NORMAL_PRIORITY_CLASS
-        
+
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             universal_newlines=True,
             bufsize=1,
-            shell=False,  # SECURITY: Never use shell=True!
+            shell=False,
             creationflags=creation_flags
         )
-        
-        # Store process for potential cancellation
+
         active_processes[download_id] = process
-        
+
         if os.name != 'nt':
             try:
                 import resource
                 os.setpriority(os.PRIO_PROCESS, process.pid, 10)
             except Exception as e:
                 pass
-        
-        # Track error messages from yt-dlp
+
         error_messages = []
         has_progress = False
-        
-        # Parse progress in real-time
+
         for line in process.stdout:
-            # Check if download was cancelled
+
             if download_status.get(download_id, {}).get('status') == 'cancelled':
                 print(f"🚫 Download {download_id} was cancelled")
                 process.terminate()
                 break
-                
+
             line = line.strip()
-            # Skip printing every line for cleaner output
-            
-            # Detect ERROR messages from yt-dlp
+
             if 'ERROR:' in line:
                 error_msg = line.replace('ERROR:', '').strip()
                 error_messages.append(error_msg)
-            
-            # Detect common error patterns
+
             error_patterns = [
                 'Video unavailable',
                 'Private video',
@@ -1089,30 +1005,27 @@ def download_song(url, title, download_id, advanced_options=None):
                 'Sign in to confirm',
                 'members-only content',
             ]
-            
+
             if any(pattern.lower() in line.lower() for pattern in error_patterns):
                 error_messages.append(line)
-            
-            # Parse download progress: [download]  45.2% of 3.50MiB at 1.23MiB/s ETA 00:02
+
             if '[download]' in line and '%' in line:
-                has_progress = True  # Mark that we've seen actual download progress
+                has_progress = True
                 try:
-                    # Extract percentage
+
                     percent_match = regex.search(r'(\d+\.?\d*)%', line)
                     if percent_match:
                         progress = float(percent_match.group(1))
-                        
-                        # Extract speed
+
                         speed_match = regex.search(r'at\s+([\d\.]+\s*[KMG]iB/s)', line)
                         speed = speed_match.group(1) if speed_match else 'Unknown'
-                        
-                        # Extract ETA
+
                         eta_match = regex.search(r'ETA\s+([\d:]+)', line)
                         eta = eta_match.group(1) if eta_match else 'Unknown'
-                        
+
                         download_status[download_id] = {
                             'status': 'downloading',
-                            'progress': min(progress, 99),  # Cap at 99% until complete
+                            'progress': min(progress, 99),
                             'title': title,
                             'url': url,
                             'speed': speed,
@@ -1122,23 +1035,20 @@ def download_song(url, title, download_id, advanced_options=None):
                         }
                         save_download_status()
                 except Exception as parse_err:
-                    # Parsing error - continue processing
+
                     pass
-        
-        # Clean up process reference
+
         if download_id in active_processes:
             del active_processes[download_id]
-        
+
         process.wait()
-        
-        # Check if cancelled during execution
+
         if download_status.get(download_id, {}).get('status') == 'cancelled':
             return
-        
-        # Check for errors even if return code is 0 (yt-dlp sometimes returns 0 on errors)
+
         if error_messages:
-            # Combine error messages
-            error_text = ' | '.join(error_messages[:3])  # Limit to first 3 errors
+
+            error_text = ' | '.join(error_messages[:3])
             download_status[download_id] = {
                 'status': 'error',
                 'progress': 0,
@@ -1153,14 +1063,13 @@ def download_song(url, title, download_id, advanced_options=None):
             }
             save_download_status()
             return
-        
+
         if process.returncode == 0 and has_progress:
-            # Find the downloaded file in the unique directory
+
             download_dir = os.path.join(app.config['DOWNLOAD_FOLDER'], download_id)
             try:
                 files = os.listdir(download_dir)
-                
-                # Get the most recently created file
+
                 latest_file = max(
                     [os.path.join(download_dir, f) for f in files],
                     key=os.path.getctime,
@@ -1168,7 +1077,7 @@ def download_song(url, title, download_id, advanced_options=None):
                 )
             except FileNotFoundError:
                 latest_file = None
-            
+
             if latest_file:
                 filename = os.path.basename(latest_file)
                 download_status[download_id] = {
@@ -1197,19 +1106,18 @@ def download_song(url, title, download_id, advanced_options=None):
                     'advanced_options': advanced_options
                 }
         elif process.returncode == 0 and not has_progress:
-            # yt-dlp returned 0 but no download progress - check if file was actually created
+
             download_dir = os.path.join(app.config['DOWNLOAD_FOLDER'], download_id)
             try:
                 files = os.listdir(download_dir)
                 if files:
-                    # Get the most recently created file
+
                     latest_file = max(
                         [os.path.join(download_dir, f) for f in files],
                         key=os.path.getctime,
                         default=None
                     )
-                    
-                    # Check if file was created recently (within last 10 seconds)
+
                     if latest_file and (datetime.now().timestamp() - os.path.getctime(latest_file)) < 10:
                         filename = os.path.basename(latest_file)
                         download_status[download_id] = {
@@ -1228,8 +1136,7 @@ def download_song(url, title, download_id, advanced_options=None):
                         return
             except Exception:
                 pass
-            
-            # No file found - likely an error
+
             download_status[download_id] = {
                 'status': 'error',
                 'progress': 0,
@@ -1243,11 +1150,11 @@ def download_song(url, title, download_id, advanced_options=None):
                 'advanced_options': advanced_options
             }
         else:
-            # Process returned non-zero exit code
+
             error_text = 'Download failed'
             if error_messages:
-                error_text = ' | '.join(error_messages[:3])  # Use collected error messages
-            
+                error_text = ' | '.join(error_messages[:3])
+
             download_status[download_id] = {
                 'status': 'error',
                 'progress': 0,
@@ -1260,15 +1167,14 @@ def download_song(url, title, download_id, advanced_options=None):
                 'failed_at': datetime.now().isoformat(),
                 'advanced_options': advanced_options
             }
-            
-            # Try fallback with video proxy API for YouTube URLs
+
             if 'youtube.com' in url or 'youtu.be' in url:
                 try:
                     download_with_proxy_api(url, title, download_id, advanced_options)
                     return
                 except Exception as fallback_error:
                     print(f"❌ Fallback proxy API also failed: {fallback_error}")
-    
+
     except Exception as e:
         download_status[download_id] = {
             'status': 'error',
@@ -1282,69 +1188,63 @@ def download_song(url, title, download_id, advanced_options=None):
             'failed_at': datetime.now().isoformat(),
             'advanced_options': advanced_options
         }
-    
+
     finally:
-        # Always save final status
+
         save_download_status()
-        # Clean up process reference
+
         if download_id in active_processes:
             del active_processes[download_id]
-
 
 @app.route('/')
 def index():
     """Render main page with optional URL parameter search"""
-    # Get query parameter from URL
+
     query = request.args.get('q', '').strip()
     search_type = request.args.get('type', 'music')
-    
-    # Get frontend URL from environment variable
+
     frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5000')
-    
-    return render_template('index.html', 
-                         initial_query=query, 
+
+    return render_template('index.html',
+                         initial_query=query,
                          initial_type=search_type,
                          frontend_url=frontend_url)
-
 
 @app.route('/search', methods=['POST'])
 def search():
     """Handle search request"""
     data = request.get_json()
     query = data.get('query', '').strip()
-    search_type = data.get('type', 'music')  # 'music', 'video', or 'all'
-    
+    search_type = data.get('type', 'music')
+
     if not query:
         return jsonify({'error': 'Empty query'}), 400
-    
-    # Generate search ID
+
     search_id = f"search_{datetime.now().timestamp()}"
-    
-    # Detect if it's a URL
+
     query_type = 'url' if is_url(query) else 'search'
-    
+
     thread = threading.Thread(
         target=search_all_sources,
         args=(query, search_id, search_type)
     )
     thread.start()
-    
+
     return jsonify({
         'search_id': search_id,
         'status': 'started',
         'query_type': query_type
     })
 
-
 @app.route('/search/jiosaavn', methods=['POST'])
 def search_jiosaavn_endpoint():
     """Fast JioSaavn search endpoint"""
     data = request.get_json()
     query = data.get('query', '').strip()
-    
+
     if not query:
         return jsonify({'error': 'Query is required'}), 400
-    
+
     try:
         results = search_jiosaavn(query)
         return jsonify({
@@ -1364,16 +1264,15 @@ def search_jiosaavn_endpoint():
             'query': query
         })
 
-
 @app.route('/search/soundcloud', methods=['POST'])
 def search_soundcloud_endpoint():
     """Fast SoundCloud search endpoint"""
     data = request.get_json()
     query = data.get('query', '').strip()
-    
+
     if not query:
         return jsonify({'error': 'Query is required'}), 400
-    
+
     try:
         results = search_soundcloud(query)
         return jsonify({
@@ -1393,16 +1292,15 @@ def search_soundcloud_endpoint():
             'query': query
         })
 
-
 @app.route('/search/ytmusic', methods=['POST'])
 def search_ytmusic_endpoint():
     """Fast YouTube Music search endpoint"""
     data = request.get_json()
     query = data.get('query', '').strip()
-    
+
     if not query:
         return jsonify({'error': 'Query is required'}), 400
-    
+
     try:
         results = search_ytmusic(query)
         return jsonify({
@@ -1422,16 +1320,15 @@ def search_ytmusic_endpoint():
             'query': query
         })
 
-
 @app.route('/search/ytvideo', methods=['POST'])
 def search_ytvideo_endpoint():
     """Fast YouTube Video search endpoint"""
     data = request.get_json()
     query = data.get('query', '').strip()
-    
+
     if not query:
         return jsonify({'error': 'Query is required'}), 400
-    
+
     try:
         results = search_ytvideo(query)
         return jsonify({
@@ -1451,25 +1348,23 @@ def search_ytvideo_endpoint():
             'query': query
         })
 
-
 def get_youtube_suggestions(query):
     """Get search suggestions from YouTube API"""
     try:
         import urllib.parse
         import json
-        
-        # YouTube's suggestion API endpoint
+
         encoded_query = urllib.parse.quote(query)
         url = f"https://suggestqueries.google.com/complete/search?client=youtube&q={encoded_query}"
-        
+
         response = requests.get(url, timeout=3)
         if response.status_code == 200:
-            # YouTube returns JSONP format, extract JSON part
+
             jsonp_text = response.text
             if jsonp_text.startswith('window.google.ac.h('):
-                json_text = jsonp_text[19:-1]  # Remove JSONP wrapper
+                json_text = jsonp_text[19:-1]
                 data = json.loads(json_text)
-                suggestions = [item[0] for item in data[1][:5]]  # Get first 5 suggestions
+                suggestions = [item[0] for item in data[1][:5]]
                 return suggestions
     except Exception as e:
         print(f"YouTube suggestions error: {e}")
@@ -1478,16 +1373,16 @@ def get_youtube_suggestions(query):
 def get_jiosaavn_suggestions(query):
     """Get search suggestions from JioSaavn search"""
     try:
-        # Use JioSaavn search to get relevant song titles
+
         from jiosaavn_api import search_songs
-        
+
         results = search_songs(query, limit=3)
         if results and 'data' in results and 'results' in results['data']:
             suggestions = []
             for song in results['data']['results'][:3]:
                 if 'title' in song:
                     title = song['title']
-                    # Clean up the title
+
                     if title and len(title) > 3:
                         suggestions.append(title)
             return suggestions
@@ -1498,7 +1393,7 @@ def get_jiosaavn_suggestions(query):
 def get_spotify_suggestions(query):
     """Get search suggestions using Spotify-like approach"""
     try:
-        # Use common music search patterns
+
         suggestions = [
             f"{query} song",
             f"{query} remix",
@@ -1510,33 +1405,28 @@ def get_spotify_suggestions(query):
     except Exception:
         return []
 
-
 @app.route('/suggestions')
 def get_suggestions():
     """Get dynamic search suggestions from multiple APIs"""
     query = request.args.get('q', '').strip()
-    
+
     if not query or len(query) < 2:
         return jsonify({'suggestions': []})
-    
+
     try:
         all_suggestions = []
-        
-        # Get YouTube suggestions (most reliable)
+
         youtube_suggestions = get_youtube_suggestions(query)
         if youtube_suggestions:
             all_suggestions.extend(youtube_suggestions[:4])
-        
-        # Get JioSaavn-based suggestions
+
         jiosaavn_suggestions = get_jiosaavn_suggestions(query)
         if jiosaavn_suggestions:
             all_suggestions.extend(jiosaavn_suggestions[:2])
-        
-        # Add Spotify-like suggestions as fallback
+
         spotify_suggestions = get_spotify_suggestions(query)
         all_suggestions.extend(spotify_suggestions[:2])
-        
-        # Remove duplicates while preserving order
+
         seen = set()
         unique_suggestions = []
         for suggestion in all_suggestions:
@@ -1544,22 +1434,20 @@ def get_suggestions():
             if suggestion_lower not in seen and len(suggestion_lower) > 1:
                 seen.add(suggestion_lower)
                 unique_suggestions.append(suggestion)
-        
-        # Limit to 6 suggestions for better UX
+
         final_suggestions = unique_suggestions[:6]
-        
+
         return jsonify({'suggestions': final_suggestions})
-        
+
     except Exception as e:
         print(f"❌ Suggestions error: {e}")
-        # Fallback to simple suggestions
+
         fallback_suggestions = [
             f"{query} song",
             f"{query} music",
             f"{query} latest"
         ]
         return jsonify({'suggestions': fallback_suggestions})
-
 
 @app.route('/search_status/<search_id>')
 def search_status(search_id):
@@ -1569,7 +1457,6 @@ def search_status(search_id):
     else:
         return jsonify({'status': 'not_found'}), 404
 
-
 @app.route('/download', methods=['POST'])
 def download():
     """Handle download request with optional advanced options"""
@@ -1577,34 +1464,27 @@ def download():
     url = data.get('url')
     title = data.get('title')
     advanced_options = data.get('advancedOptions')
-    
-    # SECURITY: Validate required parameters
+
     if not url or not title:
         return jsonify({'error': 'Missing url or title'}), 400
-    
-    # SECURITY: Validate URL format
+
     if not isinstance(url, str) or not url.startswith(('http://', 'https://')):
         return jsonify({'error': 'Invalid URL format. Only HTTP/HTTPS URLs are allowed.'}), 400
-    
-    # SECURITY: Block shell operators and dangerous characters in title only
+
     DANGEROUS_CHARS_TITLE = ['&&', '||', ';', '|', '`', '$', '<', '>', '\n', '\r']
     for dangerous_char in DANGEROUS_CHARS_TITLE:
         if dangerous_char in title:
             return jsonify({'error': f'Security: Dangerous character detected in title'}), 400
-    
-    # SECURITY: Validate title (prevent path traversal)
+
     if not isinstance(title, str) or '..' in title or '/' in title or '\\' in title:
         return jsonify({'error': 'Invalid title'}), 400
-    
-    # SECURITY: Limit title length
+
     if len(title) > 200:
         title = title[:200]
-    
-    # SECURITY: Validate URL length
+
     if len(url) > 2048:
         return jsonify({'error': 'URL too long'}), 400
-    
-    # SECURITY: Validate advanced options if provided
+
     if advanced_options and isinstance(advanced_options, dict):
         custom_args = advanced_options.get('customArgs', '')
         if custom_args:
@@ -1612,89 +1492,82 @@ def download():
             for dangerous_char in DANGEROUS_CHARS_ARGS:
                 if dangerous_char in custom_args:
                     return jsonify({'error': f'Security: Dangerous character detected in custom arguments'}), 400
-    
-    # Generate download ID
+
     download_id = f"download_{datetime.now().timestamp()}"
-    
+
     thread = threading.Thread(
         target=download_song,
         args=(url, title, download_id, advanced_options)
     )
     thread.start()
-    
+
     return jsonify({
         'download_id': download_id,
         'status': 'started'
     })
-
 
 @app.route('/download_status/<download_id>')
 def download_status_check(download_id):
     """Check download status"""
     if download_id in download_status:
         status = download_status[download_id]
-        # If download complete, add file download URL
+
         if status['status'] == 'complete' and 'file' in status:
             status['download_url'] = f"/get_file/{download_id}/{status['file']}"
         return jsonify(status)
     else:
         return jsonify({'status': 'not_found'}), 404
 
-
 @app.route('/downloads')
 def get_all_downloads():
     """Get all download statuses for persistent tracking"""
-    # Filter out very old completed downloads
+
     filtered_downloads = {}
     current_time = datetime.now()
-    
+
     for download_id, status in download_status.items():
-        # Keep all active downloads and recent completed ones
+
         if status.get('status') in ['downloading', 'queued', 'preparing']:
             filtered_downloads[download_id] = status
         elif status.get('status') in ['complete', 'error', 'cancelled']:
-            # Keep completed downloads for 24 hours
+
             if 'timestamp' in status:
                 try:
                     download_time = datetime.fromisoformat(status['timestamp'])
-                    if (current_time - download_time).total_seconds() < 86400:  # 24 hours
+                    if (current_time - download_time).total_seconds() < 86400:
                         filtered_downloads[download_id] = status
                 except:
-                    # Keep if timestamp parsing fails
+
                     filtered_downloads[download_id] = status
             else:
-                # Keep if no timestamp
+
                 filtered_downloads[download_id] = status
-    
-    # Add download URLs for completed files
+
     for download_id, status in filtered_downloads.items():
         if status['status'] == 'complete' and 'file' in status:
             status['download_url'] = f"/get_file/{download_id}/{status['file']}"
-    
-    return jsonify(filtered_downloads)
 
+    return jsonify(filtered_downloads)
 
 @app.route('/cancel_download/<download_id>', methods=['POST'])
 def cancel_download(download_id):
     """Cancel a download"""
     global download_status, active_processes
-    
+
     if download_id not in download_status:
         return jsonify({'error': 'Download not found'}), 404
-    
+
     current_status = download_status[download_id]['status']
-    
+
     if current_status in ['complete', 'error', 'cancelled']:
         return jsonify({'error': 'Download already finished'}), 400
-    
-    # Mark as cancelled
+
     download_status[download_id]['status'] = 'cancelled'
     download_status[download_id]['cancelled_at'] = datetime.now().isoformat()
     download_status[download_id]['progress'] = 0
     download_status[download_id]['speed'] = 'Cancelled'
     download_status[download_id]['eta'] = 'N/A'
-    
-    # Terminate active process if it exists
+
     if download_id in active_processes:
         try:
             process = active_processes[download_id]
@@ -1702,41 +1575,39 @@ def cancel_download(download_id):
             print(f"🚫 Terminated download process for {download_id}")
         except Exception as e:
             print(f"Warning: Could not terminate process for {download_id}: {e}")
-    
+
     save_download_status()
-    
+
     return jsonify({
         'status': 'cancelled',
         'message': f"Download cancelled: {download_status[download_id]['title']}"
     })
 
-
 @app.route('/clear_downloads', methods=['POST'])
 def clear_downloads():
     """Clear completed/failed downloads"""
     global download_status
-    
+
     to_remove = []
     for download_id, status in download_status.items():
         if status.get('status') in ['complete', 'error', 'cancelled']:
             to_remove.append(download_id)
-    
+
     for download_id in to_remove:
         del download_status[download_id]
-    
+
     save_download_status()
-    
+
     return jsonify({
         'message': f'Cleared {len(to_remove)} finished downloads',
         'cleared_count': len(to_remove)
     })
 
-
 @app.route('/get_file/<download_id>/<filename>')
 def get_file(download_id, filename):
     """Serve downloaded file to browser"""
     try:
-        # Security check for download_id
+
         if not re.match(r'^[a-zA-Z0-9_.-]+$', download_id):
              return jsonify({'error': 'Invalid download ID'}), 400
 
@@ -1752,22 +1623,20 @@ def get_file(download_id, filename):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
 @app.route('/preview_url', methods=['POST'])
 def preview_url():
     """Get video/song info from URL using existing search APIs (FAST)"""
     data = request.get_json()
     url = data.get('url')
-    
+
     if not url:
         return jsonify({'error': 'Missing URL'}), 400
-    
-    # SECURITY: Validate URL
+
     if not isinstance(url, str) or not url.startswith(('http://', 'https://')):
         return jsonify({'error': 'Invalid URL format'}), 400
-    
+
     try:
-        # First determine the source platform
+
         source = "Unknown"
         if 'soundcloud.com' in url.lower():
             source = "SoundCloud"
@@ -1777,28 +1646,24 @@ def preview_url():
             source = "Spotify"
         elif 'youtube.com' in url.lower() or 'youtu.be' in url.lower() or 'music.youtube.com' in url.lower():
             source = "YouTube"
-        
-        # Handle YouTube URLs with API
+
         if source == "YouTube":
             video_id = extract_video_id_from_url(url)
             if video_id:
                 try:
                     ytmusic, ytvideo, _ = get_apis()
-                    
-                    # Try YouTube Music API first
+
                     try:
-                        # Construct YouTube URL
+
                         yt_url = f"https://www.youtube.com/watch?v={video_id}"
-                        
-                        # Search by URL to get metadata (uses cached tokens)
+
                         search_data = ytvideo.search_videos(video_id, use_fresh_tokens=True, retry_on_error=False)
-                        
+
                         if search_data:
                             videos = ytvideo.parse_video_results(search_data)
                             if videos and len(videos) > 0:
                                 video = videos[0]
-                                
-                                # Return formatted preview data
+
                                 preview_data = {
                                     'title': video.get('title', 'Unknown Title'),
                                     'uploader': video.get('metadata', 'Unknown Channel'),
@@ -1808,13 +1673,12 @@ def preview_url():
                                     'webpage_url': yt_url,
                                     'source': 'YouTube'
                                 }
-                                
+
                                 return jsonify(preview_data)
                     except Exception as e:
-                        # YouTube API preview error - continue with fallback
+
                         pass
-                    
-                    # Fallback: Return basic info with video ID if we can extract it
+
                     if video_id:
                         preview_data = {
                             'title': 'YouTube Video',
@@ -1827,15 +1691,13 @@ def preview_url():
                         }
                         return jsonify(preview_data)
                     else:
-                        # No video ID found - invalid YouTube URL
+
                         return jsonify({'error': 'Invalid YouTube URL - Unable to extract video information'}), 400
-                    
+
                 except Exception as e:
-                    # YouTube preview error - invalid URL
+
                     return jsonify({'error': 'Invalid YouTube URL - Unable to extract video information'}), 400
-        
-        # For non-YouTube URLs (SoundCloud, JioSaavn, Spotify, etc.)
-        # Try to extract enhanced metadata for JioSaavn
+
         if source == "JioSaavn":
             enhanced_metadata = extract_jiosaavn_metadata(url)
             if enhanced_metadata:
@@ -1845,20 +1707,19 @@ def preview_url():
                     'channel': enhanced_metadata.get('artist', source),
                     'thumbnail': enhanced_metadata.get('thumbnail', ''),
                     'album': enhanced_metadata.get('album', ''),
-                    'pid': enhanced_metadata.get('pid', ''),  # Add PID for suggestions
-                    'language': enhanced_metadata.get('language', 'hindi'),  # Add language for suggestions
+                    'pid': enhanced_metadata.get('pid', ''),
+                    'language': enhanced_metadata.get('language', 'hindi'),
                     'webpage_url': url,
                     'source': source
                 }
                 return jsonify(preview_data)
             else:
-                # No metadata found - invalid JioSaavn URL
+
                 return jsonify({'error': 'Invalid JioSaavn URL - Unable to extract song information'}), 400
-        
-        # Try to extract enhanced metadata for SoundCloud
+
         elif source == "SoundCloud":
             enhanced_metadata = extract_soundcloud_metadata_with_recommendations(url)
-            
+
             if enhanced_metadata and enhanced_metadata.get('main_track'):
                 main_track = enhanced_metadata['main_track']
                 preview_data = {
@@ -1872,52 +1733,43 @@ def preview_url():
                     'genre': main_track.get('genre', ''),
                     'webpage_url': url,
                     'source': source,
-                    'soundcloud_data': enhanced_metadata  # Include full data for frontend
+                    'soundcloud_data': enhanced_metadata
                 }
                 return jsonify(preview_data)
             else:
-                # No metadata found - invalid SoundCloud URL
+
                 return jsonify({'error': 'Invalid SoundCloud URL - Unable to extract track information'}), 400
-        
-        # For other sources that don't have metadata extraction yet
-        # Return generic error for unsupported platforms
+
         return jsonify({'error': f'Invalid {source} URL - Unable to extract content information'}), 400
-        
+
     except Exception as e:
         print(f"❌ Preview error: {e}")
         return jsonify({'error': str(e)}), 500
-
 
 @app.route('/jiosaavn_suggestions/<pid>')
 def get_jiosaavn_suggestions_by_pid(pid):
     """Get JioSaavn recommendations using PID with India geo-location and Selenium fallback"""
     try:
-        # Validate PID (alphanumeric, reasonable length)
+
         if not pid or not re.match(r'^[a-zA-Z0-9_-]{1,20}$', pid):
             return jsonify({'error': 'Invalid PID format'}), 400
-        
-        # Default to English if no language specified
+
         language = request.args.get('language', 'english')
-        
-        # Validate language (allow only safe values)
+
         allowed_languages = ['english', 'hindi', 'telugu', 'tamil', 'punjabi', 'bengali', 'marathi', 'gujarati', 'kannada', 'malayalam']
         if language not in allowed_languages:
             language = 'english'
-        
-        # Check if running on Heroku (more likely to be geo-blocked)
+
         is_heroku = os.getenv('DYNO') is not None
-        
+
         suggestions = []
         method_used = 'api'
-        
-        # METHOD 1: Try API first with India geo-location headers (same as search)
+
         try:
             print(f"🔄 Fetching suggestions via API for PID: {pid}")
-            
-            # Build JioSaavn API URL
+
             api_url = f"https://www.jiosaavn.com/api.php?__call=reco.getreco&api_version=4&_format=json&_marker=0&ctx=wap6dot0&pid={pid}&language={language}"
-            
-            # India geo-location headers (same as search)
+
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
                 "Accept": "application/json, text/plain, */*",
@@ -1926,27 +1778,27 @@ def get_jiosaavn_suggestions_by_pid(pid):
                 "Origin": "https://www.jiosaavn.com",
                 "Referer": "https://www.jiosaavn.com/",
                 "X-Requested-With": "XMLHttpRequest",
-                "X-Forwarded-For": "103.21.124.0",  # Indian IP range
-                "CF-IPCountry": "IN"  # Cloudflare country header
+                "X-Forwarded-For": "103.21.124.0",
+                "CF-IPCountry": "IN"
             }
-            
+
             print(f"   🌍 Using India geo-location headers")
             response = requests.get(api_url, headers=headers, timeout=10)
-            
+
             print(f"   📊 Status: {response.status_code}, Size: {len(response.content)} bytes")
-            
+
             if response.status_code == 200 and len(response.content) > 10:
                 data = response.json()
-                
+
                 if isinstance(data, list) and len(data) > 0:
                     print(f"   ✅ API returned {len(data)} items")
-                    
+
                     for item in data:
                         if isinstance(item, dict):
-                            # Extract artist from subtitle
+
                             subtitle = item.get('subtitle', '')
                             artist = subtitle.split(' - ')[0] if ' - ' in subtitle else 'Unknown Artist'
-                            
+
                             suggestion = {
                                 'id': item.get('id', ''),
                                 'title': item.get('title', ''),
@@ -1961,7 +1813,7 @@ def get_jiosaavn_suggestions_by_pid(pid):
                                 'play_count': item.get('play_count', 0)
                             }
                             suggestions.append(suggestion)
-                    
+
                     print(f"✅ API Method Success: {len(suggestions)} suggestions")
                     method_used = 'api'
                 else:
@@ -1970,31 +1822,29 @@ def get_jiosaavn_suggestions_by_pid(pid):
                         print(f"   🌐 [HEROKU] Likely geo-blocked, will try Selenium")
             else:
                 print(f"   ⚠️ API call failed or returned minimal data")
-                
+
         except Exception as e:
             print(f"   ❌ API Error: {e}")
-        
-        # METHOD 2: Selenium fallback if API returned no results
+
         if not suggestions:
             try:
                 print(f"\n🔄 Method 2: Selenium web scraping fallback")
-                
+
                 from jiosaavn_suggestions_simple import JioSaavnSuggestions
-                
+
                 scraper = JioSaavnSuggestions()
                 selenium_suggestions = scraper._try_selenium(pid, language, max_results=10)
-                
+
                 if selenium_suggestions:
                     suggestions = selenium_suggestions
                     method_used = 'selenium'
                     print(f"✅ Selenium Success: Got {len(suggestions)} suggestions")
                 else:
                     print(f"⚠️ Selenium returned no results")
-                    
+
             except Exception as e:
                 print(f"❌ Selenium Error: {e}")
-        
-        # Return results - only success if we actually have suggestions
+
         if suggestions and len(suggestions) > 0:
             return jsonify({
                 'success': True,
@@ -2002,10 +1852,10 @@ def get_jiosaavn_suggestions_by_pid(pid):
                 'language': language,
                 'suggestions': suggestions,
                 'count': len(suggestions),
-                'method': method_used  # 'api' or 'selenium'
+                'method': method_used
             })
         else:
-            # No suggestions found even after Selenium fallback
+
             return jsonify({
                 'success': False,
                 'error': 'No suggestions available for this song',
@@ -2015,13 +1865,12 @@ def get_jiosaavn_suggestions_by_pid(pid):
                 'count': 0,
                 'method': method_used
             }), 404
-        
+
     except Exception as e:
         print(f"❌ Server error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': f'Server error: {str(e)}'}), 500
-
 
 @app.route('/extract_jiosaavn_pid', methods=['POST'])
 def extract_jiosaavn_pid():
@@ -2029,17 +1878,15 @@ def extract_jiosaavn_pid():
     try:
         data = request.get_json()
         url = data.get('url', '').strip()
-        
+
         if not url:
             return jsonify({'error': 'URL is required'}), 400
-        
-        # Validate that it's a JioSaavn URL
+
         if 'jiosaavn.com' not in url and 'saavn.com' not in url:
             return jsonify({'error': 'Not a valid JioSaavn URL'}), 400
-        
-        # Extract PID using the existing function
+
         metadata = extract_jiosaavn_metadata(url)
-        
+
         if metadata and 'pid' in metadata:
             return jsonify({
                 'success': True,
@@ -2048,43 +1895,63 @@ def extract_jiosaavn_pid():
             })
         else:
             return jsonify({'error': 'Could not extract PID from URL'}), 404
-            
+
     except Exception as e:
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
-
 @app.route('/proxy_image')
 def proxy_image():
-    """Proxy images to avoid CORS issues"""
+    """Proxy images to avoid CORS issues, with browser & in-memory caching"""
     url = request.args.get('url')
+    size = request.args.get('size', 'medium')
     if not url:
         return '', 404
-    
+
     try:
-        response = requests.get(url, timeout=5)
-        return send_file(
-            BytesIO(response.content),
-            mimetype=response.headers.get('Content-Type', 'image/jpeg')
-        )
-    except:
+
+        cache_key = hashlib.md5(f"{url}:{size}".encode()).hexdigest()
+
+        cached = _image_cache.get(cache_key)
+        if cached:
+            content_bytes, content_type = cached
+        else:
+            response = requests.get(url, timeout=8)
+            response.raise_for_status()
+            content_bytes = response.content
+            content_type = response.headers.get('Content-Type', 'image/jpeg')
+
+            if len(_image_cache) > 500:
+
+                for k in list(_image_cache.keys())[:100]:
+                    del _image_cache[k]
+            _image_cache[cache_key] = (content_bytes, content_type)
+
+        resp = make_response(send_file(
+            BytesIO(content_bytes),
+            mimetype=content_type
+        ))
+
+        resp.headers['Cache-Control'] = 'public, max-age=604800, stale-while-revalidate=86400'
+        resp.headers['ETag'] = cache_key
+        resp.headers['Vary'] = 'Accept'
+        return resp
+    except Exception:
         return '', 404
 
+_image_cache: dict = {}
 
-# ==================== YouTube Video Downloader Proxy Routes ====================
-# Get API key from environment
 VIDEO_DOWNLOAD_API_KEY = os.getenv('VIDEO_DOWNLOAD_API_KEY', '')
 
 def download_with_proxy_api(url, title, download_id, advanced_options=None):
     """Fallback download using video-download-api.com when yt-dlp fails"""
     global download_status
-    
+
     try:
         print(f"🔄 Attempting fallback download via proxy API for: {title}")
-        
+
         if not VIDEO_DOWNLOAD_API_KEY:
             raise Exception("Proxy API key not configured")
-        
-        # Update status
+
         download_status[download_id] = {
             'status': 'downloading',
             'progress': 0,
@@ -2096,54 +1963,49 @@ def download_with_proxy_api(url, title, download_id, advanced_options=None):
             'advanced_options': advanced_options
         }
         save_download_status()
-        
-        # Determine format from advanced options or default to mp3
+
         format_type = 'mp3'
         if advanced_options:
             audio_format = advanced_options.get('audioFormat', 'mp3')
             if audio_format in ['mp3', 'm4a', 'flac', 'wav']:
                 format_type = audio_format
-        
-        # Step 1: Initiate download
+
         params = {
             'format': format_type,
             'url': url,
             'apikey': VIDEO_DOWNLOAD_API_KEY,
             'add_info': '1'
         }
-        
-        # Add optional parameters from advanced options
+
         if advanced_options:
             if advanced_options.get('audioQuality'):
                 params['audio_quality'] = advanced_options['audioQuality']
-        
+
         api_url = 'https://p.savenow.to/ajax/download.php'
         response = requests.get(api_url, params=params, timeout=30)
         response.raise_for_status()
         data = response.json()
-        
+
         if not data.get('success'):
             raise Exception(data.get('message', 'Failed to initiate download'))
-        
+
         job_id = data.get('id')
         if not job_id:
             raise Exception('No job ID returned from API')
-        
-        # Step 2: Poll for progress
-        max_attempts = 60  # 2 minutes max
+
+        max_attempts = 60
         attempts = 0
-        
+
         while attempts < max_attempts:
             attempts += 1
-            
+
             progress_url = f"https://p.savenow.to/api/progress?id={job_id}"
             progress_response = requests.get(progress_url, timeout=10)
             progress_data = progress_response.json()
-            
-            # Update status with progress
+
             progress_percent = round((progress_data.get('progress', 0) / 1000) * 100)
             status_text = progress_data.get('text', 'Processing')
-            
+
             download_status[download_id] = {
                 'status': 'downloading',
                 'progress': progress_percent,
@@ -2155,35 +2017,30 @@ def download_with_proxy_api(url, title, download_id, advanced_options=None):
                 'advanced_options': advanced_options
             }
             save_download_status()
-            
-            # Check if completed
+
             if progress_data.get('success') == 1 and progress_data.get('progress') == 1000:
                 download_url = progress_data.get('download_url')
                 if not download_url:
                     raise Exception('No download URL in completed response')
-                
-                # Step 3: Download the file
+
                 download_status[download_id]['eta'] = 'Downloading file...'
                 save_download_status()
-                
+
                 file_response = requests.get(download_url, stream=True, timeout=60)
                 file_response.raise_for_status()
-                
-                # Get filename
+
                 safe_title = re.sub(r'[<>:"/\\|?*]', '_', title)
                 filename = f"{safe_title}.{format_type}"
-                
-                # Save to download folder
+
                 download_dir = os.path.join(app.config['DOWNLOAD_FOLDER'], download_id)
                 os.makedirs(download_dir, exist_ok=True)
                 filepath = os.path.join(download_dir, filename)
-                
+
                 with open(filepath, 'wb') as f:
                     for chunk in file_response.iter_content(chunk_size=8192):
                         if chunk:
                             f.write(chunk)
-                
-                # Mark as complete
+
                 download_status[download_id] = {
                     'status': 'complete',
                     'progress': 100,
@@ -2198,17 +2055,15 @@ def download_with_proxy_api(url, title, download_id, advanced_options=None):
                     'advanced_options': advanced_options
                 }
                 save_download_status()
-                
+
                 print(f"✅ Proxy API download successful: {filename}")
                 return
-            
-            # Wait before next poll
+
             import time
             time.sleep(2)
-        
-        # Timeout
+
         raise Exception('Download timeout - took too long to process')
-        
+
     except Exception as e:
         print(f"❌ Proxy API download failed: {e}")
         download_status[download_id] = {
@@ -2232,16 +2087,14 @@ def proxy_download():
     try:
         if not VIDEO_DOWNLOAD_API_KEY:
             return jsonify({'error': 'API key not configured on server'}), 500
-            
-        # Get all query parameters from frontend
+
         params = {
             'format': request.args.get('format'),
             'url': request.args.get('url'),
             'apikey': VIDEO_DOWNLOAD_API_KEY,
             'add_info': request.args.get('add_info', '1'),
         }
-        
-        # Optional parameters
+
         if request.args.get('audio_quality'):
             params['audio_quality'] = request.args.get('audio_quality')
         if request.args.get('allow_extended_duration'):
@@ -2254,16 +2107,14 @@ def proxy_download():
             params['start_time'] = request.args.get('start_time')
         if request.args.get('end_time'):
             params['end_time'] = request.args.get('end_time')
-        
-        # Build URL with parameters
+
         api_url = 'https://p.savenow.to/ajax/download.php'
         response = requests.get(api_url, params=params)
-        
-        # Get response data and filter out message field
+
         response_data = response.json()
         if 'message' in response_data:
             del response_data['message']
-        
+
         return jsonify(response_data), response.status_code
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -2273,16 +2124,14 @@ def proxy_progress():
     """Proxy for progress check to avoid CORS"""
     try:
         job_id = request.args.get('id')
-        
-        # Make request to actual API
+
         api_url = f"https://p.savenow.to/api/progress?id={job_id}"
         response = requests.get(api_url)
-        
-        # Get response data and filter out message field
+
         response_data = response.json()
         if 'message' in response_data:
             del response_data['message']
-        
+
         return jsonify(response_data), response.status_code
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -2292,23 +2141,19 @@ def proxy_file():
     """Proxy for actual file download to avoid CORS and hide original headers"""
     try:
         download_url = request.args.get('url')
-        
-        # Stream the file from the download URL with minimal headers
+
         response = requests.get(download_url, stream=True, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
-        
-        # Get filename from Content-Disposition or use default
+
         filename = 'download.mp3'
         if 'Content-Disposition' in response.headers:
             content_disposition = response.headers['Content-Disposition']
             if 'filename=' in content_disposition:
                 filename = content_disposition.split('filename=')[1].strip('"')
-        
-        # Determine content type
+
         content_type = response.headers.get('Content-Type', 'application/octet-stream')
-        
-        # Create response with only necessary headers (hiding original source)
+
         return app.response_class(
             response.iter_content(chunk_size=8192),
             mimetype=content_type,
@@ -2322,7 +2167,6 @@ def proxy_file():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
 if __name__ == '__main__':
     print("🎵 Universal Music Downloader")
     print(f"📁 Downloads: {app.config['DOWNLOAD_FOLDER']}")
@@ -2334,16 +2178,14 @@ if __name__ == '__main__':
         print(f"☁️  Running on Heroku (ephemeral /tmp storage)")
         print(f"🧹 Auto-cleanup enabled when /tmp > 80% full")
     print("="*70)
-    
+
     load_persistent_data()
     cleanup_old_downloads()
-    
-    # Initial cleanup if on Heroku
+
     if os.getenv('DYNO'):
         cleanup_tmp_directory()
 
-    # Use PORT from environment (Heroku provides this)
     port = int(os.getenv('PORT', 5000))
-    # Disable debug in production
+
     debug = os.getenv('FLASK_ENV') == 'development'
     app.run(host='0.0.0.0', debug=debug, port=port, threaded=True)

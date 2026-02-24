@@ -74,6 +74,7 @@ export class App {
 
     initLazyLoading();
     this.initScrollOverlay();
+    this.initOfflineDetection();
 
     window.addEventListener("popstate", () => this.handlePopState());
 
@@ -138,6 +139,22 @@ export class App {
 
     // Run once on load (in case page is already scrolled)
     update();
+  }
+
+  /** Show toast when device goes offline/online */
+  private initOfflineDetection(): void {
+    window.addEventListener("offline", () => {
+      this.toast.show(
+        "error",
+        "You're offline",
+        "Check your internet connection",
+        8000,
+      );
+    });
+
+    window.addEventListener("online", () => {
+      this.toast.show("success", "Back online", "Connection restored", 3000);
+    });
   }
 
   async performSearch(): Promise<void> {
