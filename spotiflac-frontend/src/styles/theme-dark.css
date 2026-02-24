@@ -33,18 +33,19 @@ body:not(.light-theme) {
   --status-loading-border: rgba(166, 168, 103, 0.18);
 }
 
-/* Dark vinyl background with webp texture */
 body:not(.light-theme) {
-  --scroll-overlay-color: 26, 23, 20; /* warm dark brown RGB for overlay */
+  --scroll-overlay-color: 26, 23, 20;
   background-image: url("/dark.webp");
   background-size: cover;
   background-attachment: fixed;
   background-position: center;
 }
 
-/* Mobile: portrait-optimised background */
 @media (max-width: 768px) {
   body:not(.light-theme) {
     background-image: url("/mobile_dark.webp");
+    background-size: 100vw auto;
+    background-attachment: scroll;
+    background-position: center top;
   }
 }

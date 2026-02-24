@@ -33,18 +33,19 @@ body.light-theme {
   --status-loading-border: rgba(81, 81, 61, 0.15);
 }
 
-/* Light vintage paper background with webp texture */
 body.light-theme {
-  --scroll-overlay-color: 241, 235, 221; /* paper-light RGB for overlay */
+  --scroll-overlay-color: 241, 235, 221;
   background-image: url("/light.webp");
   background-size: cover;
   background-attachment: fixed;
-  background-position: center top;
+  background-position: center;
 }
 
-/* Mobile: portrait-optimised background */
 @media (max-width: 768px) {
   body.light-theme {
     background-image: url("/mobile_light.webp");
+    background-size: 100vw auto;
+    background-attachment: scroll;
+    background-position: center top;
   }
 }
