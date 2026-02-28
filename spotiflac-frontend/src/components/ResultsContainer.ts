@@ -1,4 +1,5 @@
 import { SearchService } from "@/services/SearchService";
+import { PreviewService } from "@/services/PreviewService";
 import { YouTubeService } from "@/services/YouTubeService";
 import type {
   DirectUrlInfo,
@@ -19,6 +20,22 @@ import {
   type DownloadCallback,
 } from "./SongCard";
 import { SourceNavigation } from "./SourceNavigation";
+
+/** Returns true when the URL belongs to a source that supports audio preview. */
+function _previewSupported(url: string): boolean {
+  const u = url.toLowerCase();
+  return (
+    u.includes("soundcloud.com") ||
+    u.includes("jiosaavn.com") ||
+    u.includes("saavn.com") ||
+    u.includes("music.youtube.com") ||
+    u.includes("youtube.com/watch") ||
+    u.includes("youtu.be/")
+  );
+}
+
+const PREVIEW_ICON_PLAY =
+  '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>';
 
 type StatusFn = (type: string, title: string, subtitle?: string) => void;
 type ToastFn = (
@@ -194,11 +211,19 @@ export class ResultsContainer {
       <div class="url-result-card" style="background:var(--bg-card);padding:30px;border-radius:15px;border:2px solid var(--accent-color);">
         ${previewHTML}
         ${optionsHTML}
-        <button id="direct-url-download-btn" class="download-btn"
-          style="width:100%;padding:15px;font-size:1.2em;font-weight:bold;"
-          data-url="${processedInfo.url}" data-title="${downloadTitle}">
-          Download Now
-        </button>
+        <div style="display:flex;gap:10px;align-items:stretch;">
+          <button id="direct-url-download-btn" class="download-btn"
+            style="flex:1;padding:15px;font-size:1.2em;font-weight:bold;"
+            data-url="${processedInfo.url}" data-title="${downloadTitle}">
+            Download Now
+          </button>
+          ${_previewSupported(processedInfo.url) && !youtubeData?.videoId ? `
+          <button id="direct-url-preview-btn" class="preview-btn"
+            data-url="${processedInfo.url}" data-title="${downloadTitle}"
+            title="Preview" style="padding:15px 20px;font-size:1em;">
+            ${PREVIEW_ICON_PLAY}
+          </button>` : ""}
+        </div>
         ${this.buildRecommendationsPlaceholder(previewData, info)}
       </div>
     `;
@@ -217,6 +242,20 @@ export class ResultsContainer {
           this.onDownload(url, title, btn, true);
         });
       }
+
+      const previewBtn = document.getElementById(
+        "direct-url-preview-btn",
+      ) as HTMLButtonElement | null;
+      if (previewBtn) {
+        previewBtn.addEventListener("click", () => {
+          const url = previewBtn.dataset.url!;
+          const title = previewBtn.dataset.title!;
+          // inject player inside the card wrapper (parent of the flex row)
+          const cardEl = previewBtn.closest(".url-result-card") as HTMLElement ?? previewBtn.parentElement as HTMLElement;
+          PreviewService.play(url, title, cardEl, previewBtn);
+        });
+      }
+
       this.wireAdvancedToggle();
       this.wireOptionsTabSwitcher();
       this.wirePlaylistToggle();
@@ -545,6 +584,7 @@ export class ResultsContainer {
           ${suggestions.map((s: JioSaavnSuggestion) => this.buildRecommendationCard(s)).join("")}
         </div>`;
 
+      this.wireRecommendationPreviews(container as HTMLElement);
       setTimeout(() => initLazyLoadingForNewImages(), 0);
     } catch {
       const c = section.querySelector("#jiosaavn-suggestions-container");
@@ -567,7 +607,12 @@ export class ResultsContainer {
       </div>`;
 
     const btn = section.querySelector("#direct-url-download-btn");
-    if (btn) btn.insertAdjacentHTML("afterend", html);
+    if (btn) {
+      btn.insertAdjacentHTML("afterend", html);
+      // wire previews after the new HTML is in the DOM
+      const grid = section.querySelector(".recommended-tracks-grid:last-of-type")?.parentElement;
+      if (grid) this.wireRecommendationPreviews(grid as HTMLElement);
+    }
   }
 
   private buildRecommendationCard(track: {
@@ -588,6 +633,8 @@ export class ResultsContainer {
 
     const safeTitle = track.title.replace(/'/g, "\\'");
     const btnId = `rec-btn-${Math.random().toString(36).slice(2, 8)}`;
+    const prevBtnId = `rec-prev-${Math.random().toString(36).slice(2, 8)}`;
+    const showPreview = _previewSupported(track.url);
 
     // We'll bind events after insertion
     return `
@@ -600,11 +647,27 @@ export class ResultsContainer {
             <div style="font-size:0.75em;color:var(--text-tertiary);margin-bottom:8px;">
               ${track.duration || ""} ${track.plays ? "\u2022 " + track.plays.toLocaleString() + " plays" : ""}
             </div>
-            <button class="download-btn rec-download" id="${btnId}" data-url="${track.url}" data-title="${safeTitle}"
-              style="padding:6px 10px;font-size:0.85em;">Download</button>
+            <div style="display:flex;gap:6px;">
+              <button class="download-btn rec-download" id="${btnId}" data-url="${track.url}" data-title="${safeTitle}"
+                style="padding:6px 10px;font-size:0.85em;">Download</button>
+              ${showPreview ? `<button class="preview-btn rec-preview" id="${prevBtnId}" data-url="${track.url}" data-title="${safeTitle}"
+                title="Preview" style="padding:6px 10px;">${PREVIEW_ICON_PLAY}</button>` : ""}
+            </div>
           </div>
         </div>
       </div>`;
+  }
+
+  /** Wire all .rec-preview buttons inside a container after DOM insertion. */
+  private wireRecommendationPreviews(container: HTMLElement): void {
+    container.querySelectorAll<HTMLButtonElement>(".rec-preview").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const url = btn.dataset.url!;
+        const title = btn.dataset.title!;
+        const cardEl = btn.closest(".recommended-track-card") as HTMLElement ?? btn.parentElement as HTMLElement;
+        PreviewService.play(url, title, cardEl, btn);
+      });
+    });
   }
 
   /* ---------------------------------------------------------------- */

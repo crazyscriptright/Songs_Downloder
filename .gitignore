@@ -29,3 +29,5 @@ venv
 .vite
 package-lock.json
 backend/old
+downloas_status.json
+music_api_cache.json

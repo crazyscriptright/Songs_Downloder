@@ -6,3 +6,5 @@ schedulestart.
 *.tmp
 *.md
 old/
+downloas_status.json
+music_api_cache.json

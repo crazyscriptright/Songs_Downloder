@@ -1,6 +1,7 @@
 import type { SearchType, Song, SourceId } from "@/types";
 import { createLazyImageHTML } from "@/utils/imageUtils";
 import { initLazyLoadingForNewImages } from "@/utils/lazyLoader";
+import { PreviewService } from "@/services/PreviewService";
 
 export type DownloadCallback = (
   url: string,
@@ -123,10 +124,21 @@ export function createSongCard(
 
   const buttonId = `download-btn-${sourceId}-${index}`;
   const advancedBtnId = `advanced-btn-${sourceId}-${index}`;
+  const previewBtnId = `preview-btn-${sourceId}-${index}`;
   const thumbnailClass =
     searchType === "video"
       ? "song-thumbnail video-thumbnail"
       : "song-thumbnail";
+
+  // Preview button: SoundCloud + JioSaavn (audio proxy) + YouTube Music (iframe)
+  const previewBtnHTML =
+    sourceId === "soundcloud" || sourceId === "jiosaavn" || sourceId === "ytmusic"
+      ? `<button id="${previewBtnId}" class="preview-btn"
+          data-song-url="${song.url}" data-song-title="${song.title}"
+          title="Preview">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>
+        </button>`
+      : "";
 
   card.innerHTML = `
     ${createLazyImageHTML(thumbnailUrl, song.title, thumbnailClass)}
@@ -138,6 +150,7 @@ export function createSongCard(
         data-song-url="${song.url}" data-song-title="${song.title}">
         Download
       </button>
+      ${previewBtnHTML}
       <button id="${advancedBtnId}" class="advanced-btn"
         data-song-url="${song.url}" data-song-title="${song.title}"
         style="padding: 10px 15px; background: var(--secondary-color); border: none; border-radius: 5px; cursor: pointer; font-size: 0.9em; transition: all 0.3s ease; position: relative; z-index: 999;"
@@ -152,6 +165,14 @@ export function createSongCard(
     if (dlBtn) {
       dlBtn.addEventListener("click", () => {
         onDownload(song.url, song.title, dlBtn);
+      });
+    }
+    const previewBtn = document.getElementById(
+      previewBtnId,
+    ) as HTMLButtonElement | null;
+    if (previewBtn) {
+      previewBtn.addEventListener("click", () => {
+        PreviewService.play(song.url, song.title, card, previewBtn);
       });
     }
     const advBtn = document.getElementById(
