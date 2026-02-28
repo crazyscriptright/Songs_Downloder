@@ -399,4 +399,12 @@ export class App {
       this.hideStatus();
     }
   }
+
+  /** Reset the home page to its initial state (no results, empty search). */
+  clearHome(): void {
+    this.searchBox.query = "";
+    this.results.clear();
+    this.hideStatus();
+    this.currentSearchId = null;
+  }
 }

@@ -7,10 +7,12 @@ import {
   IoSearch,
   IoVideocam,
 } from "react-icons/io5";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 export default function Home() {
   const appRef = useRef<App | null>(null);
+  const isInitialMount = useRef(true);
+  const location = useLocation();
 
   useEffect(() => {
     // Init the App controller after React has rendered the DOM elements
@@ -19,6 +21,16 @@ export default function Home() {
       appRef.current.init();
     }
   }, []);
+
+  // Clear results whenever the user navigates "home" (logo click, back button, etc.)
+  // location.key changes on every navigation even to the same path.
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    appRef.current?.clearHome();
+  }, [location.key]);
 
   return (
     <>
