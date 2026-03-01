@@ -1,0 +1,236 @@
+/* ================================================================
+   404 Not-Found Page
+   ================================================================ */
+
+/* ---- Theme tokens for the vinyl record ---- */
+:root {
+  --nf-vinyl-outer:        #1a1714;
+  --nf-vinyl-groove:       rgba(255, 255, 255, 0.07);
+  --nf-vinyl-label:        var(--accent-color);
+  --nf-vinyl-label-border: rgba(255, 255, 255, 0.25);
+  --nf-vinyl-hole:         var(--bg-primary);
+  --nf-vinyl-rim:          rgba(255, 255, 255, 0.06);
+  --nf-needle-color:       var(--text-tertiary);
+  --nf-needle-cap:         var(--accent-secondary);
+}
+
+.light-theme {
+  --nf-vinyl-outer:        #1a1714;
+  --nf-vinyl-groove:       rgba(255, 255, 255, 0.1);
+  --nf-vinyl-label:        var(--accent-color);
+  --nf-vinyl-hole:         var(--bg-primary);
+}
+
+/* ---- Page wrapper ---- */
+.nf-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* subtract header (≈180px) + body padding so the whole page fits without scroll */
+  min-height: calc(100svh - 200px);
+  overflow: hidden;
+  padding: 1rem 1.5rem 1.5rem;
+  text-align: center;
+}
+
+/* ---- Floating notes background ---- */
+.nf-notes-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.nf-note {
+  position: absolute;
+  bottom: -48px;
+  color: var(--accent-color);
+  opacity: 0;
+  animation: nfNoteFloat linear infinite;
+}
+
+@keyframes nfNoteFloat {
+  0%   { transform: translateY(0)      rotate(0deg);   opacity: 0;    }
+  8%   { opacity: 0.3; }
+  88%  { opacity: 0.12; }
+  100% { transform: translateY(-105vh) rotate(360deg); opacity: 0;    }
+}
+
+/* ---- Content layer ---- */
+.nf-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+/* ---- Vinyl scene (record + needle together) ---- */
+.nf-vinyl-scene {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  margin-bottom: 1rem;
+  animation: nfFadeInUp 0.6s ease both;
+}
+
+.nf-vinyl-wrapper {
+  width: 170px;
+  height: 170px;
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  filter: drop-shadow(0 10px 36px var(--shadow-color));
+}
+
+.nf-vinyl {
+  width: 100%;
+  height: 100%;
+  animation: nfVinylSpin 3.5s linear infinite;
+}
+
+@keyframes nfVinylSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ---- Needle arm ---- */
+.nf-needle {
+  position: absolute;
+  top: -12px;
+  right: -18px;
+  width: 58px;
+  height: 96px;
+  transform-origin: top right;
+  animation: nfNeedleBob 3.5s ease-in-out infinite;
+  filter: drop-shadow(0 2px 6px var(--shadow-color));
+  z-index: 2;
+}
+
+@keyframes nfNeedleBob {
+  0%, 100% { transform: rotate(-20deg); }
+  50%       { transform: rotate(-10deg); }
+}
+
+/* ---- 404 heading ---- */
+.nf-404 {
+  font-family: var(--font-display);
+  font-size: clamp(4rem, 18vw, 8rem);
+  font-weight: 700;
+  line-height: 1;
+  margin: 0;
+  letter-spacing: -3px;
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: nfFadeInUp 0.65s 0.08s ease both;
+}
+
+/* ---- Subtitle ---- */
+.nf-title {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: clamp(1.1rem, 3.5vw, 1.6rem);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0.2rem 0 1rem;
+  animation: nfFadeInUp 0.65s 0.16s ease both;
+}
+
+/* ---- Ornament divider ---- */
+.nf-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+  animation: nfFadeInUp 0.65s 0.22s ease both;
+}
+
+.nf-divider::before,
+.nf-divider::after {
+  content: "";
+  display: block;
+  width: 55px;
+  height: 2px;
+  background: var(--gradient-secondary);
+  border-radius: 2px;
+}
+
+.nf-divider::before {
+  background: linear-gradient(to right, transparent, var(--accent-color));
+}
+
+.nf-divider::after {
+  background: linear-gradient(to left, transparent, var(--accent-color));
+}
+
+/* ---- Description ---- */
+.nf-desc {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  max-width: 400px;
+  line-height: 1.65;
+  margin: 0 0 1.5rem;
+  animation: nfFadeInUp 0.65s 0.28s ease both;
+}
+
+/* ---- CTA button ---- */
+.nf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.85rem 2.4rem;
+  background: var(--gradient-primary);
+  color: var(--vintage-paper) !important;
+  text-decoration: none;
+  border-radius: 10px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 1rem;
+  box-shadow: 0 4px 20px var(--shadow-color);
+  transition: transform 0.22s ease, box-shadow 0.22s ease, opacity 0.22s ease;
+  animation: nfFadeInUp 0.65s 0.34s ease both;
+  letter-spacing: 0.01em;
+}
+
+.nf-btn:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 32px var(--shadow-color);
+  opacity: 0.92;
+}
+
+.nf-btn:active {
+  transform: translateY(-1px);
+}
+
+/* ---- Shared fade-in-up ---- */
+@keyframes nfFadeInUp {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 480px) {
+  .nf-vinyl-scene {
+    width: 130px;
+    height: 130px;
+    margin-bottom: 0.75rem;
+  }
+  .nf-vinyl-wrapper {
+    width: 122px;
+    height: 122px;
+    top: 3px;
+    left: 3px;
+  }
+  .nf-needle {
+    width: 38px;
+    height: 62px;
+    right: -10px;
+  }
+  .nf-404 {
+    font-size: clamp(3.5rem, 22vw, 5rem);
+  }
+}

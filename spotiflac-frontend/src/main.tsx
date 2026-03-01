@@ -1,6 +1,7 @@
 import RootLayout from "@/layouts/RootLayout";
 import Bulk from "@/pages/Bulk";
 import Home from "@/pages/Home";
+import NotFound from "@/pages/NotFound";
 import "@/styles/main.css";
 import "@fontsource-variable/inter";
 import "@fontsource/playfair-display/400.css";
@@ -15,6 +16,7 @@ createRoot(document.getElementById("root")!).render(
       <Route path="/" element={<RootLayout />}>
         <Route index element={<Home />} />
         <Route path="bulk" element={<Bulk />} />
+        <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
   </BrowserRouter>,
