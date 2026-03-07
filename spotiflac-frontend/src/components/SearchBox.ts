@@ -130,6 +130,7 @@ export class SearchBox {
       music: "Search Music",
       video: "Search Videos",
       all: "Search All Sources",
+      spotify: "Search Spotify",
     };
     this.button.innerHTML = labels[type] || "Search";
 
@@ -137,13 +138,11 @@ export class SearchBox {
   }
 
   private async fetchSuggestions(query: string): Promise<void> {
-    // Don't fetch suggestions if search is already in progress
     if (this.searchInProgress) return;
 
     const requestId = ++this.suggestionRequestId;
     const suggestions = await SuggestionService.fetchSuggestions(query);
 
-    // Ignore stale responses or if search has started
     if (requestId !== this.suggestionRequestId || this.searchInProgress) return;
 
     if (suggestions.length > 0) {
@@ -154,7 +153,6 @@ export class SearchBox {
   }
 
   private showSuggestions(suggestions: string[]): void {
-    // Don't show suggestions if search is in progress
     if (this.searchInProgress) return;
 
     this.currentSuggestions = suggestions;
@@ -197,7 +195,7 @@ export class SearchBox {
     this.searchInProgress = inProgress;
     if (inProgress) {
       this.hideSuggestions();
-      // Invalidate any pending suggestion requests
+
       this.suggestionRequestId++;
     }
   }
