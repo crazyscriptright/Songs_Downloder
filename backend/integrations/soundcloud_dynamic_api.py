@@ -4,21 +4,32 @@ import json
 import time
 import os
 from urllib.parse import quote_plus
+from utils.atomic_write import atomic_json_write, atomic_json_read_modify_write
+from datetime import datetime, timedelta
 
-CACHE_FILE = "soundcloud_cache.json"
-CACHE_TTL = 60 * 60 * 24  # 24 hours cache validity (adjust if needed)
+# Use unified music_api_cache.json like ytmusic and spotify
+CACHE_FILE = "/tmp/music_api_cache.json" if os.getenv("DYNO") else "music_api_cache.json"
+CACHE_DURATION_HOURS = 24  # 24 hours cache validity
 
 
 def load_cache():
-    """Load existing cache if not expired."""
-    if not os.path.exists(CACHE_FILE):
-        return {}
-
+    """Load existing soundcloud cache from music_api_cache.json if not expired."""
     try:
+        if not os.path.exists(CACHE_FILE):
+            return {}
+        
         with open(CACHE_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if time.time() - data.get("timestamp", 0) < CACHE_TTL:
-            return data
+            cache_data = json.load(f)
+        
+        if "soundcloud" not in cache_data:
+            return {}
+        
+        entry = cache_data["soundcloud"]
+        cached_time = datetime.fromisoformat(entry["timestamp"])
+        expiry_time = cached_time + timedelta(hours=CACHE_DURATION_HOURS)
+        
+        if datetime.now() < expiry_time:
+            return entry  # return the full entry with timestamp
         else:
             return {}  # expired
     except Exception:
@@ -26,16 +37,24 @@ def load_cache():
 
 
 def save_cache(client_id, app_version="1761662631", user_id=""):
-    """Save cache with timestamp."""
-    data = {
+    """Save soundcloud cache to music_api_cache.json (atomic, race-condition-safe)."""
+    entry = {
         "client_id": client_id,
         "app_version": app_version,
         "user_id": user_id,
-        "timestamp": time.time(),
+        "timestamp": datetime.now().isoformat(),
     }
-    with open(CACHE_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-    return data
+    
+    try:
+        def _updater(cache_data: dict) -> dict:
+            cache_data["soundcloud"] = entry
+            return cache_data
+        
+        atomic_json_read_modify_write(CACHE_FILE, _updater, ensure_ascii=False)
+        return entry
+    except Exception as e:
+        print(f"Error saving soundcloud cache: {e}")
+        return entry
 
 
 def get_valid_client_id(force_refresh=False):

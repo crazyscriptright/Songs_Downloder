@@ -52,30 +52,24 @@ def load_cache():
 
 
 def save_cache(client_id, app_version="1761662631", user_id=""):
-    """Save cache to unified cache file."""
+    """Save cache to unified cache file (atomic, race-condition-safe)."""
     try:
-        # Load existing cache to preserve other API tokens
-        cache_data = {}
-        if os.path.exists(CACHE_FILE):
-            try:
-                with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                    cache_data = json.load(f)
-            except:
-                pass
-        
-        # Update SoundCloud tokens
-        cache_data['soundcloud'] = {
+        from utils.atomic_write import atomic_json_read_modify_write
+
+        sc_entry = {
             "client_id": client_id,
             "app_version": app_version,
             "user_id": user_id,
             "timestamp": datetime.now().isoformat(),
         }
-        
-        with open(CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(cache_data, f, indent=2, ensure_ascii=False)
-        
-        print(f"SoundCloud client_id cached successfully (valid for 2 hours)")
-        return cache_data['soundcloud']
+
+        def _updater(cache_data: dict) -> dict:
+            cache_data['soundcloud'] = sc_entry
+            return cache_data
+
+        atomic_json_read_modify_write(CACHE_FILE, _updater, ensure_ascii=False)
+        print("SoundCloud client_id cached successfully (valid for 2 hours)")
+        return sc_entry
     except Exception as e:
         print(f"Error saving cache: {e}")
         return {}
@@ -85,17 +79,9 @@ def get_valid_client_id(force_refresh=False):
     """Return cached or freshly scraped client_id."""
     cache = load_cache()
     if not force_refresh and "client_id" in cache:
-        # Test if cached client_id still works
-        test_url = f"https://api-v2.soundcloud.com/search?q=test&client_id={cache['client_id']}&limit=1"
-        try:
-            test_response = requests.get(test_url, timeout=5)
-            if test_response.status_code == 200:
-                print(f"Using valid cached client_id: {cache['client_id']}")
-                return cache["client_id"]
-            else:
-                print(f"Cached client_id expired ({test_response.status_code}), refreshing...")
-        except:
-            print(f"Cached client_id test failed, refreshing...")
+        # Cache TTL already validated by load_cache() — no extra network test needed
+        print(f"Using valid cached client_id: {cache['client_id']}")
+        return cache["client_id"]
 
     print("[Fetch] Extracting new client_id from SoundCloud...")
     

@@ -1,13 +1,19 @@
 import { DirectUrlInfo, Song } from "./song";
 
-export type SearchType = "music" | "video" | "all";
-export type SourceId = "jiosaavn" | "soundcloud" | "ytmusic" | "ytvideo";
+export type SearchType = "music" | "video" | "all" | "spotify";
+export type SourceId =
+  | "jiosaavn"
+  | "soundcloud"
+  | "ytmusic"
+  | "ytvideo"
+  | "spotify";
 
 export interface SearchResults {
   jiosaavn: Song[];
   soundcloud: Song[];
   ytmusic: Song[];
   ytvideo: Song[];
+  spotify?: Song[];
   direct_url?: DirectUrlInfo[];
   query_type?: "url" | "search";
   search_id?: string;

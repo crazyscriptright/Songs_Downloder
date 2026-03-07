@@ -1,12 +1,36 @@
-import { getApiBaseUrl } from '@/config';
+import { getApiBaseUrl } from "@/config";
 import type {
-    JioSaavnSuggestion,
-    PreviewData,
-    SearchResults,
-    SearchType,
-    Song,
-    SourceId,
-} from '@/types';
+  JioSaavnSuggestion,
+  PreviewData,
+  SearchResults,
+  SearchType,
+  Song,
+  SourceId,
+} from "@/types";
+
+/** Format milliseconds to "m:ss" string for display. */
+function formatDurationMs(ms: number): string {
+  const totalSec = Math.round(ms / 1000);
+  const minutes = Math.floor(totalSec / 60);
+  const seconds = totalSec % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+/** Map a Spotify API result item to the common Song shape. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapSpotifyToSong(item: any): Song {
+  const artists = Array.isArray(item.artists)
+    ? item.artists.join(", ")
+    : (item.artists ?? "");
+  return {
+    title: item.name ?? "",
+    artist: artists,
+    url: item.spotify_url ?? item.uri ?? "",
+    thumbnail: item.cover_url ?? "",
+    album: item.album ?? "",
+    duration: item.duration_ms ? formatDurationMs(item.duration_ms) : undefined,
+  };
+}
 
 export type SourceResultCallback = (
   source: SourceId,
@@ -24,8 +48,8 @@ export class SearchService {
    */
   static async searchByUrl(query: string, type: SearchType): Promise<string> {
     const response = await fetch(`${getApiBaseUrl()}/search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, type }),
     });
     const data = await response.json();
@@ -36,7 +60,9 @@ export class SearchService {
    * Poll the backend for URL search results.
    */
   static async pollSearchStatus(searchId: string): Promise<SearchResults> {
-    const response = await fetch(`${getApiBaseUrl()}/search_status/${searchId}`);
+    const response = await fetch(
+      `${getApiBaseUrl()}/search_status/${searchId}`,
+    );
     return response.json();
   }
 
@@ -50,11 +76,14 @@ export class SearchService {
     onSourceResult: SourceResultCallback,
   ): Promise<SearchResults> {
     const endpoints: SourceId[] = [];
-    if (type === 'music' || type === 'all') {
-      endpoints.push('jiosaavn', 'soundcloud', 'ytmusic');
+    if (type === "music" || type === "all") {
+      endpoints.push("jiosaavn", "soundcloud", "ytmusic", "spotify");
     }
-    if (type === 'video' || type === 'all') {
-      endpoints.push('ytvideo');
+    if (type === "video" || type === "all") {
+      endpoints.push("ytvideo");
+    }
+    if (type === "spotify") {
+      endpoints.push("spotify");
     }
 
     const totalSources = endpoints.length;
@@ -65,22 +94,32 @@ export class SearchService {
       soundcloud: [],
       ytmusic: [],
       ytvideo: [],
+      spotify: [],
     };
 
     const promises = endpoints.map(async (source) => {
       try {
         const response = await fetch(`${getApiBaseUrl()}/search/${source}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query, type }),
         });
         const data = await response.json();
-        allResults[source] = data.results || [];
+        if (source === "spotify") {
+          allResults[source] = (data.results || []).map(mapSpotifyToSong);
+        } else {
+          allResults[source] = data.results || [];
+        }
       } catch {
         allResults[source] = [];
       }
       completedSources++;
-      onSourceResult(source, allResults[source], completedSources, totalSources);
+      onSourceResult(
+        source,
+        allResults[source]!,
+        completedSources,
+        totalSources,
+      );
     });
 
     await Promise.allSettled(promises);
@@ -93,8 +132,8 @@ export class SearchService {
   static async fetchPreview(url: string): Promise<PreviewData | null> {
     try {
       const response = await fetch(`${getApiBaseUrl()}/preview_url`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
       });
 
@@ -116,7 +155,7 @@ export class SearchService {
    */
   static async fetchJioSaavnSuggestions(
     pid: string,
-    language = 'hindi',
+    language = "hindi",
   ): Promise<JioSaavnSuggestion[]> {
     const response = await fetch(
       `${getApiBaseUrl()}/jiosaavn_suggestions/${pid}?language=${language}`,

@@ -27,10 +27,10 @@ preview_cache: dict[str, tuple[str, float]] = {}
 # ── Persistence helpers ────────────────────────────────────────────────────────
 
 def save_download_status() -> None:
-    """Persist download_status to disk (no-op on read-only filesystems)."""
+    """Persist download_status to disk (atomic, race-condition-safe)."""
     try:
-        with open(config.DOWNLOAD_STATUS_FILE, "w") as f:
-            json.dump(download_status, f, indent=2)
+        from utils.atomic_write import atomic_json_write
+        atomic_json_write(config.DOWNLOAD_STATUS_FILE, download_status)
     except (IOError, OSError, PermissionError) as exc:
         print(f"Warning: Could not save download status: {exc}")
 

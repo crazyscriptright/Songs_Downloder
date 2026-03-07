@@ -3,7 +3,6 @@
 import re
 from typing import Optional
 
-# ── Supported platform patterns ────────────────────────────────────────────────
 _MUSIC_URL_PATTERNS = [
     r"youtube\.com/watch",
     r"youtu\.be/",
@@ -26,11 +25,9 @@ _SUPPORTED_PATTERNS = [
     r"spotify\.com/",
 ]
 
-
 def is_url(query: str) -> bool:
     """Return True if *query* looks like a supported music platform URL."""
     return any(re.search(p, query, re.IGNORECASE) for p in _MUSIC_URL_PATTERNS)
-
 
 def detect_source(url: str) -> str:
     """Return a human-readable source name for a URL."""
@@ -42,7 +39,6 @@ def detect_source(url: str) -> str:
     if "spotify.com" in url_l:
         return "Spotify"
     return "YouTube"
-
 
 def validate_url_simple(url: str) -> dict:
     """
@@ -76,7 +72,6 @@ def validate_url_simple(url: str) -> dict:
         ),
         "url": url,
     }
-
 
 def extract_video_id(url: str) -> Optional[str]:
     """Extract an 11-character YouTube video ID from a URL."""

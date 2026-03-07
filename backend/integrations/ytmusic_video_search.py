@@ -10,6 +10,8 @@ Usage:
 
 from .ytmusic_dynamic_video_tokens import YouTubeMusicVideoAPI
 import json
+import os
+from utils.atomic_write import atomic_json_write
 
 def main():
     print("="*70)
@@ -65,14 +67,12 @@ def main():
             
             # Save results to file (use /tmp on Heroku)
             output_file = "/tmp/video_search_results.json" if os.getenv('DYNO') else "video_search_results.json"
-            with open(output_file, "w", encoding="utf-8") as f:
-                json.dump(videos, f, indent=2, ensure_ascii=False)
+            atomic_json_write(output_file, videos, ensure_ascii=False)
             print(f" Results saved to {output_file}")
-            
+
             # Save full response (use /tmp on Heroku)
             full_response_file = "/tmp/ytmusic_video_response.json" if os.getenv('DYNO') else "ytmusic_video_response.json"
-            with open(full_response_file, "w", encoding="utf-8") as f:
-                json.dump(results, f, indent=2, ensure_ascii=False)
+            atomic_json_write(full_response_file, results, ensure_ascii=False)
             print(f" Full response saved to {full_response_file}")
             
             # Show first 3 videos

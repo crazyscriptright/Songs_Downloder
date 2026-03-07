@@ -296,11 +296,13 @@ export class App {
   }
 
   private async searchByKeyword(query: string): Promise<void> {
-    this.showStatus(
-      "searching",
-      "Searching all platforms...",
-      "JioSaavn \u2022 SoundCloud \u2022 YouTube Music",
-    );
+    const searchSubtitle =
+      this.searchType === "spotify"
+        ? "Searching Spotify only..."
+        : this.searchType === "video"
+          ? "YouTube Videos"
+          : "JioSaavn \u2022 SoundCloud \u2022 YouTube Music \u2022 Spotify";
+    this.showStatus("searching", "Searching all platforms...", searchSubtitle);
     this.searchBox.input.disabled = true;
 
     const allResults: Record<string, Song[]> = {
@@ -308,6 +310,7 @@ export class App {
       soundcloud: [],
       ytmusic: [],
       ytvideo: [],
+      spotify: [],
     };
 
     const timeoutId = setTimeout(() => {
@@ -337,6 +340,8 @@ export class App {
         names.push(`YTMusic (${allResults.ytmusic.length})`);
       if (allResults.ytvideo.length)
         names.push(`YTVideo (${allResults.ytvideo.length})`);
+      if (allResults.spotify?.length)
+        names.push(`Spotify (${allResults.spotify.length})`);
 
       if (names.length > 0) {
         this.showStatus(
@@ -353,7 +358,8 @@ export class App {
           allResults.jiosaavn.length +
           allResults.soundcloud.length +
           allResults.ytmusic.length +
-          allResults.ytvideo.length;
+          allResults.ytvideo.length +
+          (allResults.spotify?.length ?? 0);
         if (totalCount > 0) {
           this.showStatus(
             "complete",

@@ -1,5 +1,5 @@
-import { SearchService } from "@/services/SearchService";
 import { PreviewService } from "@/services/PreviewService";
+import { SearchService } from "@/services/SearchService";
 import { YouTubeService } from "@/services/YouTubeService";
 import type {
   DirectUrlInfo,
@@ -83,6 +83,7 @@ export class ResultsContainer {
       { key: "ytmusic", name: "YouTube Music", id: "ytmusic" },
       { key: "soundcloud", name: "SoundCloud", id: "soundcloud" },
       { key: "ytvideo", name: "YouTube Videos", id: "ytvideo" },
+      { key: "spotify", name: "Spotify", id: "spotify" },
     ];
 
     for (const s of order) {
@@ -217,12 +218,16 @@ export class ResultsContainer {
             data-url="${processedInfo.url}" data-title="${downloadTitle}">
             Download Now
           </button>
-          ${_previewSupported(processedInfo.url) && !youtubeData?.videoId ? `
+          ${
+            _previewSupported(processedInfo.url) && !youtubeData?.videoId
+              ? `
           <button id="direct-url-preview-btn" class="preview-btn"
             data-url="${processedInfo.url}" data-title="${downloadTitle}"
             title="Preview" style="padding:15px 20px;font-size:1em;">
             ${PREVIEW_ICON_PLAY}
-          </button>` : ""}
+          </button>`
+              : ""
+          }
         </div>
         ${this.buildRecommendationsPlaceholder(previewData, info)}
       </div>
@@ -251,7 +256,9 @@ export class ResultsContainer {
           const url = previewBtn.dataset.url!;
           const title = previewBtn.dataset.title!;
           // inject player inside the card wrapper (parent of the flex row)
-          const cardEl = previewBtn.closest(".url-result-card") as HTMLElement ?? previewBtn.parentElement as HTMLElement;
+          const cardEl =
+            (previewBtn.closest(".url-result-card") as HTMLElement) ??
+            (previewBtn.parentElement as HTMLElement);
           PreviewService.play(url, title, cardEl, previewBtn);
         });
       }
@@ -610,7 +617,9 @@ export class ResultsContainer {
     if (btn) {
       btn.insertAdjacentHTML("afterend", html);
       // wire previews after the new HTML is in the DOM
-      const grid = section.querySelector(".recommended-tracks-grid:last-of-type")?.parentElement;
+      const grid = section.querySelector(
+        ".recommended-tracks-grid:last-of-type",
+      )?.parentElement;
       if (grid) this.wireRecommendationPreviews(grid as HTMLElement);
     }
   }
@@ -650,8 +659,12 @@ export class ResultsContainer {
             <div style="display:flex;gap:6px;">
               <button class="download-btn rec-download" id="${btnId}" data-url="${track.url}" data-title="${safeTitle}"
                 style="padding:6px 10px;font-size:0.85em;">Download</button>
-              ${showPreview ? `<button class="preview-btn rec-preview" id="${prevBtnId}" data-url="${track.url}" data-title="${safeTitle}"
-                title="Preview" style="padding:6px 10px;">${PREVIEW_ICON_PLAY}</button>` : ""}
+              ${
+                showPreview
+                  ? `<button class="preview-btn rec-preview" id="${prevBtnId}" data-url="${track.url}" data-title="${safeTitle}"
+                title="Preview" style="padding:6px 10px;">${PREVIEW_ICON_PLAY}</button>`
+                  : ""
+              }
             </div>
           </div>
         </div>
@@ -660,14 +673,18 @@ export class ResultsContainer {
 
   /** Wire all .rec-preview buttons inside a container after DOM insertion. */
   private wireRecommendationPreviews(container: HTMLElement): void {
-    container.querySelectorAll<HTMLButtonElement>(".rec-preview").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const url = btn.dataset.url!;
-        const title = btn.dataset.title!;
-        const cardEl = btn.closest(".recommended-track-card") as HTMLElement ?? btn.parentElement as HTMLElement;
-        PreviewService.play(url, title, cardEl, btn);
+    container
+      .querySelectorAll<HTMLButtonElement>(".rec-preview")
+      .forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const url = btn.dataset.url!;
+          const title = btn.dataset.title!;
+          const cardEl =
+            (btn.closest(".recommended-track-card") as HTMLElement) ??
+            (btn.parentElement as HTMLElement);
+          PreviewService.play(url, title, cardEl, btn);
+        });
       });
-    });
   }
 
   /* ---------------------------------------------------------------- */

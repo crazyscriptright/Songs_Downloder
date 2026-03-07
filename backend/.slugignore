@@ -1,34 +1,25 @@
-# ─── Python / virtualenv ──────────────────────────────────────────────────────
+
 venv/
 **/__pycache__/
 **/*.pyc
 **/*.pyo
 **/*.pyd
-.python-version
 
-# ─── Git / CI ─────────────────────────────────────────────────────────────────
 .git/
 .github/
 .gitignore
 
-# ─── Archive / legacy code ────────────────────────────────────────────────────
 old/
 new/
-beta_verion/
 
-# ─── Dev / scratch files ──────────────────────────────────────────────────────
 requirements copy.txt
 *.md
 
-# ─── Runtime-generated cache files (recreated in /tmp on Heroku) ──────────────
 music_api_cache.json
 download_status.json
 
-# ─── Local env / secrets (use Heroku config vars instead) ────────────────────
-.env
-
-# ─── Editor / OS noise ────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.DS_Store
 Thumbs.db
+music_api_cache.json

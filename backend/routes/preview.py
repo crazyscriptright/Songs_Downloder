@@ -26,9 +26,6 @@ from services.preview import (
 
 preview_bp = Blueprint("preview", __name__)
 
-
-# ── Metadata helpers ───────────────────────────────────────────────────────────
-
 def extract_soundcloud_metadata_with_recommendations(soundcloud_url):
     """Scrape SoundCloud page for track metadata + recommendations."""
     try:
@@ -145,7 +142,6 @@ def extract_soundcloud_metadata_with_recommendations(soundcloud_url):
         print(f"SoundCloud metadata error: {e}")
         return None
 
-
 def extract_jiosaavn_metadata(jiosaavn_url):
     """Scrape JioSaavn page for track metadata."""
     try:
@@ -157,7 +153,6 @@ def extract_jiosaavn_metadata(jiosaavn_url):
         soup = BeautifulSoup(resp.text, "html.parser")
         metadata = {}
 
-        # METHOD 1 — parse window.__INITIAL_DATA__ (fastest, most reliable)
         for script in soup.find_all("script"):
             if not (script.string and "window.__INITIAL_DATA__" in script.string and '"song":{' in script.string):
                 continue
@@ -191,7 +186,6 @@ def extract_jiosaavn_metadata(jiosaavn_url):
                 return metadata
             break
 
-        # METHOD 2 — HTML fallback
         img_el = soup.find("img", {"id": "songHeaderImage"})
         if img_el:
             metadata["thumbnail"] = img_el.get("src")
@@ -210,7 +204,6 @@ def extract_jiosaavn_metadata(jiosaavn_url):
             if artists:
                 metadata["artists"] = artists
 
-        # PID extraction
         for script in soup.find_all("script"):
             if script.string and '"pid"' in script.string:
                 m = re.search(r'"pid"\s*:\s*"([^"]+)"', script.string)
@@ -218,7 +211,6 @@ def extract_jiosaavn_metadata(jiosaavn_url):
                     metadata["pid"] = m.group(1)
                     break
 
-        # Language
         for script in soup.find_all("script"):
             if script.string and '"language"' in script.string:
                 m = re.search(r'"language"\s*:\s*"([^"]+)"', script.string)
@@ -240,16 +232,12 @@ def extract_jiosaavn_metadata(jiosaavn_url):
         print(f"JioSaavn metadata error: {e}")
         return None
 
-
 def _extract_video_id(url):
     for pat in (r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", r"(?:embed\/)([0-9A-Za-z_-]{11})", r"(?:watch\?v=)([0-9A-Za-z_-]{11})"):
         m = re.search(pat, url)
         if m:
             return m.group(1)
     return None
-
-
-# ── Routes ────────────────────────────────────────────────────────────────────
 
 @preview_bp.route("/preview_url", methods=["POST"])
 def preview_url():
@@ -266,7 +254,7 @@ def preview_url():
             source = "SoundCloud"
         elif "jiosaavn.com" in url.lower() or "saavn.com" in url.lower():
             source = "JioSaavn"
-        elif "spotify.com" in url.lower():
+        elif "open.spotify.com" in url.lower():
             source = "Spotify"
         elif any(p in url.lower() for p in ("youtube.com", "youtu.be", "music.youtube.com")):
             source = "YouTube"
@@ -332,12 +320,37 @@ def preview_url():
                 "soundcloud_data": meta,
             })
 
+        if source == "Spotify":
+            import re as _re
+            m = _re.search(r"open\.spotify\.com/track/([A-Za-z0-9]+)", url)
+            if not m:
+                return jsonify({"error": "Invalid Spotify track URL"}), 400
+            track_id = m.group(1)
+            from routes.search import get_spotify_client
+            spotify_client = get_spotify_client()
+            track = spotify_client.get_track_metadata(track_id)
+            # format duration_ms → "m:ss"
+            dur_ms = track.get("duration_ms", 0)
+            total_sec = (dur_ms or 0) // 1000
+            duration_str = f"{total_sec // 60}:{total_sec % 60:02d}"
+            return jsonify({
+                "title":       track.get("title", "Unknown Title"),
+                "uploader":    track.get("artist", "Unknown Artist"),
+                "channel":     track.get("album_artist", track.get("artist", "")),
+                "album":       track.get("album", ""),
+                "thumbnail":   track.get("cover_url", ""),
+                "duration":    duration_str,
+                "year":        (track.get("release_date") or "")[:4] or None,
+                "isrc":        track.get("isrc", ""),
+                "webpage_url": url,
+                "source":      "Spotify",
+            })
+
         return jsonify({"error": f"Invalid {source} URL — unable to extract information"}), 400
 
     except Exception as e:
         print(f"❌ Preview URL error: {e}")
         return jsonify({"error": str(e)}), 500
-
 
 @preview_bp.route("/preview", methods=["GET"])
 def audio_preview():
@@ -354,14 +367,12 @@ def audio_preview():
     if not isinstance(url, str) or not url.startswith(("http://", "https://")):
         return jsonify({"error": "Invalid URL"}), 400
 
-    # ── Cache lookup ──────────────────────────────────────────────────────────
-    # cache value is a string: either a CDN URL (starts with http) or a local file path
     cached_val = None
     cached = state.preview_cache.get(url)
     if cached:
         _val, expires_at = cached
         if time.time() < expires_at:
-            # File paths: verify file still exists and is non-empty
+
             if _val.startswith("http") or (os.path.isfile(_val) and os.path.getsize(_val) > 0):
                 cached_val = _val
         if not cached_val:
@@ -383,10 +394,9 @@ def audio_preview():
             file_path = cached_val
     else:
         url_lower = url.lower()
-        # ── 1. yt-dlp download (primary — most reliable) ───────────────────────
+
         file_path = download_preview_audio(url)
 
-        # ── 2. Native API fallback (if yt-dlp fails) ───────────────────────────
         if not file_path:
             if "soundcloud.com" in url_lower:
                 try:
@@ -406,21 +416,19 @@ def audio_preview():
     if not cdn_url and not file_path:
         return jsonify({"error": "Preview unavailable"}), 503
 
-    # ── Serve local file (fully reliable, supports Range) ─────────────────────
     if file_path:
         try:
             mime, _ = mimetypes.guess_type(file_path)
             return send_file(
                 file_path,
                 mimetype=mime or "audio/mpeg",
-                conditional=True,  # handles Range requests automatically
+                conditional=True,
                 max_age=config.PREVIEW_CACHE_TTL,
             )
         except Exception as e:
             print(f"[/preview] send_file failed: {e}")
             return jsonify({"error": "Preview unavailable"}), 503
 
-    # ── Proxy CDN URL through Flask ───────────────────────────────────────────
     try:
         proxy_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         rng = request.headers.get("Range")
@@ -429,7 +437,7 @@ def audio_preview():
 
         upstream = requests.get(cdn_url, headers=proxy_headers, stream=True, timeout=10)
         if not upstream.ok:
-            # CDN URL may have expired — evict cache and fall back to download
+
             state.preview_cache.pop(url, None)
             file_path = download_preview_audio(url)
             if file_path:
@@ -460,7 +468,6 @@ def audio_preview():
         print(f"[/preview] CDN proxy failed: {e}")
         return jsonify({"error": "Stream proxy failed"}), 502
 
-
 @preview_bp.route("/jiosaavn_suggestions/<pid>")
 def get_jiosaavn_suggestions_by_pid(pid):
     if not pid or not re.match(r"^[a-zA-Z0-9_-]{1,20}$", pid):
@@ -474,7 +481,6 @@ def get_jiosaavn_suggestions_by_pid(pid):
     suggestions = []
     method_used = "api"
 
-    # METHOD 1: JioSaavn API with India headers
     try:
         api_url = f"https://www.jiosaavn.com/api.php?__call=reco.getreco&api_version=4&_format=json&_marker=0&ctx=wap6dot0&pid={pid}&language={language}"
         headers = {
@@ -510,7 +516,6 @@ def get_jiosaavn_suggestions_by_pid(pid):
     except Exception as e:
         print(f"JioSaavn API error: {e}")
 
-    # METHOD 2: Selenium fallback
     if not suggestions:
         try:
             from integrations.jiosaavn_suggestions_simple import JioSaavnSuggestions
@@ -525,7 +530,6 @@ def get_jiosaavn_suggestions_by_pid(pid):
     if suggestions:
         return jsonify({"success": True, "pid": pid, "language": language, "suggestions": suggestions, "count": len(suggestions), "method": method_used})
     return jsonify({"success": False, "error": "No suggestions available", "pid": pid, "language": language, "suggestions": [], "count": 0, "method": method_used}), 404
-
 
 @preview_bp.route("/extract_jiosaavn_pid", methods=["POST"])
 def extract_jiosaavn_pid():
@@ -542,7 +546,6 @@ def extract_jiosaavn_pid():
         return jsonify({"error": "Could not extract PID"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @preview_bp.route("/extract_playlist", methods=["POST"])
 def extract_playlist():

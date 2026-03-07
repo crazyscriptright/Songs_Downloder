@@ -18,12 +18,9 @@ from utils.url_utils import is_url, validate_url_simple
 
 search_bp = Blueprint("search", __name__)
 
-# ── Lazy API singletons ───────────────────────────────────────────────────────
-
 _ytmusic_api = None
 _ytvideo_api = None
 _jiosaavn_api = None
-
 
 def get_apis():
     global _ytmusic_api, _ytvideo_api, _jiosaavn_api
@@ -48,9 +45,6 @@ def get_apis():
         _jiosaavn_api = JioSaavnAPI()
     return _ytmusic_api, _ytvideo_api, _jiosaavn_api
 
-
-# ── Search helpers ─────────────────────────────────────────────────────────────
-
 def search_ytmusic(query):
     results = []
     try:
@@ -72,7 +66,6 @@ def search_ytmusic(query):
         print(f"YT Music error: {e}")
     return results
 
-
 def search_ytvideo(query):
     results = []
     try:
@@ -93,7 +86,6 @@ def search_ytvideo(query):
     except Exception as e:
         print(f"YT Video error: {e}")
     return results
-
 
 def search_jiosaavn(query):
     results = []
@@ -124,6 +116,14 @@ def search_jiosaavn(query):
         print(f"JioSaavn error: {e}")
     return results
 
+_spotify_client = None
+
+def get_spotify_client():
+    global _spotify_client
+    if not _spotify_client:
+        from beta_verion.modules.spotify import SpotifyClient
+        _spotify_client = SpotifyClient()
+    return _spotify_client
 
 def search_soundcloud(query):
     from integrations import soundcloud
@@ -152,7 +152,6 @@ def search_soundcloud(query):
     except Exception as e:
         print(f"SoundCloud error: {e}")
     return results
-
 
 def search_all_sources(query, search_id, search_type="music"):
     all_results = {
@@ -214,9 +213,6 @@ def search_all_sources(query, search_id, search_type="music"):
     state.search_results[search_id] = all_results
     return all_results
 
-
-# ── Suggestion helpers ─────────────────────────────────────────────────────────
-
 def _yt_suggestions(query):
     BLOCK_WORDS = [
         "movie", "full movie", "trailer", "teaser", "film", "scene",
@@ -275,7 +271,6 @@ def _yt_suggestions(query):
         print(f"YouTube suggestions error: {e}")
     return []
 
-
 def _jiosaavn_suggestions(query):
     try:
         from integrations.jiosaavn_search import JioSaavnAPI
@@ -290,9 +285,6 @@ def _jiosaavn_suggestions(query):
         print(f"JioSaavn suggestions error: {e}")
     return []
 
-
-# ── Routes ────────────────────────────────────────────────────────────────────
-
 @search_bp.route("/")
 def index():
     query = request.args.get("q", "").strip()
@@ -302,7 +294,6 @@ def index():
                            initial_query=query,
                            initial_type=search_type,
                            frontend_url=frontend_url)
-
 
 @search_bp.route("/search", methods=["POST"])
 def search():
@@ -316,7 +307,6 @@ def search():
     threading.Thread(target=search_all_sources, args=(query, search_id, search_type)).start()
     return jsonify({"search_id": search_id, "status": "started", "query_type": query_type})
 
-
 @search_bp.route("/search/jiosaavn", methods=["POST"])
 def search_jiosaavn_endpoint():
     data = request.get_json()
@@ -328,7 +318,6 @@ def search_jiosaavn_endpoint():
         return jsonify({"status": "complete", "source": "jiosaavn", "results": results, "count": len(results), "query": query})
     except Exception as e:
         return jsonify({"status": "error", "source": "jiosaavn", "error": str(e), "results": [], "count": 0, "query": query})
-
 
 @search_bp.route("/search/soundcloud", methods=["POST"])
 def search_soundcloud_endpoint():
@@ -342,7 +331,6 @@ def search_soundcloud_endpoint():
     except Exception as e:
         return jsonify({"status": "error", "source": "soundcloud", "error": str(e), "results": [], "count": 0, "query": query})
 
-
 @search_bp.route("/search/ytmusic", methods=["POST"])
 def search_ytmusic_endpoint():
     data = request.get_json()
@@ -355,7 +343,6 @@ def search_ytmusic_endpoint():
     except Exception as e:
         return jsonify({"status": "error", "source": "ytmusic", "error": str(e), "results": [], "count": 0, "query": query})
 
-
 @search_bp.route("/search/ytvideo", methods=["POST"])
 def search_ytvideo_endpoint():
     data = request.get_json()
@@ -367,7 +354,6 @@ def search_ytvideo_endpoint():
         return jsonify({"status": "complete", "source": "ytvideo", "results": results, "count": len(results), "query": query})
     except Exception as e:
         return jsonify({"status": "error", "source": "ytvideo", "error": str(e), "results": [], "count": 0, "query": query})
-
 
 @search_bp.route("/suggestions")
 def get_suggestions():
@@ -388,9 +374,51 @@ def get_suggestions():
         print(f"Suggestions error: {e}")
         return jsonify({"suggestions": [f"{query} song", f"{query} music", f"{query} latest"]})
 
-
 @search_bp.route("/search_status/<search_id>")
 def search_status(search_id):
     if search_id in state.search_results:
         return jsonify(state.search_results[search_id])
     return jsonify({"status": "not_found"}), 404
+
+@search_bp.route("/search/spotify", methods=["POST"])
+def spotify_search():
+    """
+    POST /search/spotify
+    Body: { "query": "Bohemian Rhapsody" }
+    Returns: { "results": [...], "total": N, "query": "..." }
+    """
+    body = request.get_json(silent=True) or {}
+    query = (body.get("query") or "").strip()
+    #type=(body.get("type")or "music").strip().lower()
+
+    if not query:
+        return jsonify({"error": "Missing 'query' in request body"}), 400
+
+    try:
+        client = get_spotify_client()
+        resp_json = client.get_search_results(query)
+
+        if not resp_json:
+            return jsonify({"error": "No response from Spotify"}), 502
+
+        errors = resp_json.get("errors")
+        if errors:
+            return jsonify({
+                "error": errors[0].get("message", "Spotify search error"),
+                "details": errors,
+            }), 502
+
+        tracks, total, returned = client.parse_search_results(resp_json)
+
+        return jsonify({
+            "query":   query,
+            "total":   total,
+            "count": returned,
+            "results": tracks,
+            "source": "spotify",
+            "status": "complete"
+        })
+
+    except Exception as e:
+        print(f"Spotify search error: {e}")
+        return jsonify({"error": str(e)}), 500

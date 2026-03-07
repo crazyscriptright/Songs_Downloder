@@ -60,28 +60,20 @@ class YouTubeMusicAPI:
             return None
     
     def save_cache(self, tokens):
-        """Save tokens to unified cache file"""
+        """Save tokens to unified cache file (atomic, race-condition-safe)."""
         try:
-            # Load existing cache to preserve other API tokens
-            cache_data = {}
-            if os.path.exists(self.cache_file):
-                try:
-                    with open(self.cache_file, 'r', encoding='utf-8') as f:
-                        cache_data = json.load(f)
-                except:
-                    pass
-            
-            # Update YouTube Music song tokens
-            cache_data['ytmusic_songs'] = {
-                'timestamp': datetime.now().isoformat(),
-                'tokens': tokens
-            }
-            
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(cache_data, f, indent=2, ensure_ascii=False)
-            
+            from utils.atomic_write import atomic_json_read_modify_write
+
+            def _updater(cache_data: dict) -> dict:
+                cache_data['ytmusic_songs'] = {
+                    'timestamp': datetime.now().isoformat(),
+                    'tokens': tokens,
+                }
+                return cache_data
+
+            atomic_json_read_modify_write(self.cache_file, _updater, ensure_ascii=False)
             print(f" YT Music song tokens cached successfully (valid for {self.cache_duration_hours} hours)")
-            
+
         except Exception as e:
             print(f" Error saving cache: {e}")
     

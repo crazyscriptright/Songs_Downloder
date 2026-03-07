@@ -258,16 +258,15 @@ def main():
             print(f" Total songs found: {len(songs)}")
             print(f"{'='*70}")
             
+            from utils.atomic_write import atomic_json_write
             # Save results to file (use /tmp on Heroku)
             output_file = "/tmp/jiosaavn_search_results.json" if os.getenv('DYNO') else "jiosaavn_search_results.json"
-            with open(output_file, "w", encoding="utf-8") as f:
-                json.dump(songs, f, indent=2, ensure_ascii=False)
+            atomic_json_write(output_file, songs, ensure_ascii=False)
             print(f" Results saved to {output_file}")
-            
+
             # Save full response (use /tmp on Heroku)
             full_response_file = "/tmp/jiosaavn_full_response.json" if os.getenv('DYNO') else "jiosaavn_full_response.json"
-            with open(full_response_file, "w", encoding="utf-8") as f:
-                json.dump(results, f, indent=2, ensure_ascii=False)
+            atomic_json_write(full_response_file, results, ensure_ascii=False)
             print(f" Full response saved to {full_response_file}")
             
             # Ask if user wants song details
@@ -288,8 +287,8 @@ def main():
                         
                         # Save details (use /tmp on Heroku)
                         details_file = f"/tmp/song_details_{song_id}.json" if os.getenv('DYNO') else f"song_details_{song_id}.json"
-                        with open(details_file, "w", encoding="utf-8") as f:
-                            json.dump(details, f, indent=2, ensure_ascii=False)
+                        from utils.atomic_write import atomic_json_write
+                        atomic_json_write(details_file, details, ensure_ascii=False)
                         print(f"\n Details saved to {details_file}")
                 else:
                     print(" Invalid song number")

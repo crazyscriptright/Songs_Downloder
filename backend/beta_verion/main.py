@@ -56,14 +56,12 @@ def download(music_url, service, quality, output, template, fallback):
         print(f"\nDetected Platform: {detected_platform.capitalize()}")
 
         if service == 'auto':
-
             if detected_platform != 'spotify':
                 service = detected_platform
                 print(f"Auto-selected service: {service}")
             else:
-
                 service = 'tidal'
-                print(f"Auto-selected service: {service} (fallback enabled)")
+                print(f"Auto-selected service: tidal (spotdl as fallback if tidal/qobuz/amazon fail)")
 
         if detected_platform != 'spotify' and service == detected_platform:
             return download_direct(music_url, detected_platform, track_id, output, template, quality)
@@ -82,7 +80,7 @@ def download(music_url, service, quality, output, template, fallback):
         print(f"  Album: {track_metadata['album']}")
         print(f"  Duration: {utils.format_duration(track_metadata['duration_ms'])}")
 
-        print(f"\n[2/4] Converting to {service.capitalize()} URL...")
+        print(f"\n[2/4] Preparing download via {service.capitalize()}...")
         songlink_client = songlink.SongLinkClient()
 
         if service == 'amazon':
@@ -103,19 +101,22 @@ def download(music_url, service, quality, output, template, fallback):
         download_success = False
         services_to_try = [service]
 
-        if fallback and service != 'spotdl':
-            all_services = ['tidal', 'qobuz', 'amazon']
-            if SPOTDL_AVAILABLE:
-                all_services.append('spotdl')
-
-            services_to_try.extend([s for s in all_services if s != service])
+        if fallback:
+            if detected_platform == 'spotify' and SPOTDL_AVAILABLE:
+                # spotdl first, then tidal/qobuz/amazon as fallback
+                fallback_chain = ['tidal', 'qobuz', 'amazon', 'spotdl', ]
+            else:
+                fallback_chain = ['tidal', 'qobuz', 'amazon']
+                if SPOTDL_AVAILABLE:
+                    fallback_chain.append('spotdl')
+            services_to_try.extend([s for s in fallback_chain if s != service])
 
         last_error = None
         for current_service in services_to_try:
             try:
                 print(f"\nTrying {current_service.capitalize()}...")
 
-                '''if current_service == 'tidal':
+                if current_service == 'tidal':
                     service_url = songlink_client.get_platform_url(track_id, 'tidal')
                     downloader = tidal.TidalDownloader()
                     downloader.download(service_url, output_path, quality)
@@ -136,9 +137,9 @@ def download(music_url, service, quality, output, template, fallback):
                     downloader = amazon.AmazonDownloader()
                     downloader.download(service_url, output_path)
                     download_success = True
-                    break'''
+                    break
 
-                if current_service == 'spotdl':
+                elif current_service == 'spotdl':
                     if not SPOTDL_AVAILABLE:
                         raise Exception("SpotDL not installed")
                     downloader = spotdl.SpotDLDownloader()

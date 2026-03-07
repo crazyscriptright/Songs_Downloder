@@ -156,7 +156,9 @@ def embed_metadata(filepath, metadata):
     cover_path = None
     if metadata.get('cover_url'):
         cover_path = filepath + '.cover.jpg'
-        download_cover_art(metadata['cover_url'], cover_path)
+        result = download_cover_art(metadata['cover_url'], cover_path)  # ← capture return
+        if not result:
+            cover_path = None  # ← don't pass a non-existent path downstream
 
     if ext == '.flac':
         embed_flac_metadata(filepath, metadata, cover_path)

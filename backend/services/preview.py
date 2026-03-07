@@ -19,16 +19,11 @@ import requests
 from urllib.parse import quote_plus
 from typing import Optional
 
-# ── Temp-file directory ────────────────────────────────────────────────────────
-# On Heroku the only writable directory is /tmp; elsewhere use the system temp.
 _PREVIEW_TMP_DIR = os.path.join(
     os.environ.get("TMPDIR", tempfile.gettempdir()),
     "spotiflac_previews",
 )
-_PREVIEW_FILE_MAX_AGE = 600  # seconds — reuse files younger than this
-
-
-# ── SoundCloud ─────────────────────────────────────────────────────────────────
+_PREVIEW_FILE_MAX_AGE = 600
 
 def get_soundcloud_stream_fast(track_url: str, client_id: str) -> Optional[str]:
     """
@@ -59,7 +54,6 @@ def get_soundcloud_stream_fast(track_url: str, client_id: str) -> Optional[str]:
         rs.raise_for_status()
         streams = rs.json()
 
-        # Prefer progressive (directly streamable) over HLS
         for key in ("http_mp3_128", "preview_mp3_128", "hls_mp3_128"):
             if streams.get(key):
                 print(f"[preview/sc] stream key: {key}")
@@ -77,14 +71,10 @@ def get_soundcloud_stream_fast(track_url: str, client_id: str) -> Optional[str]:
         print(f"[preview/sc] error: {exc}")
         return None
 
-
-# ── JioSaavn ───────────────────────────────────────────────────────────────────
-
 _SAAVN_APIS = [
     "https://saavn.dev/api/songs",
     "https://jiosaavn-api-2.vercel.app/api/songs",
 ]
-
 
 def get_jiosaavn_stream_fast(song_url: str) -> Optional[str]:
     """
@@ -124,9 +114,6 @@ def get_jiosaavn_stream_fast(song_url: str) -> Optional[str]:
     print("[preview/saavn] all APIs failed")
     return None
 
-
-# ── yt-dlp download fallback ───────────────────────────────────────────────────
-
 def download_preview_audio(url: str, timeout: int = 40) -> Optional[str]:
     """
     Download the audio at the lowest available quality to a temp file and
@@ -141,7 +128,6 @@ def download_preview_audio(url: str, timeout: int = 40) -> Optional[str]:
     url_hash = hashlib.md5(url.encode()).hexdigest()[:16]
     prefix = os.path.join(_PREVIEW_TMP_DIR, f"prev_{url_hash}")
 
-    # ── Reuse cached file ──────────────────────────────────────────────────────
     existing = glob.glob(f"{prefix}.*")
     if existing:
         fpath = existing[0]
@@ -150,7 +136,6 @@ def download_preview_audio(url: str, timeout: int = 40) -> Optional[str]:
             print(f"[preview/dl] reusing cached: {os.path.basename(fpath)}")
             return fpath
 
-    # ── Prune stale files ──────────────────────────────────────────────────────
     for f in glob.glob(os.path.join(_PREVIEW_TMP_DIR, "prev_*")):
         try:
             if time.time() - os.path.getmtime(f) > _PREVIEW_FILE_MAX_AGE:
@@ -158,7 +143,6 @@ def download_preview_audio(url: str, timeout: int = 40) -> Optional[str]:
         except OSError:
             pass
 
-    # ── Download ───────────────────────────────────────────────────────────────
     out_template = f"{prefix}.%(ext)s"
     cmd = [
         "yt-dlp",

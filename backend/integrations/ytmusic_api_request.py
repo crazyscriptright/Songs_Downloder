@@ -63,16 +63,15 @@ def main():
             print(f" Found {len(songs)} songs")
             print(f"{'='*70}")
             
+            from utils.atomic_write import atomic_json_write
             # Save results to file
             output_file = "search_results.json"
-            with open(output_file, "w", encoding="utf-8") as f:
-                json.dump(songs, f, indent=2, ensure_ascii=False)
+            atomic_json_write(output_file, songs, ensure_ascii=False)
             print(f" Results saved to {output_file}")
-            
+
             # Save full response
             full_response_file = "ytmusic_response.json"
-            with open(full_response_file, "w", encoding="utf-8") as f:
-                json.dump(results, f, indent=2, ensure_ascii=False)
+            atomic_json_write(full_response_file, results, ensure_ascii=False)
             print(f" Full response saved to {full_response_file}")
             
             # Show first 3 songs

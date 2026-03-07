@@ -8,3 +8,5 @@ schedulestart.
 old/
 downloas_status.json
 music_api_cache.json
+*.dummy.*
+dummy.*
