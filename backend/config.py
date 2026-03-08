@@ -42,9 +42,9 @@ PREVIEW_CACHE_TTL: int = 300          # seconds (5 min)
 PREVIEW_CACHE_MAX_SIZE: int = 60      # max entries in preview LRU cache
 API_CACHE_HOURS: int = 2              # YouTube Music API token cache lifetime
 
-# ── SpotiFLAC / beta_verion platform constants ─────────────────────────────────
-# These are read by beta_verion/modules/* via `from config import …`
-# when beta_verion is imported as a proper sub-package.
+# ── SpotiFLAC / spoflac_core platform constants ─────────────────────────────────
+# These are read by spoflac_core/modules/* via `from config import …`
+# when spoflac_core is imported as a proper sub-package.
 
 USER_AGENT: str = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -57,8 +57,6 @@ TIDAL_APIS: list[str] = [
     "https://triton.squid.wtf",
     "https://hifi-one.spotisaver.net",
     "https://hifi-two.spotisaver.net",
-    "https://tidal.kinoplus.online",
-    "https://tidal-api.binimum.org",
 ]
 TIDAL_QUALITY: dict[str, str] = {"HI_RES": "HI_RES", "LOSSLESS": "LOSSLESS"}
 
@@ -66,7 +64,6 @@ TIDAL_QUALITY: dict[str, str] = {"HI_RES": "HI_RES", "LOSSLESS": "LOSSLESS"}
 QOBUZ_STANDARD_APIS: list[str] = [
     "https://dab.yeet.su/api/stream",
     "https://dabmusic.xyz/api/stream",
-    "https://qobuz.squid.wtf/api/download-music",
 ]
 QOBUZ_JUMO_API:    str = "https://jumo-dl.pages.dev/get"
 QOBUZ_SEARCH_API:  str = "https://www.qobuz.com/api.json/0.2/track/search"
@@ -77,14 +74,24 @@ QOBUZ_QUALITY: dict[str, str] = {
     "LOSSLESS": "6",
 }
 
-# Amazon Music
-AMAZON_API: str = "https://amazon.afkarxyz.fun/api/track"
+# Amazon Music — try these in order; add/remove as services go up/down
+AMAZON_APIS: list[str] = [
+    "https://amzn.afkarxyz.fun/api/track",     # v7.1.0 current endpoint
+    "https://amazon.squid.wtf/api/track",
+    "https://amazon.afkarxyz.app/api/track",
+    "https://amazon.afkarxyz.fun/api/track",
+]
 
 # Song.link / Deezer
 SONGLINK_API:       str = "https://api.song.link/v1-alpha.1/links"
 DEEZER_API:         str = "https://api.deezer.com/track"
 SONGLINK_MIN_DELAY: int = 7    # seconds between calls
 SONGLINK_RETRY_DELAY: int = 15  # seconds on 429
+
+# Download defaults (used by routes/flac_download.py)
+DEFAULT_SERVICE:    str = "auto"        # auto | tidal | qobuz | amazon | soundcloud
+DEFAULT_QUALITY:    str = "HI_RES"      # HI_RES | LOSSLESS | 27 | 7 | 6
+DEFAULT_OUTPUT_DIR: str = os.path.join(os.path.expanduser("~"), "Downloads", "Music")
 
 # Spotify (web-player token endpoint)
 SPOTIFY_TOKEN_URL:        str = "https://open.spotify.com/api/token"
@@ -98,7 +105,6 @@ TOTP_SECRET_V61: list[int] = [
 ]
 
 # FLAC download defaults
-SPOTDL_ENABLED:    bool = True
 DEFAULT_OUTPUT_DIR: str = str(DOWNLOAD_FOLDER)   # reuse existing path
-DEFAULT_SERVICE:    str = "auto"                  # auto | tidal | qobuz | amazon | spotdl
+DEFAULT_SERVICE:    str = "auto"                  # auto | tidal | qobuz | amazon | soundcloud
 DEFAULT_QUALITY:    str = "HI_RES"

@@ -2,7 +2,7 @@
 import sys
 import os
 import argparse
-from modules.audio_converter import AudioConverter
+from spoflac_core.modules.audio_converter import AudioConverter
 
 def main():
     parser = argparse.ArgumentParser(

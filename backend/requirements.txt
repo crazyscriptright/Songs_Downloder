@@ -2,6 +2,7 @@ Flask>=3.0.0
 Flask-CORS>=4.0.0
 gunicorn>=21.2.0
 yt-dlp>=2024.8.6
+free-proxy>=1.1.2
 requests>=2.31.0
 python-dotenv>=1.0.0
 beautifulsoup4>=4.12.2
@@ -13,5 +14,5 @@ Pillow>=10.0.0
 click>=8.1.7
 tqdm>=4.66.0
 ffmpeg-python>=0.2.0
-spotdl>=4.2.0
+# spotdl>=4.2.0  (no longer used; replaced by soundcloud downloader)
 

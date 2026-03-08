@@ -121,7 +121,7 @@ _spotify_client = None
 def get_spotify_client():
     global _spotify_client
     if not _spotify_client:
-        from beta_verion.modules.spotify import SpotifyClient
+        from spoflac_core.modules.spotify import SpotifyClient
         _spotify_client = SpotifyClient()
     return _spotify_client
 

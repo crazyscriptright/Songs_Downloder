@@ -2,23 +2,13 @@
 import os
 import sys
 import click
-from modules import spotify, songlink, tidal, qobuz, amazon, metadata, utils, url_detector
-from config import DEFAULT_OUTPUT_DIR, DEFAULT_SERVICE, DEFAULT_QUALITY, SPOTDL_ENABLED
-
-if SPOTDL_ENABLED:
-    try:
-        from modules import spotdl
-        SPOTDL_AVAILABLE = True
-    except ImportError:
-        SPOTDL_AVAILABLE = False
-        print(" SpotDL not installed. Install with: pip install spotdl")
-else:
-    SPOTDL_AVAILABLE = False
+from modules import tidal, qobuz, amazon, soundcloud, metadata, utils, url_resolver
+from config import DEFAULT_OUTPUT_DIR, DEFAULT_SERVICE, DEFAULT_QUALITY
 
 @click.command()
 @click.argument('music_url')
 @click.option('--service', '-s', default=DEFAULT_SERVICE,
-              type=click.Choice(['auto', 'tidal', 'qobuz', 'amazon', 'spotdl'], case_sensitive=False),
+              type=click.Choice(['auto', 'tidal', 'qobuz', 'amazon', 'soundcloud'], case_sensitive=False),
               help='Streaming service to use (auto = detect from URL or try all)')
 @click.option('--quality', '-q', default=DEFAULT_QUALITY,
               help='Audio quality (HI_RES, LOSSLESS, or 6/7/27 for Qobuz)')
@@ -42,46 +32,31 @@ def download(music_url, service, quality, output, template, fallback):
         python main.py "https://music.amazon.com/albums/B08X123456"
 
         python main.py "SPOTIFY_URL" --service qobuz
-
-        python main.py "SPOTIFY_URL" --service spotdl
     """
     try:
+        print("\n[1/3] Resolving URL and fetching metadata...")
+        resolved          = url_resolver.URLResolver().resolve(music_url)
+        track_metadata    = resolved['metadata']
+        sl_result         = resolved['sl_result']
+        detected_platform = resolved['source_platform']
 
-        detector = url_detector.URLDetector()
-        detected_platform, track_id = detector.get_track_id(music_url)
-
-        if not detected_platform:
-            raise Exception("Unsupported URL format. Supported: Spotify, Tidal, Qobuz, Amazon")
-
-        print(f"\nDetected Platform: {detected_platform.capitalize()}")
+        print(f"  Platform : {detected_platform}")
+        print(f"  Metadata : {resolved['metadata_source']}")
+        print(f"  Title    : {track_metadata['title']}")
+        print(f"  Artist   : {track_metadata['artist']}")
+        print(f"  Album    : {track_metadata['album']}")
+        if track_metadata.get('duration_ms'):
+            print(f"  Duration : {utils.format_duration(track_metadata['duration_ms'])}")
 
         if service == 'auto':
-            if detected_platform != 'spotify':
+            if detected_platform not in ('spotify', 'unknown'):
                 service = detected_platform
                 print(f"Auto-selected service: {service}")
             else:
                 service = 'tidal'
-                print(f"Auto-selected service: tidal (spotdl as fallback if tidal/qobuz/amazon fail)")
+                print(f"Auto-selected service: tidal (fallback: qobuz → amazon → soundcloud)")
 
-        if detected_platform != 'spotify' and service == detected_platform:
-            return download_direct(music_url, detected_platform, track_id, output, template, quality)
-
-        if detected_platform == 'spotify':
-            if not track_id:
-                raise Exception("Could not extract track ID from Spotify URL")
-            print(f"Spotify Track ID: {track_id}")
-
-        print("\n[1/4] Fetching Spotify metadata...")
-        spotify_client = spotify.SpotifyClient()
-        track_metadata = spotify_client.get_track_metadata(track_id)
-
-        print(f"  Title: {track_metadata['title']}")
-        print(f"  Artist: {track_metadata['artist']}")
-        print(f"  Album: {track_metadata['album']}")
-        print(f"  Duration: {utils.format_duration(track_metadata['duration_ms'])}")
-
-        print(f"\n[2/4] Preparing download via {service.capitalize()}...")
-        songlink_client = songlink.SongLinkClient()
+        print(f"\n[2/3] Preparing download via {service.capitalize()}...")
 
         if service == 'amazon':
             ext = '.m4a'
@@ -96,19 +71,13 @@ def download(music_url, service, quality, output, template, fallback):
             print(f"\n File already exists: {output_path}")
             return
 
-        print(f"\n[3/4] Downloading from {service.capitalize()}...")
+        print(f"\n[3/3] Downloading from {service.capitalize()}...")
 
         download_success = False
         services_to_try = [service]
 
         if fallback:
-            if detected_platform == 'spotify' and SPOTDL_AVAILABLE:
-                # spotdl first, then tidal/qobuz/amazon as fallback
-                fallback_chain = ['tidal', 'qobuz', 'amazon', 'spotdl', ]
-            else:
-                fallback_chain = ['tidal', 'qobuz', 'amazon']
-                if SPOTDL_AVAILABLE:
-                    fallback_chain.append('spotdl')
+            fallback_chain = ['tidal', 'qobuz', 'amazon', 'soundcloud']
             services_to_try.extend([s for s in fallback_chain if s != service])
 
         last_error = None
@@ -117,34 +86,45 @@ def download(music_url, service, quality, output, template, fallback):
                 print(f"\nTrying {current_service.capitalize()}...")
 
                 if current_service == 'tidal':
-                    service_url = songlink_client.get_platform_url(track_id, 'tidal')
+                    service_url = sl_result['tidal_url']
+                    if not service_url:
+                        raise Exception("Tidal URL not available from song.link")
                     downloader = tidal.TidalDownloader()
                     downloader.download(service_url, output_path, quality)
                     download_success = True
                     break
 
                 elif current_service == 'qobuz':
-                    isrc = songlink_client.get_isrc(track_id)
+                    isrc = sl_result['isrc']
                     if not isrc:
-                        raise Exception("ISRC not found - cannot search Qobuz")
+                        raise Exception("ISRC not found — cannot search Qobuz")
                     downloader = qobuz.QobuzDownloader()
                     downloader.download(isrc, output_path, quality)
                     download_success = True
                     break
 
                 elif current_service == 'amazon':
-                    service_url = songlink_client.get_platform_url(track_id, 'amazonMusic')
+                    service_url = sl_result['amazon_url']
+                    if not service_url:
+                        raise Exception("Amazon URL not available from song.link")
                     downloader = amazon.AmazonDownloader()
-                    downloader.download(service_url, output_path)
+                    downloader.download(service_url, output_path, asin=sl_result['amazon_asin'])
                     download_success = True
                     break
 
-                elif current_service == 'spotdl':
-                    if not SPOTDL_AVAILABLE:
-                        raise Exception("SpotDL not installed")
-                    downloader = spotdl.SpotDLDownloader()
-                    format = 'flac' if ext == '.flac' else 'mp3'
-                    downloader.download_with_metadata(music_url, output_path, track_metadata)
+                elif current_service == 'soundcloud':
+                    sc_url = sl_result['soundcloud_url']
+                    if not sc_url:
+                        raise Exception("SoundCloud URL not available from song.link")
+                    out_dir = os.path.dirname(os.path.abspath(output_path))
+                    downloaded = soundcloud.SoundCloudDownloader().download(sc_url, out_dir, 'flac')
+                    if not downloaded:
+                        raise Exception("SoundCloud/yt-dlp returned no file")
+                    downloaded = os.path.abspath(downloaded)
+                    if downloaded != os.path.abspath(output_path):
+                        if os.path.exists(output_path):
+                            os.remove(output_path)
+                        os.rename(downloaded, output_path)
                     download_success = True
                     break
 
@@ -152,14 +132,13 @@ def download(music_url, service, quality, output, template, fallback):
                 last_error = e
                 print(f" {current_service.capitalize()} failed: {e}")
                 if not fallback or current_service == services_to_try[-1]:
-
                     break
                 continue
 
         if not download_success:
             raise Exception(f"All services failed. Last error: {last_error}")
 
-        print("\n[4/4] Embedding metadata...")
+        print("\n[3/3] Embedding metadata...")
         metadata.embed_metadata(output_path, track_metadata)
 
         print("\n" + "=" * 60)
@@ -183,12 +162,7 @@ def download_direct(url, platform, track_id, output_dir, template, quality):
 
         print("\n[1/3] Attempting to fetch Spotify metadata...")
         track_metadata = None
-        try:
-            songlink_client = songlink.SongLinkClient()
-
-            print("  (Skipping - using platform's own metadata)")
-        except:
-            pass
+        print("  (Skipping - using platform's own metadata)")
 
         if not track_metadata:
 

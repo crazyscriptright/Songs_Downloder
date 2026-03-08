@@ -18,7 +18,8 @@ if os.getenv("DYNO"):
     CACHE_FILE = f"/tmp/{_CACHE_FILENAME}"
 else:
     CACHE_FILE = os.path.join(_BACKEND_DIR, _CACHE_FILENAME)
-CACHE_DURATION_HOURS = 2
+
+CACHE_DURATION_MINUTES = 5
 
 class SpotifyClient:
     def __init__(self):
@@ -31,7 +32,7 @@ class SpotifyClient:
         self.session.headers.update({'User-Agent': USER_AGENT})
 
     def load_cache(self):
-        """Load Spotify tokens from music_api_cache.json if still valid (< 2 h)."""
+        """Load Spotify tokens from music_api_cache.json if still valid (< 10 minutes)."""
         try:
             if not os.path.exists(CACHE_FILE):
                 return False
@@ -41,17 +42,17 @@ class SpotifyClient:
                 return False
             entry = cache_data['spotify']
             cached_time = datetime.fromisoformat(entry['timestamp'])
-            expiry_time = cached_time + timedelta(hours=CACHE_DURATION_HOURS)
+            expiry_time = cached_time + timedelta(minutes=CACHE_DURATION_MINUTES)
             if datetime.now() < expiry_time:
                 time_left = expiry_time - datetime.now()
-                hours, remainder = divmod(int(time_left.total_seconds()), 3600)
-                minutes, _ = divmod(remainder, 60)
+
+                mins_left = int(time_left.total_seconds() // 60)
                 self.access_token  = entry['tokens']['access_token']
                 self.client_token  = entry['tokens']['client_token']
                 self.client_id     = entry['tokens']['client_id']
                 self.client_version = entry['tokens']['client_version']
                 self.device_id     = entry['tokens'].get('device_id', '')
-                print(f" Using cached Spotify tokens (expires in {hours}h {minutes}m)")
+                print(f" Using cached Spotify tokens (expires in {mins_left}m)")
                 return True
             else:
                 print(f" Spotify cache expired — refreshing tokens")
@@ -60,28 +61,48 @@ class SpotifyClient:
             print(f" Error loading Spotify cache: {e}")
             return False
 
-    def save_cache(self):
-        """Persist current tokens into music_api_cache.json (atomic, race-condition-safe)."""
+    def clear_cache(self):
+        """Invalidate cached Spotify tokens so next call fetches fresh ones."""
         try:
-            from utils.atomic_write import atomic_json_read_modify_write
+            if os.path.exists(CACHE_FILE):
+                with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+                    cache_data = json.load(f)
+                cache_data.pop('spotify', None)
+                with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(cache_data, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+        self.access_token = None
+        self.client_token = None
+        self.client_id = None
+        self.client_version = None
+        self.device_id = None
 
-            tokens = {
-                'access_token':  self.access_token,
-                'client_token':  self.client_token,
-                'client_id':     self.client_id,
-                'client_version': self.client_version,
-                'device_id':     self.device_id or '',
+    def save_cache(self):
+        """Persist current tokens into music_api_cache.json."""
+        try:
+            cache_data = {}
+            if os.path.exists(CACHE_FILE):
+                try:
+                    with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+                        cache_data = json.load(f)
+                except Exception:
+                    cache_data = {}
+
+            cache_data['spotify'] = {
+                'timestamp': datetime.now().isoformat(),
+                'tokens': {
+                    'access_token':  self.access_token,
+                    'client_token':  self.client_token,
+                    'client_id':     self.client_id,
+                    'client_version': self.client_version,
+                    'device_id':     self.device_id or '',
+                },
             }
 
-            def _updater(cache_data: dict) -> dict:
-                cache_data['spotify'] = {
-                    'timestamp': datetime.now().isoformat(),
-                    'tokens': tokens,
-                }
-                return cache_data
-
-            atomic_json_read_modify_write(CACHE_FILE, _updater, ensure_ascii=False)
-            print(f" Spotify tokens cached (valid for {CACHE_DURATION_HOURS}h)")
+            with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+                json.dump(cache_data, f, ensure_ascii=False, indent=2)
+            print(f" Spotify tokens cached (valid for {CACHE_DURATION_MINUTES}m)")
         except Exception as e:
             print(f" Error saving Spotify cache: {e}")
 
@@ -326,8 +347,6 @@ class SpotifyClient:
             'Spotify-App-Version': self.client_version,
             'Content-Type': 'application/json'
         }
-        print(f"headers: {headers} ")
-
         payload = {
             "variables": {
                 "searchTerm": search_term,
@@ -352,6 +371,17 @@ class SpotifyClient:
         response = self.session.post(SPOTIFY_GRAPHQL_URL, json=payload, headers=headers)
 
         print(f" [Search] Response status: {response.status_code}")
+
+        if response.status_code == 401:
+            print(" [Search] 401 — tokens expired, refreshing and retrying...")
+            self.clear_cache()
+            self.get_client_token()
+            headers['Authorization'] = f'Bearer {self.access_token}'
+            headers['Client-Token'] = self.client_token
+            headers['Spotify-App-Version'] = self.client_version
+            response = self.session.post(SPOTIFY_GRAPHQL_URL, json=payload, headers=headers)
+            print(f" [Search] Retry response status: {response.status_code}")
+
         try:
             resp_json = response.json()
         except Exception:

@@ -482,50 +482,13 @@ def get_jiosaavn_suggestions_by_pid(pid):
     method_used = "api"
 
     try:
-        api_url = f"https://www.jiosaavn.com/api.php?__call=reco.getreco&api_version=4&_format=json&_marker=0&ctx=wap6dot0&pid={pid}&language={language}"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "en-IN,en-US;q=0.9,en;q=0.8",
-            "Origin": "https://www.jiosaavn.com",
-            "Referer": "https://www.jiosaavn.com/",
-            "X-Forwarded-For": "103.21.124.0",
-            "CF-IPCountry": "IN",
-        }
-        resp = requests.get(api_url, headers=headers, timeout=10)
-        if resp.status_code == 200 and len(resp.content) > 10:
-            data = resp.json()
-            if isinstance(data, list) and data:
-                for item in data:
-                    if isinstance(item, dict):
-                        subtitle = item.get("subtitle", "")
-                        artist = subtitle.split(" - ")[0] if " - " in subtitle else "Unknown Artist"
-                        suggestions.append({
-                            "id": item.get("id", ""),
-                            "title": item.get("title", ""),
-                            "artist": artist,
-                            "subtitle": subtitle,
-                            "thumbnail": item.get("image", ""),
-                            "url": item.get("perma_url", ""),
-                            "duration": str(item.get("duration", 0)),
-                            "language": item.get("language", ""),
-                            "type": item.get("type", "song"),
-                            "year": item.get("year", ""),
-                            "play_count": item.get("play_count", 0),
-                        })
+        from integrations.jiosaavn_suggestions_simple import JioSaavnSuggestions
+        scraper = JioSaavnSuggestions()
+        suggestions = scraper.get_suggestions(pid, language, max_results=10)
+        if suggestions:
+            method_used = "artistOtherTopSongs"
     except Exception as e:
-        print(f"JioSaavn API error: {e}")
-
-    if not suggestions:
-        try:
-            from integrations.jiosaavn_suggestions_simple import JioSaavnSuggestions
-            scraper = JioSaavnSuggestions()
-            sel_sugg = scraper._try_selenium(pid, language, max_results=10)
-            if sel_sugg:
-                suggestions = sel_sugg
-                method_used = "selenium"
-        except Exception as e:
-            print(f"Selenium error: {e}")
+        print(f"JioSaavn suggestions error: {e}")
 
     if suggestions:
         return jsonify({"success": True, "pid": pid, "language": language, "suggestions": suggestions, "count": len(suggestions), "method": method_used})

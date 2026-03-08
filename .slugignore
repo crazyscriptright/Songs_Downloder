@@ -1,4 +1,4 @@
-# ─── Python / virtualenv ──────────────────────────────────────────────────────
+
 venv/
 backend/venv/
 **/__pycache__/
@@ -6,35 +6,27 @@ backend/venv/
 **/*.pyo
 **/*.pyd
 
-# ─── Git / CI ─────────────────────────────────────────────────────────────────
 .git/
 .github/
 .gitignore
 
-# ─── Frontend source (built & deployed separately, not needed by Flask) ───────
 spotiflac-frontend/
 frontend/
 
-# ─── Archive / legacy code ────────────────────────────────────────────────────
 backend/old/
 backend/new/
-backend/beta_verion/
 old/
 
-# ─── Dev / scratch files ──────────────────────────────────────────────────────
 backend/requirements copy.txt
 README.md
 *.md
 
-# ─── Runtime-generated cache files (recreated on first run) ───────────────────
 backend/music_api_cache.json
 backend/download_status.json
 
-# ─── Local env / secrets (should never ship) ──────────────────────────────────
 .env
 backend/.env
 
-# ─── Editor / OS noise ────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.DS_Store
