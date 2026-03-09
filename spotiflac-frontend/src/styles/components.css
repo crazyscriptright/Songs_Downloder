@@ -25,6 +25,39 @@
   border-color: var(--accent-color);
 }
 
+/* ── Preview card grid ───────────────────────────────────────────────────── */
+.preview-grid-generic {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 20px;
+  margin-bottom: 24px;
+  align-items: start;
+}
+
+@media (max-width: 640px) {
+  .preview-grid-generic {
+    grid-template-columns: 1fr;
+  }
+  .preview-thumb img,
+  .preview-thumb .lazy-image {
+    max-width: 220px;
+    margin: 0 auto;
+    display: block;
+  }
+}
+
+/* ── Direct download button (URL preview page) ───────────────────────────── */
+.direct-download-btn {
+  padding: 13px 20px;
+  font-size: 1em;
+  letter-spacing: 0.03em;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
 @media (max-width: 768px) {
   .theme-toggle {
     top: 15px;

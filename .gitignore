@@ -34,3 +34,4 @@ music_api_cache.json
 *.dummy.*
 dummy.*
 *.code-workspace
+downloads

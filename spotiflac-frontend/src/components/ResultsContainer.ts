@@ -3,7 +3,6 @@ import { SearchService } from "@/services/SearchService";
 import { YouTubeService } from "@/services/YouTubeService";
 import type {
   DirectUrlInfo,
-  JioSaavnSuggestion,
   PreviewData,
   SearchType,
   Song,
@@ -11,7 +10,6 @@ import type {
   SourceId,
   SourceInfo,
 } from "@/types";
-import { createLazyImageHTML } from "@/utils/imageUtils";
 import { initLazyLoadingForNewImages } from "@/utils/lazyLoader";
 import { convertYouTubeMusicUrl } from "@/utils/urlDetector";
 import {
@@ -19,20 +17,8 @@ import {
   type AdvancedCallback,
   type DownloadCallback,
 } from "./SongCard";
+import { PreviewCard, previewSupported } from "./PreviewCard";
 import { SourceNavigation } from "./SourceNavigation";
-
-/** Returns true when the URL belongs to a source that supports audio preview. */
-function _previewSupported(url: string): boolean {
-  const u = url.toLowerCase();
-  return (
-    u.includes("soundcloud.com") ||
-    u.includes("jiosaavn.com") ||
-    u.includes("saavn.com") ||
-    u.includes("music.youtube.com") ||
-    u.includes("youtube.com/watch") ||
-    u.includes("youtu.be/")
-  );
-}
 
 const PREVIEW_ICON_PLAY =
   '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>';
@@ -212,14 +198,13 @@ export class ResultsContainer {
       <div class="url-result-card" style="background:var(--bg-card);padding:30px;border-radius:15px;border:2px solid var(--accent-color);">
         ${previewHTML}
         ${optionsHTML}
-        <div style="display:flex;gap:10px;align-items:stretch;">
-          <button id="direct-url-download-btn" class="download-btn"
-            style="flex:1;padding:15px;font-size:1.2em;font-weight:bold;"
+        <div id="download-actions-row" style="display:flex;gap:10px;align-items:stretch;">
+          <button id="direct-url-download-btn" class="download-btn direct-download-btn"
             data-url="${processedInfo.url}" data-title="${downloadTitle}">
-            Download Now
+            ⤓ Download Now
           </button>
           ${
-            _previewSupported(processedInfo.url) && !youtubeData?.videoId
+            previewSupported(processedInfo.url) && !youtubeData?.videoId
               ? `
           <button id="direct-url-preview-btn" class="preview-btn"
             data-url="${processedInfo.url}" data-title="${downloadTitle}"
@@ -324,68 +309,7 @@ export class ResultsContainer {
         </div>`;
     }
 
-    if (preview?.soundcloud_data && preview.source === "SoundCloud") {
-      const t = preview.soundcloud_data.main_track;
-      const thumb =
-        t.thumbnail ||
-        'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%23333"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" fill="%23666">\u266A</text></svg>';
-      return `
-        <div style="margin-bottom:30px;">
-          <h3 style="font-size:1.4em;margin-bottom:15px;color:var(--accent-color);border-bottom:2px solid var(--accent-color);padding-bottom:8px;">Main Track</h3>
-          <div style="display:grid;grid-template-columns:200px 1fr;gap:20px;padding:20px;background:var(--bg-secondary);border-radius:12px;">
-            <div><img src="${thumb}" alt="${t.title}" style="width:100%;border-radius:8px;box-shadow:0 4px 15px rgba(0,0,0,0.3);" /></div>
-            <div>
-              <h4 style="font-size:1.3em;margin-bottom:8px;color:var(--text-primary);">${t.title}</h4>
-              <div style="color:var(--text-secondary);margin-bottom:12px;">
-                <p style="margin:3px 0;"><strong>Artist:</strong> ${t.artist}</p>
-                <p style="margin:3px 0;"><strong>Duration:</strong> ${t.duration}</p>
-                <p style="margin:3px 0;"><strong>Plays:</strong> ${t.plays ? t.plays.toLocaleString() : "0"}</p>
-                <p style="margin:3px 0;"><strong>Likes:</strong> ${t.likes ? t.likes.toLocaleString() : "0"}</p>
-                ${t.genre ? `<p style="margin:3px 0;"><strong>Genre:</strong> ${t.genre}</p>` : ""}
-              </div>
-            </div>
-          </div>
-        </div>`;
-    }
-
-    if (preview && !preview.error && preview.thumbnail) {
-      const thumb = preview.thumbnail;
-      return `
-        <div class="preview-grid-generic" style="display:grid;grid-template-columns:320px 1fr;gap:20px;margin-bottom:25px;">
-          <div>${createLazyImageHTML(thumb, "Thumbnail", "lazy-image", "width:100%;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.3);")}</div>
-          <div>
-            <h3 style="font-size:1.6em;margin-bottom:12px;color:var(--text-primary);line-height:1.3;">${preview.title}</h3>
-            <div style="color:var(--text-secondary);margin-bottom:15px;">
-              <p style="margin:5px 0;"><strong>Artist:</strong> ${preview.uploader || preview.channel || "Unknown"}</p>
-              ${preview.album ? `<p style="margin:5px 0;"><strong>Album:</strong> ${preview.album}</p>` : ""}
-              ${preview.language ? `<p style="margin:5px 0;"><strong>Language:</strong> ${preview.language}</p>` : ""}
-              ${preview.duration ? `<p style="margin:5px 0;"><strong>Duration:</strong> ${preview.duration}</p>` : ""}
-              ${preview.plays ? `<p style="margin:5px 0;"><strong>Plays:</strong> ${preview.plays.toLocaleString()}</p>` : ""}
-              ${preview.likes ? `<p style="margin:5px 0;"><strong>Likes:</strong> ${preview.likes.toLocaleString()}</p>` : ""}
-              ${preview.genre ? `<p style="margin:5px 0;"><strong>Genre:</strong> ${preview.genre}</p>` : ""}
-              <p style="margin:5px 0;"><strong>Source:</strong> ${preview.source || processedInfo.source}</p>
-            </div>
-          </div>
-        </div>`;
-    }
-
-    if (preview && !preview.error) {
-      return `
-        <div style="margin-bottom:20px;">
-          <h3 style="font-size:1.6em;margin-bottom:12px;color:var(--text-primary);">${preview.title}</h3>
-          <p style="color:var(--text-secondary);margin:5px 0;"><strong>Artist:</strong> ${preview.uploader || preview.channel || "Unknown"}</p>
-          ${preview.album ? `<p style="color:var(--text-secondary);margin:5px 0;"><strong>Album:</strong> ${preview.album}</p>` : ""}
-          ${preview.duration ? `<p style="color:var(--text-secondary);margin:5px 0;"><strong>Duration:</strong> ${preview.duration}</p>` : ""}
-          <p style="color:var(--text-secondary);margin:5px 0;"><strong>Source:</strong> ${preview.source || processedInfo.source}</p>
-        </div>`;
-    }
-
-    return `
-      <div style="margin-bottom:20px;">
-        <h3 style="font-size:1.8em;margin-bottom:10px;color:var(--accent-color);">URL Validated</h3>
-        <p style="color:var(--text-secondary);font-size:1.1em;"><strong>Source:</strong> ${processedInfo.source}</p>
-        <p style="color:var(--text-tertiary);font-size:0.9em;word-break:break-all;">${processedInfo.url}</p>
-      </div>`;
+    return PreviewCard.buildHTML(preview, processedInfo);
   }
 
   private buildOptionsHTML(urlMode: SearchType, info: DirectUrlInfo): string {
@@ -583,15 +507,11 @@ export class ResultsContainer {
         return;
       }
 
-      container.innerHTML = `
-        <h3 style="font-size:1.4em;margin-bottom:15px;color:var(--info-color);border-bottom:2px solid var(--info-color);padding-bottom:8px;">
-          Recommended Tracks (${suggestions.length})
-        </h3>
-        <div class="recommended-tracks-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:15px;">
-          ${suggestions.map((s: JioSaavnSuggestion) => this.buildRecommendationCard(s)).join("")}
-        </div>`;
-
-      this.wireRecommendationPreviews(container as HTMLElement);
+      container.innerHTML = PreviewCard.buildRecommendationsHTML(suggestions);
+      PreviewCard.wireRecommendationPreviews(
+        container as HTMLElement,
+        (url, title, card, btn) => PreviewService.play(url, title, card, btn),
+      );
       setTimeout(() => initLazyLoadingForNewImages(), 0);
     } catch {
       const c = section.querySelector("#jiosaavn-suggestions-container");
@@ -603,89 +523,22 @@ export class ResultsContainer {
     tracks: SoundCloudTrack[],
     section: HTMLElement,
   ): void {
-    const html = `
-      <div style="margin:25px 0;">
-        <h3 style="font-size:1.4em;margin-bottom:15px;color:var(--info-color);border-bottom:2px solid var(--info-color);padding-bottom:8px;">
-          Recommended Tracks (${tracks.length})
-        </h3>
-        <div class="recommended-tracks-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:15px;">
-          ${tracks.map((t) => this.buildRecommendationCard(t)).join("")}
-        </div>
-      </div>`;
-
-    const btn = section.querySelector("#direct-url-download-btn");
-    if (btn) {
-      btn.insertAdjacentHTML("afterend", html);
-      // wire previews after the new HTML is in the DOM
-      const grid = section.querySelector(
-        ".recommended-tracks-grid:last-of-type",
-      )?.parentElement;
-      if (grid) this.wireRecommendationPreviews(grid as HTMLElement);
+    const html = PreviewCard.buildRecommendationsHTML(tracks);
+    // Insert after the download-actions-row div (not the button inside it)
+    // to avoid making the recs a flex item inside the button row
+    const actionsRow = section.querySelector("#download-actions-row");
+    if (actionsRow) {
+      actionsRow.insertAdjacentHTML("afterend", html);
+      const grid = section.querySelector(".recommendations-section:last-of-type");
+      if (grid)
+        PreviewCard.wireRecommendationPreviews(
+          grid as HTMLElement,
+          (url, title, card, b) => PreviewService.play(url, title, card, b),
+        );
     }
   }
 
-  private buildRecommendationCard(track: {
-    title: string;
-    artist: string;
-    url: string;
-    thumbnail?: string;
-    duration?: string;
-    plays?: number;
-  }): string {
-    const hasThumb =
-      track.thumbnail &&
-      track.thumbnail.trim() !== "" &&
-      track.thumbnail !== "null";
-    const thumbHTML = hasThumb
-      ? `<img src="${track.thumbnail}" alt="${track.title}" loading="lazy" style="width:60px;height:60px;border-radius:6px;object-fit:cover;" />`
-      : '<div style="width:60px;height:60px;border-radius:6px;background:var(--bg-secondary);display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:24px;">\u266A</div>';
 
-    const safeTitle = track.title.replace(/'/g, "\\'");
-    const btnId = `rec-btn-${Math.random().toString(36).slice(2, 8)}`;
-    const prevBtnId = `rec-prev-${Math.random().toString(36).slice(2, 8)}`;
-    const showPreview = _previewSupported(track.url);
-
-    // We'll bind events after insertion
-    return `
-      <div class="recommended-track-card" style="background:var(--bg-card);border-radius:10px;padding:15px;border:1px solid var(--border-color);">
-        <div style="display:flex;gap:12px;">
-          <div style="flex-shrink:0;">${thumbHTML}</div>
-          <div style="flex:1;min-width:0;">
-            <h5 style="font-size:1em;margin-bottom:4px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${track.title}</h5>
-            <p style="font-size:0.85em;color:var(--text-secondary);margin-bottom:6px;">${track.artist}</p>
-            <div style="font-size:0.75em;color:var(--text-tertiary);margin-bottom:8px;">
-              ${track.duration || ""} ${track.plays ? "\u2022 " + track.plays.toLocaleString() + " plays" : ""}
-            </div>
-            <div style="display:flex;gap:6px;">
-              <button class="download-btn rec-download" id="${btnId}" data-url="${track.url}" data-title="${safeTitle}"
-                style="padding:6px 10px;font-size:0.85em;">Download</button>
-              ${
-                showPreview
-                  ? `<button class="preview-btn rec-preview" id="${prevBtnId}" data-url="${track.url}" data-title="${safeTitle}"
-                title="Preview" style="padding:6px 10px;">${PREVIEW_ICON_PLAY}</button>`
-                  : ""
-              }
-            </div>
-          </div>
-        </div>
-      </div>`;
-  }
-
-  /** Wire all .rec-preview buttons inside a container after DOM insertion. */
-  private wireRecommendationPreviews(container: HTMLElement): void {
-    container
-      .querySelectorAll<HTMLButtonElement>(".rec-preview")
-      .forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const url = btn.dataset.url!;
-          const title = btn.dataset.title!;
-          const cardEl =
-            (btn.closest(".recommended-track-card") as HTMLElement) ??
-            (btn.parentElement as HTMLElement);
-          PreviewService.play(url, title, cardEl, btn);
-        });
-      });
-  }
 
   /* ---------------------------------------------------------------- */
   /* Interactive wiring helpers                                        */
