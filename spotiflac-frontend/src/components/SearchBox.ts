@@ -62,7 +62,7 @@ export class SearchBox {
       if (isMusicUrl(q)) {
         this.queryHint.className = "query-hint url-detected";
         this.queryHint.innerHTML =
-          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;margin-right:5px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>Music URL detected! Click search to download.';
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;margin-right:5px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>Music URL detected — Spotify, Tidal, Qobuz, Amazon, Deezer, Apple Music, YouTube &amp; more supported. Click search to download.';
         this.hideSuggestions();
       } else if (isAnyUrl(q)) {
         this.queryHint.className = "query-hint";
@@ -74,7 +74,7 @@ export class SearchBox {
         this.queryHint.className = "query-hint";
         this.queryHint.style.color = "";
         this.queryHint.innerHTML =
-          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;margin-right:5px;"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>Search by name or paste a music URL';
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;margin-right:5px;"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>Search by name or paste a URL — Spotify · Tidal · Qobuz · Amazon Music · Deezer · Apple Music · YouTube · SoundCloud';
         debouncedFetch(q);
       }
     });

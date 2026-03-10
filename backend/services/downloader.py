@@ -25,6 +25,275 @@ def _safe_title(title: str) -> str:
     return re.sub(r'[<>:"/\\|?*]', "_", title)
 
 
+# ── SpotiFLAC core integration ─────────────────────────────────────────────────
+
+# yt-dlp audioQuality "0"=best … "9"=worst
+_MP3_VBR    = {"0": 0, "2": 2, "5": 5, "9": 9}          # ffmpeg -q:a (0=best)
+_AAC_VBR    = {"0": 5, "2": 4, "5": 3, "9": 1}          # ffmpeg -vbr  (5=best)
+_OGG_VBR    = {"0": 10, "2": 8, "5": 6, "9": 3}         # ffmpeg -q:a  (10=best)
+_OPUS_KBPS  = {"0": "320k", "2": "256k", "5": "192k", "9": "128k"}
+_WAV_KBPS   = {}                                          # lossless – no bitrate
+
+def _converter_quality_kwargs(audio_format: str, audio_quality: str) -> dict:
+    """
+    Map yt-dlp audioQuality string → AudioConverter keyword arguments.
+    Falls back gracefully for unknown quality values.
+    """
+    q = str(audio_quality) if audio_quality in {"0", "2", "5", "9"} else "0"
+    fmt = audio_format.lower()
+
+    if fmt == "mp3":
+        return {"vbr_quality": _MP3_VBR.get(q, 0)}
+    if fmt in ("aac", "m4a"):
+        return {"vbr_quality": _AAC_VBR.get(q, 5)}
+    if fmt == "ogg":
+        return {"vbr_quality": _OGG_VBR.get(q, 10)}
+    if fmt == "opus":
+        return {"bitrate": _OPUS_KBPS.get(q, "320k")}
+    if fmt in ("flac", "wav"):
+        return {}                                   # lossless – no quality setting
+    return {"bitrate": "320k"}                      # safe default
+
+def download_with_spoflac(url: str, title: str, download_id: str, advanced_options=None) -> None:
+    """
+    Download Spotify URL using the spoflac_core (Tidal/Qobuz/Amazon/SoundCloud).
+
+    This function provides FLAC quality downloads from premium services.
+    Progress is written to state.download_status[download_id].
+    """
+    try:
+        from spoflac_core.modules import url_resolver, utils
+        from spoflac_core.modules import tidal, qobuz, amazon, soundcloud, metadata
+        
+        print(f"\n{'='*70}")
+        print(f"🎵 SpotiFLAC Download Mode")
+        print(f"   URL: {url}")
+        print(f"   Title: {title}")
+        print(f"{'='*70}\n")
+
+        state.download_status[download_id].update(
+            status="downloading",
+            progress=5,
+            eta="Resolving URL and fetching metadata...",
+            speed="Initializing",
+        )
+        state.save_download_status()
+
+        # Get quality from advanced options (default to HI_RES)
+        quality = advanced_options.get("audioQuality", "HI_RES") if advanced_options else "HI_RES"
+        if quality == "0":
+            quality = "HI_RES"
+        
+        # Resolve URL and get metadata
+        print("[1/3] Resolving URL and fetching metadata...")
+        resolver = url_resolver.URLResolver()
+        resolved = resolver.resolve(url)
+        track_metadata = resolved['metadata']
+        sl_result = resolved['sl_result']
+        detected_platform = resolved['source_platform']
+
+        print(f"  Platform : {detected_platform}")
+        print(f"  Metadata : {resolved['metadata_source']}")
+        print(f"  Title    : {track_metadata['title']}")
+        print(f"  Artist   : {track_metadata['artist']}")
+        print(f"  Album    : {track_metadata['album']}")
+
+        state.download_status[download_id].update(
+            progress=15,
+            eta="Preparing download...",
+            title=f"{track_metadata['artist']} - {track_metadata['title']}",
+        )
+        state.save_download_status()
+
+        # Determine service order (Tidal -> Qobuz -> Amazon -> SoundCloud)
+        print("\n[2/3] Preparing download via premium services...")
+        
+        # Setup output path
+        download_dir = os.path.join(config.DOWNLOAD_FOLDER, download_id)
+        os.makedirs(download_dir, exist_ok=True)
+        
+        # Determine extension based on service
+        ext = '.flac'  # Default for most services
+        filename = utils.build_filename(track_metadata, '{artist} - {title}', ext)
+        output_path = os.path.join(download_dir, filename)
+
+        state.download_status[download_id].update(
+            progress=25,
+            eta="Attempting download...",
+            speed="Connecting",
+        )
+        state.save_download_status()
+
+        # Try services in order
+        services_to_try = [
+            ('tidal', sl_result.get('tidal_url')),
+            ('qobuz', sl_result.get('isrc')),
+            ('amazon', sl_result.get('amazon_url')),
+            ('soundcloud', sl_result.get('soundcloud_url')),
+        ]
+
+        download_success = False
+        last_error = None
+
+        for service_name, service_data in services_to_try:
+            if not service_data:
+                print(f"  Skipping {service_name.capitalize()} - no data available")
+                continue
+
+            try:
+                print(f"\n[3/3] Downloading from {service_name.capitalize()}...")
+                
+                state.download_status[download_id].update(
+                    progress=40,
+                    eta=f"Downloading from {service_name.capitalize()}...",
+                    speed=f"{service_name.capitalize()}",
+                )
+                state.save_download_status()
+
+                if service_name == 'tidal':
+                    downloader = tidal.TidalDownloader()
+                    downloader.download(service_data, output_path, quality)
+                    download_success = True
+                    break
+
+                elif service_name == 'qobuz':
+                    downloader = qobuz.QobuzDownloader()
+                    downloader.download(service_data, output_path, quality)
+                    download_success = True
+                    break
+
+                elif service_name == 'amazon':
+                    # Amazon outputs .m4a
+                    ext = '.m4a'
+                    filename = utils.build_filename(track_metadata, '{artist} - {title}', ext)
+                    output_path = os.path.join(download_dir, filename)
+                    
+                    downloader = amazon.AmazonDownloader()
+                    downloader.download(service_data, output_path, asin=sl_result.get('amazon_asin'))
+                    download_success = True
+                    break
+
+                elif service_name == 'soundcloud':
+                    downloader = soundcloud.SoundCloudDownloader()
+                    downloaded = downloader.download(service_data, download_dir, 'flac')
+                    if downloaded:
+                        downloaded = os.path.abspath(downloaded)
+                        if downloaded != os.path.abspath(output_path):
+                            if os.path.exists(output_path):
+                                os.remove(output_path)
+                            os.rename(downloaded, output_path)
+                        download_success = True
+                        break
+
+            except Exception as e:
+                last_error = e
+                print(f"  {service_name.capitalize()} failed: {e}")
+                continue
+
+        if not download_success:
+            raise Exception(f"All services failed. Last error: {last_error}")
+
+        # Update progress to embedding metadata
+        state.download_status[download_id].update(
+            progress=85,
+            eta="Embedding metadata...",
+            speed="Processing",
+        )
+        state.save_download_status()
+
+        print("\n[4/5] Embedding metadata...")
+        metadata.embed_metadata(output_path, track_metadata)
+
+        # ── Post-download format conversion ───────────────────────────────────
+        req_format   = ((advanced_options or {}).get("audioFormat") or "flac").lower()
+        req_quality  = str((advanced_options or {}).get("audioQuality", "0"))
+        embed_thumb  = (advanced_options or {}).get("embedThumbnail", True)
+        downloaded_ext = os.path.splitext(output_path)[1].lstrip(".").lower()  # flac / m4a
+
+        # Convert only when the downloaded format differs from what was requested,
+        # and only when the target format is actually supported by AudioConverter.
+        _SUPPORTED_CONVERT_FMTS = {"mp3", "aac", "m4a", "ogg", "opus", "flac", "wav"}
+        needs_conversion = (
+            req_format in _SUPPORTED_CONVERT_FMTS
+            and req_format != downloaded_ext
+            # Don't convert lossy → lossless (pointless quality-wise)
+            and not (downloaded_ext in ("m4a",) and req_format == "flac")
+        )
+
+        if needs_conversion:
+            try:
+                from spoflac_core.modules.audio_converter import AudioConverter
+
+                converted_filename = os.path.splitext(os.path.basename(output_path))[0] + f".{req_format}"
+                converted_path = os.path.join(os.path.dirname(output_path), converted_filename)
+
+                print(f"\n[5/5] Converting {downloaded_ext.upper()} → {req_format.upper()}  (quality={req_quality})...")
+
+                state.download_status[download_id].update(
+                    progress=90,
+                    eta=f"Converting to {req_format.upper()}...",
+                    speed="Converting",
+                )
+                state.save_download_status()
+
+                quality_kwargs = _converter_quality_kwargs(req_format, req_quality)
+                converter = AudioConverter()
+                converter.convert(
+                    output_path,
+                    converted_path,
+                    req_format,
+                    preserve_metadata=True,   # keeps embedded art + tags
+                    overwrite=True,
+                    **quality_kwargs,
+                )
+
+                # Remove the intermediate FLAC/M4A source
+                try:
+                    os.remove(output_path)
+                except OSError:
+                    pass
+
+                output_path = converted_path
+                print(f"  Converted → {os.path.basename(output_path)}")
+
+            except Exception as conv_exc:
+                # Conversion failed — serve the raw FLAC/M4A instead
+                print(f"⚠️  Conversion to {req_format.upper()} failed: {conv_exc} — keeping {downloaded_ext.upper()}")
+        else:
+            print(f"\n[5/5] No conversion needed ({downloaded_ext.upper()} matches requested format or target is lossless.)")
+
+        # ── Final success status ──────────────────────────────────────────────
+        file_size = os.path.getsize(output_path) / (1024 * 1024)
+        print(f"\n{'='*60}")
+        print(f"✅ Download complete!")
+        print(f"  File: {os.path.basename(output_path)}")
+        print(f"  Size: {file_size:.2f} MB")
+        print(f"{'='*60}\n")
+
+        state.download_status[download_id].update(
+            status="complete",
+            progress=100,
+            file=os.path.basename(output_path),
+            speed="Complete",
+            eta="0:00",
+            completed_at=datetime.now().isoformat(),
+        )
+        state.save_download_status()
+
+    except Exception as exc:
+        print(f"\n❌ SpotiFLAC download failed: {exc}")
+        state.download_status[download_id].update(
+            status="error",
+            progress=0,
+            error=f"SpotiFLAC download failed: {exc}",
+            speed="0 KB/s",
+            eta="N/A",
+            failed_at=datetime.now().isoformat(),
+        )
+        state.save_download_status()
+        raise
+
+
 # ── Proxy API fallback ─────────────────────────────────────────────────────────
 
 def download_with_proxy_api(url: str, title: str, download_id: str, advanced_options=None) -> None:
@@ -127,15 +396,107 @@ def download_with_proxy_api(url: str, title: str, download_id: str, advanced_opt
 
 # ── yt-dlp core download ───────────────────────────────────────────────────────
 
+def _detect_spoflac_platform(url: str) -> str | None:
+    """
+    Return the platform name if the URL should be routed to SpotiFLAC,
+    or None if yt-dlp should handle it directly.
+
+    yt-dlp handles natively (returns None — no SpotiFLAC involvement):
+        youtube.com, youtu.be, music.youtube.com, soundcloud.com,
+        jiosaavn.com, saavn.com
+
+    SpotiFLAC only — no yt-dlp fallback (SpotiFLAC has its own
+    internal Tidal → Qobuz → Amazon → SoundCloud fallback chain):
+        spotify, tidal, qobuz, amazon music, deezer, apple music,
+        and any other URL not covered by yt-dlp above.
+    """
+    url_lower = url.lower()
+
+    # ── yt-dlp-native: return None so they bypass SpotiFLAC entirely ──────────
+    if 'music.youtube.com' in url_lower:
+        return None
+    if 'youtube.com' in url_lower or 'youtu.be' in url_lower:
+        return None
+    if 'soundcloud.com' in url_lower:
+        return None
+    if 'jiosaavn.com' in url_lower or 'saavn.com' in url_lower:
+        return None
+
+    # ── SpotiFLAC platforms ───────────────────────────────────────────────────
+    if 'spotify.com' in url_lower or url.startswith('spotify:'):
+        return 'spotify'
+    if 'tidal.com' in url_lower:
+        return 'tidal'
+    if 'qobuz.com' in url_lower:
+        return 'qobuz'
+    if 'music.amazon' in url_lower or ('amazon.com' in url_lower and 'music' in url_lower):
+        return 'amazon'
+    if 'deezer.com' in url_lower:
+        return 'deezer'
+    if 'music.apple.com' in url_lower or 'itunes.apple.com' in url_lower:
+        return 'appleMusic'
+
+    # Catch-all: any other URL → SpotiFLAC (no yt-dlp fallback)
+    return 'unknown'
+
+
 def download_song(url: str, title: str, download_id: str, advanced_options=None) -> None:
     """
-    Download *url* to disk using yt-dlp.
+    Download *url* to disk.
+
+    Routing logic:
+      - Spotify / Tidal / Qobuz / Amazon / Deezer / Apple Music / unknown
+            → SpotiFLAC only (internal fallback: Tidal→Qobuz→Amazon→SoundCloud)
+            → NO yt-dlp fallback
+      - YouTube / YouTube Music / SoundCloud / JioSaavn
+            → yt-dlp directly (unchanged original behaviour)
 
     Progress is written into ``state.download_status[download_id]`` in
-    real-time.  If yt-dlp fails for YouTube URLs and a proxy API key is
-    configured, falls back to ``download_with_proxy_api()``.
+    real-time.
     """
     from state import download_status, active_processes, save_download_status
+
+    # ── SpotiFLAC route ───────────────────────────────────────────────────────
+    platform = _detect_spoflac_platform(url)
+
+    if platform is not None:
+        audio_format = (advanced_options or {}).get("audioFormat", "flac")
+
+        _PLATFORM_LABELS = {
+            'spotify':    'Spotify',
+            'tidal':      'Tidal',
+            'qobuz':      'Qobuz',
+            'amazon':     'Amazon Music',
+            'deezer':     'Deezer',
+            'appleMusic': 'Apple Music',
+            'unknown':    'Unknown (catch-all)',
+        }
+        label = _PLATFORM_LABELS.get(platform, platform)
+
+        print(f"\n{'='*70}")
+        print(f"🎵 SpotiFLAC route  →  {label}")
+        print(f"   URL     : {url}")
+        print(f"   Format  : {audio_format}")
+        print(f"   Strategy: SpotiFLAC internal chain (Tidal→Qobuz→Amazon→SC) — no yt-dlp fallback")
+        print(f"{'='*70}\n")
+
+        download_status[download_id] = _initial_status(title, url, advanced_options, "downloading")
+        save_download_status()
+
+        try:
+            download_with_spoflac(url, title, download_id, advanced_options)
+        except Exception as exc:
+            print(f"⚠️  SpotiFLAC failed for {label}: {exc}")
+            download_status[download_id].update(
+                status="error",
+                progress=0,
+                error=f"SpotiFLAC failed: {exc}",
+                speed="0 KB/s",
+                eta="N/A",
+                failed_at=datetime.now().isoformat(),
+            )
+            save_download_status()
+        return  # never falls through to yt-dlp
 
     # ── Proxy-API-only mode (testing flag) ────────────────────────────────────
     if config.FORCE_PROXY_API and ("youtube.com" in url or "youtu.be" in url):
@@ -155,7 +516,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
             save_download_status()
             return
 
-    # ── Normal yt-dlp path ────────────────────────────────────────────────────
+    # ── Normal yt-dlp path (YouTube / YT Music / SoundCloud / JioSaavn) ────────
     state.cleanup_tmp_directory()
 
     download_status[download_id] = _initial_status(title, url, advanced_options, "downloading")

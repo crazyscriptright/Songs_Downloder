@@ -36,8 +36,8 @@ export default function Home() {
     <>
       <div className="header">
         <p>
-          Download high-quality music from YouTube, SoundCloud, JioSaavn &amp;
-          more
+          Download high-quality music from Spotify, Tidal, Qobuz, Amazon Music,
+          Deezer, Apple Music, YouTube, SoundCloud &amp; more
           <br />
           <Link
             to="/bulk"
@@ -74,7 +74,7 @@ export default function Home() {
           <input
             type="text"
             id="searchInput"
-            placeholder="Enter song name, artist, or paste URL..."
+            placeholder="Song name, artist, or paste a Spotify / Tidal / Qobuz / Amazon / Deezer / Apple Music / YouTube URL..."
             autoComplete="off"
           />
           <div id="searchSuggestions" className="search-suggestions" />
@@ -86,8 +86,8 @@ export default function Home() {
 
         <div id="queryHint" className="query-hint">
           <IoHelpCircleOutline size={16} />
-          Search by name or paste a music URL (YouTube, SoundCloud, JioSaavn
-          etc.)
+          Search by name or paste a URL — Spotify · Tidal · Qobuz · Amazon Music
+          · Deezer · Apple Music · YouTube · SoundCloud · JioSaavn
         </div>
       </div>
 
