@@ -1,6 +1,6 @@
 /** Regex pattern matching supported music platform URLs */
 const MUSIC_URL_PATTERN =
-  /youtube\.com\/watch|youtu\.be\/|music\.youtube\.com|jiosaavn\.com\/|saavn\.com\/|soundcloud\.com\/|spotify\.com\/|tidal\.com\/|qobuz\.com\/|music\.amazon\.|deezer\.com\/|music\.apple\.com|itunes\.apple\.com|gaana\.com\/|wynk\.in\//i;
+  /youtube\.com\/watch|youtu\.be\/|music\.youtube\.com|jiosaavn\.com\/|saavn\.com\/|soundcloud\.com\/|spotify\.com\/|tidal\.com\/|qobuz\.com\/|music\.amazon\.|deezer\.com\/|music\.apple\.com|itunes\.apple\.com\//i;
 
 /** Regex pattern matching any HTTP(S) URL */
 const ANY_URL_PATTERN = /https?:\/\/|www\./i;

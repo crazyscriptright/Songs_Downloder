@@ -55,6 +55,9 @@ def embed_flac_metadata(filepath, metadata, cover_path=None):
             audio['ISRC'] = metadata['isrc']
         if metadata.get('lyrics'):
             audio['LYRICS'] = metadata['lyrics']
+            print(f" [metadata] Lyrics embedded into FLAC ({len(metadata['lyrics'])} chars)")
+        else:
+            print(" [metadata] No lyrics to embed (FLAC)")
 
         audio['DESCRIPTION'] = 'Downloaded with  Python -'
 
@@ -100,6 +103,9 @@ def embed_mp3_metadata(filepath, metadata, cover_path=None):
 
         if metadata.get('lyrics'):
             audio.add(USLT(encoding=3, lang='eng', desc='', text=metadata['lyrics']))
+            print(f" [metadata] Lyrics embedded into MP3 ({len(metadata['lyrics'])} chars)")
+        else:
+            print(" [metadata] No lyrics to embed (MP3)")
 
         if cover_path and os.path.exists(cover_path):
             with open(cover_path, 'rb') as f:
@@ -142,6 +148,12 @@ def embed_m4a_metadata(filepath, metadata, cover_path=None):
                 image_data = f.read()
 
             audio['covr'] = [MP4Cover(image_data, imageformat=MP4Cover.FORMAT_JPEG)]
+
+        if metadata.get('lyrics'):
+            audio['\xa9lyr'] = metadata['lyrics']
+            print(f" [metadata] Lyrics embedded into M4A ({len(metadata['lyrics'])} chars)")
+        else:
+            print(" [metadata] No lyrics to embed (M4A)")
 
         audio.save()
         print(" M4A metadata embedded")

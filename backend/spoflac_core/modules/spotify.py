@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timedelta
 from config import (
     SPOTIFY_TOKEN_URL, SPOTIFY_HOME_URL, SPOTIFY_CLIENT_TOKEN_URL,
-    SPOTIFY_GRAPHQL_URL, TOTP_SECRET_V61, USER_AGENT
+    SPOTIFY_GRAPHQL_URL, SPOTIFY_LYRICS_URL, TOTP_SECRET_V61, USER_AGENT
 )
 
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -324,6 +324,66 @@ class SpotifyClient:
 
         except (KeyError, IndexError) as e:
             raise Exception(f"Failed to parse track data: {e}\nData structure: {json.dumps(data, indent=2)[:500]}")
+
+    def get_lyrics(self, track_id: str) -> str | None:
+        """
+        Fetch lyrics from Spotify's color-lyrics API (requires an authenticated
+        web-player session with a premium/lyrics-enabled account).
+
+        Returns a plain-text string or None on failure.
+        The caller should fall back to lrclib.net if this returns None.
+        """
+        if not self.client_token:
+            self.get_client_token()
+
+        url = SPOTIFY_LYRICS_URL.format(track_id=track_id)
+        headers = {
+            'Authorization': f'Bearer {self.access_token}',
+            'Client-Token': self.client_token,
+            'Spotify-App-Version': self.client_version,
+            'app-platform': 'WebPlayer',
+        }
+
+        print(f" [lyrics/spotify] Requesting: {url}")
+        try:
+            response = self.session.get(url, headers=headers, timeout=10)
+        except Exception as exc:
+            print(f" [lyrics/spotify] Request error: {exc}")
+            return None
+
+        print(f" [lyrics/spotify] HTTP {response.status_code}")
+        if response.status_code == 404:
+            print(f" [lyrics/spotify] Track has no lyrics on Spotify (404)")
+            return None
+        if response.status_code != 200:
+            # Log a snippet of the response body to help diagnose auth errors
+            print(f" [lyrics/spotify] Failed — response: {response.text[:200]}")
+            return None
+
+        try:
+            data = response.json()
+        except Exception as exc:
+            print(f" [lyrics/spotify] Failed to parse JSON: {exc} — body: {response.text[:200]}")
+            return None
+
+        lines = data.get('lyrics', {}).get('lines', [])
+        if not lines:
+            print(f" [lyrics/spotify] Empty lines list — no lyrics in response")
+            return None
+
+        text_lines = []
+        for line in lines:
+            words = (line.get('words') or '').strip()
+            if words and words not in ('♪', '\u266a', ''):
+                text_lines.append(words)
+
+        if not text_lines:
+            print(f" [lyrics/spotify] All lines were empty/instrumental markers")
+            return None
+
+        lyrics_text = '\n'.join(text_lines)
+        print(f" [lyrics/spotify] ✅ Got {len(text_lines)} lines ({len(lyrics_text)} chars)")
+        return lyrics_text
 
     def get_search_results(self, data):
         """get search results to extract track metadata"""

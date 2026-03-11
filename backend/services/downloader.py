@@ -56,20 +56,13 @@ def _converter_quality_kwargs(audio_format: str, audio_quality: str) -> dict:
 
 def download_with_spoflac(url: str, title: str, download_id: str, advanced_options=None) -> None:
     """
-    Download Spotify URL using the spoflac_core (Tidal/Qobuz/Amazon/SoundCloud).
-
-    This function provides FLAC quality downloads from premium services.
-    Progress is written to state.download_status[download_id].
+    Download via spoflac_core (Tidal/Qobuz/Amazon/SoundCloud fallback chain).
+    Resolves URL, fetches metadata + lyrics, downloads FLAC, embeds tags,
+    and optionally converts to the requested format.
     """
     try:
         from spoflac_core.modules import url_resolver, utils
         from spoflac_core.modules import tidal, qobuz, amazon, soundcloud, metadata
-        
-        print(f"\n{'='*70}")
-        print(f"🎵 SpotiFLAC Download Mode")
-        print(f"   URL: {url}")
-        print(f"   Title: {title}")
-        print(f"{'='*70}\n")
 
         state.download_status[download_id].update(
             status="downloading",
@@ -79,24 +72,16 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
         )
         state.save_download_status()
 
-        # Get quality from advanced options (default to HI_RES)
         quality = advanced_options.get("audioQuality", "HI_RES") if advanced_options else "HI_RES"
         if quality == "0":
             quality = "HI_RES"
-        
-        # Resolve URL and get metadata
-        print("[1/3] Resolving URL and fetching metadata...")
+
         resolver = url_resolver.URLResolver()
         resolved = resolver.resolve(url)
         track_metadata = resolved['metadata']
         sl_result = resolved['sl_result']
-        detected_platform = resolved['source_platform']
 
-        print(f"  Platform : {detected_platform}")
-        print(f"  Metadata : {resolved['metadata_source']}")
-        print(f"  Title    : {track_metadata['title']}")
-        print(f"  Artist   : {track_metadata['artist']}")
-        print(f"  Album    : {track_metadata['album']}")
+        print(f" SpotiFLAC: {track_metadata['artist']} - {track_metadata['title']} | lyrics={'yes' if track_metadata.get('lyrics') else 'no'}")
 
         state.download_status[download_id].update(
             progress=15,
@@ -105,15 +90,10 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
         )
         state.save_download_status()
 
-        # Determine service order (Tidal -> Qobuz -> Amazon -> SoundCloud)
-        print("\n[2/3] Preparing download via premium services...")
-        
-        # Setup output path
         download_dir = os.path.join(config.DOWNLOAD_FOLDER, download_id)
         os.makedirs(download_dir, exist_ok=True)
-        
-        # Determine extension based on service
-        ext = '.flac'  # Default for most services
+
+        ext = '.flac'
         filename = utils.build_filename(track_metadata, '{artist} - {title}', ext)
         output_path = os.path.join(download_dir, filename)
 
@@ -141,8 +121,8 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
                 continue
 
             try:
-                print(f"\n[3/3] Downloading from {service_name.capitalize()}...")
-                
+                print(f" Downloading from {service_name}...")
+
                 state.download_status[download_id].update(
                     progress=40,
                     eta=f"Downloading from {service_name.capitalize()}...",
@@ -201,7 +181,6 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
         )
         state.save_download_status()
 
-        print("\n[4/5] Embedding metadata...")
         metadata.embed_metadata(output_path, track_metadata)
 
         # ── Post-download format conversion ───────────────────────────────────
@@ -227,7 +206,7 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
                 converted_filename = os.path.splitext(os.path.basename(output_path))[0] + f".{req_format}"
                 converted_path = os.path.join(os.path.dirname(output_path), converted_filename)
 
-                print(f"\n[5/5] Converting {downloaded_ext.upper()} → {req_format.upper()}  (quality={req_quality})...")
+                print(f" Converting {downloaded_ext.upper()} → {req_format.upper()} (quality={req_quality})")
 
                 state.download_status[download_id].update(
                     progress=90,
@@ -254,21 +233,16 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
                     pass
 
                 output_path = converted_path
-                print(f"  Converted → {os.path.basename(output_path)}")
+                print(f" Converted → {os.path.basename(output_path)}")
 
             except Exception as conv_exc:
-                # Conversion failed — serve the raw FLAC/M4A instead
-                print(f"⚠️  Conversion to {req_format.upper()} failed: {conv_exc} — keeping {downloaded_ext.upper()}")
+                print(f" Conversion to {req_format.upper()} failed: {conv_exc} — keeping {downloaded_ext.upper()}")
         else:
-            print(f"\n[5/5] No conversion needed ({downloaded_ext.upper()} matches requested format or target is lossless.)")
+            pass  # formats match
 
         # ── Final success status ──────────────────────────────────────────────
         file_size = os.path.getsize(output_path) / (1024 * 1024)
-        print(f"\n{'='*60}")
-        print(f"✅ Download complete!")
-        print(f"  File: {os.path.basename(output_path)}")
-        print(f"  Size: {file_size:.2f} MB")
-        print(f"{'='*60}\n")
+        print(f" SpotiFLAC done: {os.path.basename(output_path)} ({file_size:.1f} MB)")
 
         state.download_status[download_id].update(
             status="complete",
@@ -472,13 +446,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
             'unknown':    'Unknown (catch-all)',
         }
         label = _PLATFORM_LABELS.get(platform, platform)
-
-        print(f"\n{'='*70}")
-        print(f"🎵 SpotiFLAC route  →  {label}")
-        print(f"   URL     : {url}")
-        print(f"   Format  : {audio_format}")
-        print(f"   Strategy: SpotiFLAC internal chain (Tidal→Qobuz→Amazon→SC) — no yt-dlp fallback")
-        print(f"{'='*70}\n")
+        print(f" SpotiFLAC route: {label} | format={audio_format}")
 
         download_status[download_id] = _initial_status(title, url, advanced_options, "downloading")
         save_download_status()
@@ -821,6 +789,63 @@ def _build_cmd(url: str, advanced_options) -> list[str]:
     return cmd
 
 
+def _embed_lyrics_for_file(filepath: str) -> None:
+    """
+    Fetch and embed synced/plain lyrics into an audio file produced by yt-dlp.
+    Reads existing mutagen tags for title/artist/album, queries lrclib.net,
+    romanizes non-Latin scripts, then embeds the result via spoflac_core metadata.
+    Non-fatal — all exceptions are silently swallowed.
+    """
+    try:
+        import mutagen
+        from spoflac_core.modules.url_resolver import URLResolver
+        from spoflac_core.modules import metadata as meta
+
+        audio = mutagen.File(filepath, easy=True)
+        if audio is None:
+            return
+
+        def _tag(key):
+            val = audio.get(key)
+            return val[0] if val else ''
+
+        track_title  = _tag('title')
+        track_artist = _tag('artist')
+        track_album  = _tag('album')
+
+        if not track_title:
+            # fall back: parse "Artist - Title" from filename stem
+            stem = os.path.splitext(os.path.basename(filepath))[0]
+            if ' - ' in stem:
+                track_artist, track_title = stem.split(' - ', 1)
+            else:
+                track_title = stem
+
+        try:
+            length = audio.info.length * 1000  # ms
+        except Exception:
+            length = None
+
+        resolver = URLResolver()
+        lyrics = resolver._fetch_lyrics_lrclib(track_title, track_artist, track_album, length)
+        if not lyrics:
+            return
+
+        lyrics = resolver._romanize_lrc_lyrics(lyrics)
+
+        ext = os.path.splitext(filepath)[1].lower()
+        tag_meta = {'lyrics': lyrics}
+        if ext == '.flac':
+            meta.embed_flac_metadata(filepath, tag_meta)
+        elif ext == '.mp3':
+            meta.embed_mp3_metadata(filepath, tag_meta)
+        elif ext in ('.m4a', '.aac'):
+            meta.embed_m4a_metadata(filepath, tag_meta)
+
+    except Exception:
+        pass  # lyrics are non-critical
+
+
 def _finalise_success(
     download_id, url, title, safe, download_dir,
     completed_files, total_files, has_progress, advanced_options,
@@ -882,6 +907,11 @@ def _finalise_success(
             fname = os.path.basename(
                 max((os.path.join(download_dir, f) for f in files), key=os.path.getctime)
             )
+
+        # Embed lyrics for yt-dlp single-file downloads
+        opts = advanced_options or {}
+        if fname and opts.get('addMetadata', True) and not opts.get('keepVideo', False):
+            _embed_lyrics_for_file(os.path.join(download_dir, fname))
 
         download_status[download_id] = {
             "status": "complete", "progress": 100,

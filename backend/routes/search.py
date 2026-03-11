@@ -33,13 +33,11 @@ def get_apis():
         _ytmusic_api = YouTubeMusicAPI(
             cache_file=config.UNIFIED_CACHE_FILE,
             cache_duration_hours=config.API_CACHE_HOURS,
-            headless=True,
         )
     if not _ytvideo_api:
         _ytvideo_api = YouTubeMusicVideoAPI(
             cache_file=config.UNIFIED_CACHE_FILE,
             cache_duration_hours=config.API_CACHE_HOURS,
-            headless=True,
         )
     if not _jiosaavn_api:
         _jiosaavn_api = JioSaavnAPI()

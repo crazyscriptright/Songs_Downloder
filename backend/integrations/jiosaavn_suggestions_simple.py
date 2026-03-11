@@ -1,20 +1,13 @@
 """
 Simplified JioSaavn Suggestions Scraper
-2 Methods: API (with India geo-location) → Selenium fallback
 """
 
 import requests
 import json
 import time
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
 
 class JioSaavnSuggestions:
     def __init__(self):
-        self.driver = None
-
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
@@ -28,28 +21,10 @@ class JioSaavnSuggestions:
         }
 
     def get_suggestions(self, pid, language='hindi', max_results=16):
-        """Get song suggestions — 2 methods in order:
-        1. search.artistOtherTopSongs  (artist-based, needs song-detail lookup)
-        2. Selenium fallback (scrape the page directly)
-        """
-
-        print(f"\n{'='*60}")
-        print(f" Getting suggestions for PID: {pid} (Language: {language})")
-        print(f"{'='*60}\n")
-
-        print(" Method 1: artistOtherTopSongs API")
+        """Get song suggestions using artistOtherTopSongs API."""
         suggestions = self._try_artist_songs(pid, language, max_results)
-        if suggestions:
-            print(f" Method 1 success: {len(suggestions)} suggestions")
-            return suggestions
-
-        print("\n Method 1 empty — trying Method 2: Selenium web scraping")
-        suggestions = self._try_selenium(pid, language, max_results)
-        if suggestions:
-            print(f" Selenium success: {len(suggestions)} suggestions")
-        else:
-            print(" No suggestions found from any method")
-
+        if not suggestions:
+            print(" No suggestions found")
         return suggestions
 
     def _get_song_details(self, pid):
@@ -143,131 +118,6 @@ class JioSaavnSuggestions:
             print(f"   artistOtherTopSongs error: {e}")
 
         return suggestions
-
-    def _try_selenium(self, pid, language, max_results):
-        """Method 2: Selenium scraping"""
-        suggestions = []
-
-        try:
-
-            self._init_driver()
-
-            url = f"https://www.jiosaavn.com/song/_/{pid}"
-            print(f"   Loading: {url}")
-
-            self.driver.get(url)
-            time.sleep(5)
-
-            page_title = self.driver.title
-            page_size = len(self.driver.page_source)
-            print(f"   Page loaded: {page_title[:50]}")
-            print(f"   Page size: {page_size} chars")
-
-            if "404" in page_title.lower():
-                print(f"   Page not found")
-                return suggestions
-
-            print(f"   Searching for song links...")
-
-            selectors = [
-                '//a[contains(@href, "/song/") and not(contains(@href, "/' + pid + '"))]',
-                '//div[contains(@class, "song")]//a[contains(@href, "/song/")]',
-                '//li//a[contains(@href, "/song/")]',
-            ]
-
-            found_links = set()
-
-            for selector in selectors:
-                try:
-                    elements = self.driver.find_elements(By.XPATH, selector)
-                    if elements:
-                        print(f"   Found {len(elements)} links with selector: {selector}")
-
-                        for elem in elements[:max_results * 2]:
-                            try:
-                                href = elem.get_attribute('href')
-                                if href and '/song/' in href and href not in found_links:
-                                    found_links.add(href)
-
-                                    import re
-                                    song_id_match = re.search(r'/song/[^/]+/([^/\?]+)', href)
-                                    if song_id_match:
-                                        song_id = song_id_match.group(1)
-
-                                        title = elem.text.strip() or elem.get_attribute('title') or 'Unknown'
-
-                                        thumbnail = ''
-                                        try:
-                                            parent = elem.find_element(By.XPATH, './ancestor::*[1]')
-                                            img = parent.find_element(By.TAG_NAME, 'img')
-                                            thumbnail = img.get_attribute('src') or img.get_attribute('data-src') or ''
-                                        except:
-                                            pass
-
-                                        song_data = {
-                                            'id': song_id,
-                                            'title': title,
-                                            'artist': 'Unknown Artist',
-                                            'subtitle': '',
-                                            'thumbnail': thumbnail,
-                                            'url': href,
-                                            'duration': '0:00',
-                                            'language': language,
-                                            'type': 'song',
-                                            'year': '',
-                                            'play_count': 0
-                                        }
-
-                                        suggestions.append(song_data)
-
-                                        if len(suggestions) >= max_results:
-                                            break
-                            except:
-                                continue
-
-                        if len(suggestions) >= max_results:
-                            break
-                except:
-                    continue
-
-            print(f"   Found {len(found_links)} unique song links")
-            print(f"   Extracted {len(suggestions)} complete song data")
-
-        except Exception as e:
-            print(f"   Selenium Error: {e}")
-
-        finally:
-            self._close_driver()
-
-        return suggestions
-
-    def _init_driver(self):
-        """Initialize Chrome WebDriver"""
-        if self.driver:
-            return
-
-        print("   Initializing Chrome WebDriver...")
-
-        chrome_options = Options()
-        chrome_options.add_argument('--headless')
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument('--window-size=1920,1080')
-        chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
-
-        self.driver = webdriver.Chrome(options=chrome_options)
-        print("   WebDriver initialized")
-
-    def _close_driver(self):
-        """Close WebDriver"""
-        if self.driver:
-            try:
-                self.driver.quit()
-                print("   WebDriver closed")
-            except:
-                pass
-            self.driver = None
 
     def _parse_song_item(self, item):
         """Parse a song item from either reco.getreco or artistOtherTopSongs."""

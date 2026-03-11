@@ -98,6 +98,7 @@ SPOTIFY_TOKEN_URL:        str = "https://open.spotify.com/api/token"
 SPOTIFY_HOME_URL:         str = "https://open.spotify.com"
 SPOTIFY_CLIENT_TOKEN_URL: str = "https://clienttoken.spotify.com/v1/clienttoken"
 SPOTIFY_GRAPHQL_URL:      str = "https://api-partner.spotify.com/pathfinder/v2/query"
+SPOTIFY_LYRICS_URL:       str = "https://spclient.wg.spotify.com/color-lyrics/v2/track/{track_id}?format=json&vocalRemoval=false"
 # TOTP secret (version 61) — used to authenticate the web-player token request
 TOTP_SECRET_V61: list[int] = [
     44, 55, 47, 42, 70, 40, 34, 114, 76, 74, 50, 111, 120, 97, 75,

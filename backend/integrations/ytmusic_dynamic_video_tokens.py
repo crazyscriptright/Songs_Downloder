@@ -4,15 +4,9 @@ import time
 import re
 import os
 from datetime import datetime, timedelta
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 
 class YouTubeMusicVideoAPI:
-    def __init__(self, cache_file="music_api_cache.json", cache_duration_hours=24, headless=True):
-        self.driver = None
+    def __init__(self, cache_file="music_api_cache.json", cache_duration_hours=24):
         self.api_key = None
         self.context = None
         self.base_url = "https://music.youtube.com"
@@ -23,7 +17,6 @@ class YouTubeMusicVideoAPI:
             self.cache_file = cache_file
         self.cache_duration_hours = cache_duration_hours
         self.cached_tokens = None
-        self.headless = headless
     
     def load_cache(self):
         """Load tokens from cache file if valid"""
@@ -91,11 +84,10 @@ class YouTubeMusicVideoAPI:
         print(" Fetching fresh tokens...")
         fresh_tokens = self.get_tokens_fast()
         
-        # If fast method fails, fallback to Selenium
         if not fresh_tokens or not fresh_tokens.get('api_key'):
-            print(" Fast method failed, falling back to Selenium...")
-            fresh_tokens = self.extract_tokens_from_page(search_query)
-        
+            print(" Fast token extraction failed — using empty tokens")
+            fresh_tokens = {}
+
         # Save to cache
         self.save_cache(fresh_tokens)
         self.cached_tokens = fresh_tokens
@@ -150,74 +142,6 @@ class YouTubeMusicVideoAPI:
             print(f" Fast token extraction failed: {e}")
             return None
         
-    def extract_tokens_from_page(self, search_query=""):
-        """Extract fresh tokens from YouTube Music page"""
-        print(f" Starting browser {'(headless)' if self.headless else '(visible)'} to extract fresh tokens...")
-        
-        # Configure Chrome options for headless mode
-        chrome_options = Options()
-        # Force headless on Heroku
-        if self.headless or os.getenv('DYNO'):
-            chrome_options.add_argument('--headless=new')  # Use new headless mode
-            chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-        chrome_options.add_argument('--disable-software-rasterizer')
-        chrome_options.add_argument('--disable-extensions')
-        chrome_options.add_argument('--window-size=1920,1080')
-        chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36')
-        chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
-        
-        self.driver = webdriver.Chrome(options=chrome_options)
-        
-        # Visit YouTube Music search page
-        search_url = f"{self.base_url}/search?q={search_query.replace(' ', '+')}" if search_query else self.base_url
-        self.driver.get(search_url)
-        
-        # Wait for page to load
-        time.sleep(3)
-        
-        # Extract tokens from JavaScript
-        script = """
-        return {
-            visitorData: window.ytcfg?.data_?.VISITOR_DATA,
-            apiKey: window.ytcfg?.data_?.INNERTUBE_API_KEY,
-            clientVersion: window.ytcfg?.data_?.INNERTUBE_CONTEXT_CLIENT_VERSION,
-            context: window.ytcfg?.data_?.INNERTUBE_CONTEXT
-        };
-        """
-        
-        visitor_data = None
-        api_key = None
-        client_version = None
-        
-        try:
-            config_data = self.driver.execute_script(script)
-            visitor_data = config_data.get('visitorData')
-            api_key = config_data.get('apiKey')
-            client_version = config_data.get('clientVersion')
-            
-            print(f" Visitor Data: {visitor_data}")
-            print(f" API Key: {api_key}")
-            print(f" Client Version: {client_version}")
-            
-        except Exception as e:
-            print(f" Error extracting from JavaScript: {e}")
-        
-        self.api_key = api_key
-        self.visitor_data = visitor_data
-        self.client_version = client_version
-        
-        self.driver.quit()
-        
-        return {
-            'visitor_data': visitor_data,
-            'api_key': api_key,
-            'client_version': client_version
-        }
-    
     def build_context(self, visitor_data=None, client_version=None):
         """Build the context object with fresh or default tokens"""
         import time
