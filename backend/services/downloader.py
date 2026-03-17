@@ -17,6 +17,8 @@ import requests
 
 import config
 import state
+import api_metadata_enricher
+from services.post_download_enricher import run_post_download_enrichment
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -176,11 +178,21 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
         # Update progress to embedding metadata
         state.download_status[download_id].update(
             progress=85,
-            eta="Embedding metadata...",
+            eta="Enriching metadata (language detection + lyrics)...",
             speed="Processing",
         )
         state.save_download_status()
 
+        # Enrich metadata with language detection + lyrics
+        try:
+            enriched_metadata = api_metadata_enricher.enrich_track_metadata(track_metadata)
+            print(f"   ✅ Language detected: {enriched_metadata.get('language', 'Unknown')} ({enriched_metadata.get('language_detected_from', 'api')})")
+            if enriched_metadata.get('lyrics-eng'):
+                print(f"   ✅ Lyrics added: {len(enriched_metadata['lyrics-eng'])} characters")
+            track_metadata.update(enriched_metadata)
+        except Exception as e:
+            print(f"   ⚠️  Enrichment failed (will embed with basic metadata): {e}")
+        
         metadata.embed_metadata(output_path, track_metadata)
 
         # ── Post-download format conversion ───────────────────────────────────
@@ -234,6 +246,16 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
 
                 output_path = converted_path
                 print(f" Converted → {os.path.basename(output_path)}")
+                
+                # ── Re-embed lyrics for MP3 after conversion ──────────────────
+                if req_format == 'mp3' and track_metadata.get('lyrics-eng'):
+                    try:
+                        print(f" Re-embedding lyrics-eng into MP3...")
+                        from spoflac_core.modules import metadata as meta_module
+                        meta_module.embed_mp3_metadata(output_path, track_metadata, cover_path=None)
+                        print(f" ✓ Lyrics-eng re-embedded into MP3")
+                    except Exception as re_embed_exc:
+                        print(f"  (Lyrics re-embed failed: {re_embed_exc})")
 
             except Exception as conv_exc:
                 print(f" Conversion to {req_format.upper()} failed: {conv_exc} — keeping {downloaded_ext.upper()}")
@@ -241,6 +263,22 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
             pass  # formats match
 
         # ── Final success status ──────────────────────────────────────────────
+        state.download_status[download_id].update(
+            progress=95,
+            eta="Enhancing metadata/artwork...",
+            speed="Post-processing",
+        )
+        state.save_download_status()
+
+        try:
+            enrichment_result = run_post_download_enrichment(output_path, metadata_context=track_metadata)
+            print(
+                f" Post-process: metadata={enrichment_result.get('metadata_enriched')} "
+                f"artwork={enrichment_result.get('artwork_updated')}"
+            )
+        except Exception as post_exc:
+            print(f" Post-process skipped (SpotiFLAC): {post_exc}")
+
         file_size = os.path.getsize(output_path) / (1024 * 1024)
         print(f" SpotiFLAC done: {os.path.basename(output_path)} ({file_size:.1f} MB)")
 
@@ -834,7 +872,7 @@ def _embed_lyrics_for_file(filepath: str) -> None:
         lyrics = resolver._romanize_lrc_lyrics(lyrics)
 
         ext = os.path.splitext(filepath)[1].lower()
-        tag_meta = {'lyrics': lyrics}
+        tag_meta = {'lyrics-eng': lyrics}
         if ext == '.flac':
             meta.embed_flac_metadata(filepath, tag_meta)
         elif ext == '.mp3':
@@ -868,6 +906,14 @@ def _finalise_success(
         return
 
     if len(files) > 1 and total_files > 0:
+        for fname in files:
+            file_path = os.path.join(download_dir, fname)
+            if os.path.isfile(file_path):
+                try:
+                    run_post_download_enrichment(file_path, metadata_context={"title": os.path.splitext(fname)[0]})
+                except Exception as post_exc:
+                    print(f" Post-process skipped for {fname}: {post_exc}")
+
         # Playlist
         if completed_files:
             fds = completed_files
@@ -908,10 +954,12 @@ def _finalise_success(
                 max((os.path.join(download_dir, f) for f in files), key=os.path.getctime)
             )
 
-        # Embed lyrics for yt-dlp single-file downloads
         opts = advanced_options or {}
         if fname and opts.get('addMetadata', True) and not opts.get('keepVideo', False):
-            _embed_lyrics_for_file(os.path.join(download_dir, fname))
+            target_path = os.path.join(download_dir, fname)
+            post_result = run_post_download_enrichment(target_path, metadata_context={"title": title})
+            if not post_result.get("metadata_enriched"):
+                _embed_lyrics_for_file(target_path)
 
         download_status[download_id] = {
             "status": "complete", "progress": 100,

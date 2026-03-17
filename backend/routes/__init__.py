@@ -5,6 +5,7 @@ from routes.download import download_bp
 from routes.preview import preview_bp
 from routes.proxy import proxy_bp
 from routes.flac_download import flac_bp
+from routes.ytdlp_test import ytdlp_bp
 
 
 def register_blueprints(app):
@@ -13,3 +14,4 @@ def register_blueprints(app):
     app.register_blueprint(preview_bp)
     app.register_blueprint(proxy_bp)
     app.register_blueprint(flac_bp)
+    app.register_blueprint(ytdlp_bp)

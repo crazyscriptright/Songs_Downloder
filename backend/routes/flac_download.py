@@ -16,6 +16,8 @@ from flask import Blueprint, jsonify, request, send_file
 
 import config
 import state
+import api_metadata_enricher
+from services.post_download_enricher import run_post_download_enrichment
 
 from spoflac_core.modules import amazon
 from spoflac_core.modules import metadata
@@ -155,8 +157,29 @@ def _run_flac_download(
         if not download_success:
             raise Exception(f"All services failed. Last error: {last_error}")
 
-        _update(download_id, "processing", 92, "Embedding metadata…")
+        _update(download_id, "processing", 92, "Enriching metadata (language + lyrics)…")
+        
+        # Enrich metadata with language detection + lyrics
+        try:
+            enriched_metadata = api_metadata_enricher.enrich_track_metadata(track_metadata)
+            print(f"[flac] ✓ Language: {enriched_metadata.get('language', 'Unknown')} ({enriched_metadata.get('language_detected_from', 'api')})")
+            if enriched_metadata.get('lyrics-eng'):
+                print(f"[flac] ✓ Lyrics: {len(enriched_metadata['lyrics-eng'])} characters")
+            track_metadata.update(enriched_metadata)
+        except Exception as e:
+            print(f"[flac] ⚠ Enrichment failed (will embed with basic metadata): {e}")
+        
         metadata.embed_metadata(output_path, track_metadata)
+
+        _update(download_id, "processing", 96, "Enhancing metadata/artwork…")
+        try:
+            enrichment_result = run_post_download_enrichment(output_path, metadata_context=track_metadata)
+            print(
+                f"[flac] post-process metadata={enrichment_result.get('metadata_enriched')} "
+                f"artwork={enrichment_result.get('artwork_updated')}"
+            )
+        except Exception as post_exc:
+            print(f"[flac] post-process skipped: {post_exc}")
 
         state.download_status[download_id].update(
             status="complete",

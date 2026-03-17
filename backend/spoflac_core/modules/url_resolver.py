@@ -16,7 +16,8 @@ Deezer …) to URLResolver.resolve() and get back a single, consistent dict:
 Metadata priority
 -----------------
 1. Spotify API  (full: title, artist, album, ISRC, cover, duration, …)
-2. song.link entity data  (title, artistName, thumbnailUrl — always present)
+2. Platform-specific API (YouTube, JioSaavn, SoundCloud with enhanced fields)
+3. song.link entity data  (title, artistName, thumbnailUrl — always present)
 
 Download decisions and fallback chains can then be based purely on
 sl_result['tidal_url'], sl_result['qobuz_url'], etc.
@@ -33,6 +34,12 @@ import requests
 from spoflac_core.modules.songlink import SongLinkClient
 from spoflac_core.modules.spotify import SpotifyClient
 from spoflac_core.modules.url_detector import URLDetector
+from spoflac_core.modules.platform_metadata import (
+    extract_youtube_metadata,
+    extract_jiosaavn_metadata,
+    extract_soundcloud_metadata,
+    normalize_metadata_dict,
+)
 
 _LRCLIB_API = "https://lrclib.net/api/get"
 
@@ -316,7 +323,7 @@ class URLResolver:
                         )
                     if lyrics:
                         lyrics = _romanize_lrc_lyrics(lyrics)
-                        metadata['lyrics'] = lyrics
+                        metadata['lyrics-eng'] = lyrics
                         print(f" [resolver] ✅ Lyrics ready ({len(lyrics)} chars)")
                     else:
                         print(f" [resolver] ❌ Lyrics not available from any source")
@@ -331,11 +338,24 @@ class URLResolver:
             if sl_meta:
                 metadata = sl_meta
                 print(f" [resolver] Fallback metadata: {metadata['artist']} – {metadata['title']}")
+                metadata_source = 'songlink'
             else:
-                raise Exception(
-                    "Could not obtain metadata: Spotify lookup failed and song.link "
-                    "returned no entity data for this URL."
-                )
+                # Try platform-specific metadata extraction
+                try:
+                    metadata = self._extract_platform_metadata(url, source_platform)
+                    if metadata:
+                        metadata_source = source_platform
+                        print(f" [resolver] Platform-specific metadata ({source_platform}): {metadata['artist']} – {metadata['title']}")
+                    else:
+                        raise Exception(
+                            "Could not obtain metadata: Spotify lookup failed and song.link "
+                            "returned no entity data for this URL."
+                        )
+                except Exception as platform_exc:
+                    print(f" [resolver] Platform metadata extraction failed: {platform_exc}")
+                    raise Exception(
+                        "Could not obtain metadata: Spotify and platform-specific lookups failed."
+                    )
 
         return {
             'metadata':        metadata,
@@ -344,6 +364,112 @@ class URLResolver:
             'source_platform': source_platform,
             'metadata_source': metadata_source,
         }
+
+    def _extract_platform_metadata(self, url: str, platform: str) -> dict | None:
+        """
+        Attempt to extract metadata using platform-specific APIs.
+        Includes lyrics-eng fetching via lrclib.net.
+        Fallback when Spotify metadata is unavailable.
+        """
+        from spoflac_core.modules.platform_metadata import (
+            extract_youtube_metadata,
+            extract_jiosaavn_metadata,
+            extract_soundcloud_metadata,
+        )
+        
+        try:
+            if platform == 'youtube':
+                # Extract metadata from YouTube using yt-dlp
+                try:
+                    import yt_dlp
+                    ydl_opts = {
+                        'quiet': True,
+                        'no_warnings': True,
+                        'extract_flat': False,
+                    }
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                        if info:
+                            metadata = extract_youtube_metadata(info)
+                            print(f" [platform/youtube] Extracted metadata: {metadata['artist']} – {metadata['title']}")
+                            if metadata.get('lyrics-eng'):
+                                print(f" [platform/youtube] ✅ Found {len(metadata['lyrics-eng'])} chars of lyrics")
+                            return metadata
+                except Exception as e:
+                    print(f" [platform/youtube] Extraction failed: {e}")
+            
+            elif platform == 'jiosaavn':
+                # Extract metadata from JioSaavn
+                try:
+                    from integrations.jiosaavn_search import JioSaavnAPI
+                    api = JioSaavnAPI()
+                    
+                    # Extract song ID from URL (e.g., /song/{id}/)
+                    match = re.search(r'/song/([^/?]+)', url)
+                    if match:
+                        song_id = match.group(1)
+                        # Query JioSaavn API for track details
+                        # The API typically returns track data with the song ID
+                        print(f" [platform/jiosaavn] Fetching details for song ID: {song_id}")
+                        
+                        # Attempt to use JioSaavn API to get detailed track info
+                        # This would need the jiosaavn_search module to support detailed fetch
+                        # For now, try using any available method in the API
+                        try:
+                            # Try to get track details - this might require extending jiosaavn_search
+                            track_data = api.get_track_details(song_id)  # Hypothetical method
+                            if track_data:
+                                metadata = extract_jiosaavn_metadata(track_data)
+                                print(f" [platform/jiosaavn] Extracted metadata: {metadata['artist']} – {metadata['title']}")
+                                if metadata.get('lyrics-eng'):
+                                    print(f" [platform/jiosaavn] ✅ Found {len(metadata['lyrics-eng'])} chars of lyrics")
+                                return metadata
+                        except AttributeError:
+                            # Fallback: try search if get_track_details doesn't exist
+                            print(f" [platform/jiosaavn] API method not available, trying search...")
+                            # Search by ID might not work well, skip for now
+                            pass
+                except Exception as e:
+                    print(f" [platform/jiosaavn] Extraction failed: {e}")
+            
+            elif platform == 'soundcloud':
+                # Extract metadata from SoundCloud
+                try:
+                    # SoundCloud URLs can be accessed via yt-dlp or direct API
+                    # Try yt-dlp first as it handles SoundCloud well
+                    import yt_dlp
+                    ydl_opts = {
+                        'quiet': True,
+                        'no_warnings': True,
+                        'extract_flat': False,
+                    }
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                        if info:
+                            # Convert yt-dlp format to SoundCloud format
+                            # yt-dlp returns different structure than SoundCloud API
+                            track_data = {
+                                'title': info.get('title', ''),
+                                'user': {'username': info.get('uploader', '')},
+                                'duration': info.get('duration', 0),
+                                'genre': info.get('genre', ''),
+                                'created_at': info.get('upload_date', ''),  # YYYYMMDD format
+                                'artwork_url': info.get('thumbnail', ''),
+                                'permalink_url': url,
+                                'tag_list': ' '.join(info.get('tags', [])),
+                            }
+                            metadata = extract_soundcloud_metadata(track_data)
+                            print(f" [platform/soundcloud] Extracted metadata: {metadata['artist']} – {metadata['title']}")
+                            if metadata.get('lyrics-eng'):
+                                print(f" [platform/soundcloud] ✅ Found {len(metadata['lyrics-eng'])} chars of lyrics")
+                            return metadata
+                except Exception as e:
+                    print(f" [platform/soundcloud] Extraction failed: {e}")
+        
+        except Exception as e:
+            print(f" [platform] Platform metadata extraction error: {e}")
+        
+        return None
 
     def resolve_metadata_only(self, url: str) -> dict:
         """

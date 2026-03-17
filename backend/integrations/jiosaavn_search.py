@@ -6,23 +6,51 @@ and displays the results with download links.
 
 Usage:
     python jiosaavn_search.py
+
+Features:
+- Primary JioSaavn official API
+- Fallback to alternative public APIs
+- Proxy support for geo-blocked hosts
+- Multiple Indian IP addresses for spoofing
+- Exponential backoff retry logic
 """
 
 import requests
 import json
 import os
+import time
+import random
+import warnings
 from urllib.parse import quote_plus
 
+# Suppress SSL warnings (for private/self-signed certs)
+warnings.filterwarnings('ignore', message='Unverified HTTPS request')
+
 class JioSaavnAPI:
-    def __init__(self):
+    def __init__(self, proxy=None):
         # Use the newer API endpoint that's less geo-restricted
         self.base_url = "https://www.jiosaavn.com/api.php"
+        
         # Alternative unofficial APIs that work globally
         self.alt_apis = [
             "https://saavn.dev/api/search/songs",
             "https://jiosaavn-api.vercel.app/search/songs",
             "https://saavn-api.vercel.app/search/songs"
         ]
+        
+        # Multiple Indian IP addresses to rotate
+        self.indian_ips = [
+            "103.21.124.0",    # Airtel
+            "106.51.122.0",    # Jio
+            "49.204.200.0",    # Vodafone
+            "103.47.96.0",     # Tata
+            "49.206.0.0",      # BSNL
+            "180.151.180.0",   # Idea
+        ]
+        
+        # Get random Indian IP
+        random_ip = random.choice(self.indian_ips)
+        
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
@@ -31,24 +59,59 @@ class JioSaavnAPI:
             "Origin": "https://www.jiosaavn.com",
             "Referer": "https://www.jiosaavn.com/",
             "X-Requested-With": "XMLHttpRequest",
-            "X-Forwarded-For": "103.21.124.0",  # Indian IP range
-            "CF-IPCountry": "IN"  # Cloudflare country header
+            "X-Forwarded-For": random_ip,  # Random Indian IP
+            "CF-IPCountry": "IN",  # Cloudflare country header
+            "CF-Connecting-IP": random_ip,  # Cloudflare connecting IP
         }
+        
         self.session = requests.Session()
         self.session.headers.update(self.headers)
+        self.proxy = proxy or os.getenv("JIOSAAVN_PROXY")
+        self.max_retries = 3
+        self.retry_delay = 1  # Start with 1 second
     
     def search_songs(self, query, page=1, limit=20):
         """Search for songs on JioSaavn with fallback to alternative API"""
         
-        # Try primary API first
-        result = self._search_primary(query, page, limit)
+        # Try primary API first with retries
+        result = self._search_primary_with_retries(query, page, limit)
         
         # If primary fails or returns empty, try alternative API
         if not result or (isinstance(result, dict) and not result.get('results')):
-            print(" Primary API failed, trying alternative endpoint...")
+            print("⚠️  Primary API failed or returned empty, trying alternative endpoint...")
             result = self._search_alternative(query, page, limit)
         
         return result
+    
+    def _search_primary_with_retries(self, query, page=1, limit=20):
+        """Search primary API with exponential backoff retry logic"""
+        for attempt in range(self.max_retries):
+            try:
+                result = self._search_primary(query, page, limit)
+                if result and result.get('results'):
+                    return result
+                
+                # If we get empty results but no error, try again with different IP
+                if attempt < self.max_retries - 1:
+                    print(f"⚠️  Empty results, retrying with different IP (attempt {attempt + 1}/{self.max_retries})...")
+                    self._rotate_ip()
+                    time.sleep(self.retry_delay * (2 ** attempt))  # Exponential backoff
+                    
+            except Exception as e:
+                print(f"❌ Attempt {attempt + 1} failed: {e}")
+                if attempt < self.max_retries - 1:
+                    self._rotate_ip()
+                    time.sleep(self.retry_delay * (2 ** attempt))
+        
+        return None
+    
+    def _rotate_ip(self):
+        """Rotate to a different Indian IP"""
+        random_ip = random.choice(self.indian_ips)
+        self.headers["X-Forwarded-For"] = random_ip
+        self.headers["CF-Connecting-IP"] = random_ip
+        self.session.headers.update(self.headers)
+        print(f"🔄 Rotated IP to: {random_ip}")
     
     def _search_primary(self, query, page=1, limit=20):
         """Search using official JioSaavn API"""
@@ -67,24 +130,41 @@ class JioSaavnAPI:
         # Build URL
         url = f"{self.base_url}?p={params['p']}&q={quote_plus(query)}&_format={params['_format']}&_marker={params['_marker']}&api_version={params['api_version']}&ctx={params['ctx']}&n={params['n']}&__call={params['__call']}"
         
-        print(f" Searching JioSaavn (Primary) for: {query}")
-        print(f" URL: {url}\n")
+        print(f"🔍 Searching JioSaavn (Primary) for: {query}")
         
         try:
-            # Send GET request with session
-            response = self.session.get(url, timeout=10)
+            # Set up proxy if available
+            proxies = None
+            if self.proxy:
+                proxies = {
+                    'http': self.proxy,
+                    'https': self.proxy,
+                }
+                print(f"🌐 Using proxy: {self.proxy}")
             
-            print(f" Status Code: {response.status_code}")
+            # Send GET request with session and optional proxy
+            response = self.session.get(
+                url, 
+                timeout=10,
+                proxies=proxies,
+                verify=False  # Disable SSL verification for compatibility
+            )
+            
+            print(f"📊 Status Code: {response.status_code}")
             
             if response.status_code == 200:
-                return response.json()
+                data = response.json()
+                result_count = len(data.get('results', []))
+                print(f"✅ Got {result_count} results")
+                return data
             else:
-                print(f" Error: {response.status_code}")
-                print(response.text[:500])
+                print(f"❌ Error: {response.status_code}")
+                if response.text:
+                    print(f"   Response: {response.text[:200]}")
                 return None
                 
         except Exception as e:
-            print(f" Primary API request failed: {e}")
+            print(f"❌ Primary API request failed: {e}")
             return None
     
     def _search_alternative(self, query, page=1, limit=20):
@@ -95,8 +175,7 @@ class JioSaavnAPI:
             try:
                 url = f"{api_url}?query={quote_plus(query)}&page={page}&limit={limit}"
                 
-                print(f" Trying alternative API: {api_url}")
-                print(f" URL: {url}\n")
+                print(f"🔗 Trying alternative API: {api_url}")
                 
                 # Alternative API might not need all the headers
                 alt_headers = {
@@ -104,31 +183,51 @@ class JioSaavnAPI:
                     "Accept": "application/json"
                 }
                 
-                response = requests.get(url, headers=alt_headers, timeout=10)
+                # Set up proxy if available
+                proxies = None
+                if self.proxy:
+                    proxies = {
+                        'http': self.proxy,
+                        'https': self.proxy,
+                    }
                 
-                print(f" Status Code: {response.status_code}")
+                response = requests.get(
+                    url, 
+                    headers=alt_headers, 
+                    timeout=10,
+                    proxies=proxies,
+                    verify=False
+                )
+                
+                print(f"📊 Status Code: {response.status_code}")
                 
                 if response.status_code == 200:
                     data = response.json()
                     # Convert alternative API format to match original format
                     if data.get('success') and data.get('data'):
                         if 'results' in data['data']:
+                            print(f"✅ Got {len(data['data']['results'])} results from alternative API")
                             return {'results': data['data']['results']}
                         elif 'songs' in data['data']:
+                            print(f"✅ Got {len(data['data']['songs'])} songs from alternative API")
                             return {'results': data['data']['songs']}
                     elif data.get('data') and isinstance(data['data'], list):
+                        print(f"✅ Got {len(data['data'])} results from alternative API")
                         return {'results': data['data']}
                     elif 'results' in data:
+                        print(f"✅ Got {len(data['results'])} results from alternative API")
                         return data
                     
                     # If we got any data, try to return it
-                    return data
+                    if data:
+                        print(f"✅ Got response from alternative API")
+                        return data
                     
             except Exception as e:
-                print(f" API {api_url} failed: {e}")
+                print(f"⚠️  Alternative API {api_url} failed: {e}")
                 continue
         
-        print(" All alternative APIs failed")
+        print("❌ All alternative APIs failed")
         return None
     
     def parse_results(self, data):

@@ -297,6 +297,15 @@ class SpotifyClient:
             if 'duration' in track and track['duration']:
                 duration_ms = track['duration'].get('totalMilliseconds', 0)
 
+            # Extract explicit flag and genres
+            explicit = track.get('explicit', False)
+            genres = album_data.get('genres', []) if album_data.get('genres') else []
+            genre_str = ', '.join(genres) if genres else ''
+            
+            # Spotify track URL
+            track_id = track.get('id', '')
+            spotify_url = f'https://open.spotify.com/track/{track_id}' if track_id else ''
+
             metadata = {
                 'id': track.get('id', ''),
                 'title': track.get('name', 'Unknown Title'),
@@ -310,7 +319,10 @@ class SpotifyClient:
                 'isrc': track.get('isrc', ''),
                 'cover_url': None,
                 'copyright': '',
-                'publisher': ''
+                'publisher': '',
+                'explicit': explicit,
+                'genre': genre_str,
+                'spotify_url': spotify_url,
             }
 
             if track['albumOfTrack'].get('coverArt'):
@@ -319,7 +331,7 @@ class SpotifyClient:
 
                     metadata['cover_url'] = max(sources, key=lambda x: x.get('width', 0))['url']
 
-            print(f" Metadata: {metadata['artist']} - {metadata['title']}")
+            print(f" Metadata: {metadata['artist']} - {metadata['title']} | explicit={explicit} | genres={genre_str}")
             return metadata
 
         except (KeyError, IndexError) as e:

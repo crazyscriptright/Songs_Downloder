@@ -176,6 +176,10 @@ class SongLinkClient:
                     'copyright':   '',
                     'publisher':   '',
                     'id':          '',
+                    'explicit':    False,
+                    'genre':       'Other',
+                    'spotify_url': f'https://open.spotify.com/track/{spotify_id}' if spotify_id else '',
+                    'source_url':  '',
                 }
                 break
 
