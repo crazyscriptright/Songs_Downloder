@@ -24,7 +24,10 @@ jobs:
           python-version: "3.12"
 
       - name: Run backend pre-push script
-        run: python pre_push_backend.py
+        run: python scripts/pre_push_backend.py
+
+      - name: Run tools pre-push script
+        run: python tools/music_metadata_enhancer/pre_push.py
 
   frontend-build:
     name: Frontend build
