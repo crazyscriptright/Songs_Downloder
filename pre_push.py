@@ -29,6 +29,14 @@ def main() -> int:
         ROOT,
     )
 
+    tools_script = ROOT / "backend" / "tools" / "music_metadata_enhancer" / "pre_push.py"
+    if tools_script.exists():
+        run_step(
+            "Tools checks",
+            [PY, str(tools_script)],
+            ROOT,
+        )
+
     frontend_dir = ROOT / "spotiflac-frontend"
     if frontend_dir.exists():
         npm = shutil.which("npm")
