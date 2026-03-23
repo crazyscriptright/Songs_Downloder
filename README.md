@@ -11,10 +11,9 @@ A powerful web-based music downloader that searches and downloads music from mul
 - **Multi-Source Search**: Search across YouTube Music, YouTube Videos, JioSaavn, and SoundCloud simultaneously
 - **Web Interface**: Clean, modern web interface with real-time search results
 - **Advanced Download Options**: Customizable audio quality, format selection, and metadata embedding
-- **Progress Tracking**: Real-time download progress with speed and ETA information
 - **URL Support**: Direct download from supported platform URLs
 - **Background Processing**: Non-blocking downloads with queue management
-- **Security Features**: Input validation and command injection prevention
+- **MetaData Embed**: adds metadata to file the music file regardless of format
 
 ## Supported Platforms
 
@@ -22,71 +21,96 @@ A powerful web-based music downloader that searches and downloads music from mul
 - YouTube Videos
 - JioSaavn
 - SoundCloud
-- Spotify (URL validation only)
-
-## Quick Deploy to Heroku
-
-Click the button above or follow the detailed guide in [HEROKU_DEPLOY.md](HEROKU_DEPLOY.md).
-
-**Important:**
-
-- Heroku has read-only filesystem (except `/tmp`)
-- App automatically uses `/tmp` for downloads when on Heroku
-- Downloaded files are **temporary** and deleted on dyno restart
-- Users must download files immediately after processing
-
-## Local Installation
+- Spotify
 
 ### Prerequisites
 
-- **Python 3.11** (recommended)
-- Google Chrome browser installed
-- Internet connection for downloading
+- **Python 3.12 (recommended)**
+- **Node.js 18+** and npm
+- **yt-dlp**
+- **ffmpeg**
+- **fpcalc** (optional, for Picard/AcoustID fallback)
 
 ### Setup
 
 1. Clone or download the project files
 
-2. Install Python dependencies:
-
    ```bash
-   pip install flask yt-dlp requests python-dotenv selenium
+   git clone https://github.com/crazyscriptright/Songs_Downloder.git
    ```
 
-3. Install Chrome WebDriver:
+2. Set up backend:
 
    ```bash
-   # Option 1: Using webdriver-manager (recommended)
-   pip install webdriver-manager
-
-   # Option 2: Manual installation
-   # Download ChromeDriver from https://chromedriver.chromium.org/
-   # Extract and add to your system PATH
-   ```
-
-4. Alternative: Install from requirements.txt (manual driver setup needed):
-   ```bash
+   cd backend
+   python -m venv venv
+   # Windows
+   venv\Scripts\activate
+   # macOS/Linux
+   # source venv/bin/activate
    pip install -r requirements.txt
-   # Note: You'll need to manually install ChromeDriver for selenium
+   ```
+
+3. Set up frontend:
+
+   ```bash
+   cd ../spotiflac-frontend
+   npm install
+   ```
+
+4. Create environment file:
+
+   ```bash
+   # from repo root
+   copy backend\env.example backend\.env
+   # or on macOS/Linux: cp backend/env.example backend/.env
+   ```
+
+5. (Optional) Configure frontend API URL:
+
+   ```bash
+   # from repo root
+   copy spotiflac-frontend\.env.example spotiflac-frontend\.env.local
+   # or on macOS/Linux: cp spotiflac-frontend/.env.example spotiflac-frontend/.env.local
    ```
 
 ### Configuration
 
-1. Create a `.env` file (optional) for environment variables
-2. Configure download folder (defaults to ~/Downloads/Music)
-3. Set up API tokens if needed for enhanced functionality
+Configure these in `backend/.env`:
+
+- `SECRET_KEY`
+- `FLASK_ENV`
+- `PORT`
+- `FRONTEND_URL`
+- `FORCE_PROXY_API`
+- `VIDEO_DOWNLOAD_API_KEY` (optional)
+- `ACOUSTID_API_KEY` (optional)
+
+Frontend environment (optional):
+
+- `spotiflac-frontend/.env.local`
+- `VITE_API_URL` (e.g. `http://localhost:5000`)
 
 ## Usage
 
 ### Starting the Server
 
-Run the main application:
+Run backend:
 
-```
-python web_main.py
+```bash
+cd backend
+venv\Scripts\activate
+python app.py
 ```
 
-The server will start on `http://localhost:5000`
+Run frontend (new terminal):
+
+```bash
+cd spotiflac-frontend
+npm run dev
+```
+
+Backend starts on `http://localhost:5000` (or `PORT`), frontend on `http://localhost:5173`.
 
 ### Web Interface
 
@@ -108,17 +132,21 @@ The server will start on `http://localhost:5000`
 ## File Structure
 
 ```
-songdownload/
-├── web_main.py                    # Main Flask application
-├── templates/
-│   └── index.html                 # Web interface template
-├── ytmusic_dynamic_tokens.py      # YouTube Music API handler
-├── ytmusic_dynamic_video_tokens.py # YouTube Video API handler
-├── jiosaavn_search.py            # JioSaavn API integration
-├── soundcloud.py                 # SoundCloud search functionality
-├── requirements.txt              # Python dependencies
-├── .env                          # Environment variables (optional)
-└── README.md                     # This file
+spotiflac-python/
+├── backend/                       # Flask backend, downloader, metadata pipeline
+│   ├── app.py
+│   ├── config.py
+│   ├── env.example
+│   ├── routes/
+│   ├── services/
+│   ├── integrations/
+│   ├── spoflac_core/
+│   └── requirements.txt
+├── spotiflac-frontend/            # Vite + React frontend
+│   ├── .env.example
+│   ├── src/
+│   └── package.json
+└── README.md
 ```
 
 ## Credits

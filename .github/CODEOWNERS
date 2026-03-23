@@ -1,0 +1,5 @@
+# Code owners for review assignment
+# GitHub username from provided profile URL: https://github.com/crazyscriptright
+
+/backend/ @crazyscriptright
+/spotiflac-frontend/ @crazyscriptright
