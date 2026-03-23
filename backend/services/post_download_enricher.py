@@ -2,8 +2,8 @@
 Shared post-download enrichment service.
 
 Runs two steps for a downloaded audio file:
-1) Metadata enrichment from enrich_metadata.py
-2) Artwork fix/fill from fix_album_art.py
+1) Metadata enrichment from tools/enrich_metadata.py
+2) Artwork fix/fill from tools/fix_album_art.py
 
 All operations are best-effort and never raise to callers.
 """
@@ -56,7 +56,7 @@ def run_post_download_enrichment(file_path: str | Path, metadata_context: dict[s
     result["ran"] = True
 
     try:
-        from enrich_metadata import read_existing_metadata, enrich_metadata as build_enriched, update_file_metadata
+        from tools.enrich_metadata import read_existing_metadata, enrich_metadata as build_enriched, update_file_metadata
 
         existing_metadata = read_existing_metadata(path)
 
@@ -78,7 +78,7 @@ def run_post_download_enrichment(file_path: str | Path, metadata_context: dict[s
         result["errors"].append(f"metadata_enrichment_failed: {exc}")
 
     try:
-        from fix_album_art import (
+        from tools.fix_album_art import (
             _get_tag,
             embed_artwork_to_file,
             fetch_artwork_from_apis,

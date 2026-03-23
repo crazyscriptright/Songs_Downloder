@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 r"""
-API Metadata Enricher
-=====================
-Unified metadata enrichment for API download routes.
+API Metadata Enricher (Refactored)
+===================================
+Unified metadata enrichment for API download routes using shared utilities.
 
 Integrates:
 - Multi-phase language detection (JioSaavn → MusicBrainz → langdetect → metadata)
@@ -33,15 +33,8 @@ import os
 from pathlib import Path
 from typing import Optional, Dict, Any
 import re
-import time
 
 sys.path.insert(0, str(Path(__file__).parent))
-
-try:
-    import requests
-    HAS_REQUESTS = True
-except ImportError:
-    HAS_REQUESTS = False
 
 try:
     from langdetect import detect, detect_langs, LangDetectException
@@ -56,177 +49,53 @@ from spoflac_core.modules.platform_metadata import (
     _extract_tags_from_text,
 )
 from spoflac_core.modules.url_resolver import _romanize_lrc_lyrics, _detect_script
+from utils.shared_language_utils import map_jiosaavn_language, map_iso_639_1_language, map_musicbrainz_language
+from utils.shared_api_client import query_jiosaavn_track, query_jiosaavn_album, query_musicbrainz_recording_language
 
 
 # ============================================================================
-# PHASE 1: EXTERNAL APIs (JioSaavn, MusicBrainz)
+# PHASE 1: EXTERNAL APIs (JioSaavn, MusicBrainz) - Using Shared Client
 # ============================================================================
 
 def _detect_language_jiosaavn(title: str, artist: str) -> Dict[str, Any]:
-    """Query JioSaavn API for language metadata."""
-    if not HAS_REQUESTS or not title:
-        return {'language': None, 'confidence': 0.0, 'method': 'jiosaavn_failed'}
-    
-    try:
-        url = "https://www.jiosaavn.com/api.php"
-        params = {
-            'p': 1,
-            'q': f"{title} {artist}" if artist else title,
-            '_format': 'json',
-            '_marker': 0,
-            'api_version': 4,
-            'ctx': 'wap6dot0',
-            'n': 5,
-            '__call': 'search.getResults'
+    """Query JioSaavn API for language metadata (via shared client)."""
+    result = query_jiosaavn_track(title, artist)
+    if result and result['language']:
+        return {
+            'language': result['language'],
+            'confidence': result['confidence'],
+            'method': 'jiosaavn_api'
         }
-        
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept-Language': 'en-IN,en;q=0.9,hi;q=0.8'
-        }
-        
-        response = requests.get(url, params=params, headers=headers, timeout=5)
-        
-        if response.status_code == 200:
-            data = response.json()
-            if 'results' in data and len(data['results']) > 0:
-                first_result = data['results'][0]
-                if 'language' in first_result:
-                    lang = first_result['language'].lower()
-                    lang_map = {
-                        'english': 'English', 'hindi': 'Hindi', 'telugu': 'Telugu',
-                        'kannada': 'Kannada', 'tamil': 'Tamil', 'marathi': 'Marathi',
-                        'bengali': 'Bengali', 'gujarati': 'Gujarati', 'punjabi': 'Punjabi',
-                        'malayalam': 'Malayalam', 'bhojpuri': 'Hindi', 'sadri': 'Hindi',
-                        'urdu': 'Urdu', 'odia': 'Odia', 'assamese': 'Assamese'
-                    }
-                    detected_lang = lang_map.get(lang, None)
-                    if detected_lang:
-                        return {
-                            'language': detected_lang,
-                            'confidence': 0.95,
-                            'method': 'jiosaavn_api'
-                        }
-        
-        return {'language': None, 'confidence': 0.0, 'method': 'jiosaavn_no_results'}
-    except Exception as e:
-        return {'language': None, 'confidence': 0.0, 'method': 'jiosaavn_error'}
+    return {'language': None, 'confidence': 0.0, 'method': 'jiosaavn_failed'}
 
 
 def _detect_language_jiosaavn_album(album: str, artist: str) -> Dict[str, Any]:
-    """JioSaavn album search (alternate method)."""
-    if not HAS_REQUESTS or not album:
-        return {'language': None, 'confidence': 0.0, 'method': 'jiosaavn_album_failed'}
-    
-    try:
-        url = "https://www.jiosaavn.com/api.php"
-        params = {
-            'p': 1,
-            'q': f"{album} {artist}" if artist else album,
-            '_format': 'json',
-            '_marker': 0,
-            'api_version': 4,
-            'ctx': 'wap6dot0',
-            'n': 3,
-            '__call': 'search.getAlbumResults'
+    """JioSaavn album search (via shared client)."""
+    result = query_jiosaavn_album(album, artist)
+    if result and result['language']:
+        return {
+            'language': result['language'],
+            'confidence': result['confidence'],
+            'method': 'jiosaavn_album'
         }
-        
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept-Language': 'en-IN,en;q=0.9,hi;q=0.8'
-        }
-        
-        response = requests.get(url, params=params, headers=headers, timeout=5)
-        
-        if response.status_code == 200:
-            data = response.json()
-            if 'results' in data and len(data['results']) > 0:
-                first_result = data['results'][0]
-                if 'language' in first_result:
-                    lang = first_result['language'].lower()
-                    lang_map = {
-                        'english': 'English', 'hindi': 'Hindi', 'telugu': 'Telugu',
-                        'kannada': 'Kannada', 'tamil': 'Tamil', 'marathi': 'Marathi',
-                        'bengali': 'Bengali', 'gujarati': 'Gujarati', 'punjabi': 'Punjabi',
-                        'malayalam': 'Malayalam'
-                    }
-                    detected_lang = lang_map.get(lang, None)
-                    if detected_lang:
-                        return {
-                            'language': detected_lang,
-                            'confidence': 0.90,
-                            'method': 'jiosaavn_album'
-                        }
-        
-        return {'language': None, 'confidence': 0.0, 'method': 'jiosaavn_album_no_results'}
-    except Exception:
-        return {'language': None, 'confidence': 0.0, 'method': 'jiosaavn_album_error'}
+    return {'language': None, 'confidence': 0.0, 'method': 'jiosaavn_album_failed'}
 
 
 def _detect_language_musicbrainz(title: str, artist: str) -> Dict[str, Any]:
-    """Query MusicBrainz API for language metadata."""
-    if not HAS_REQUESTS or not title:
-        return {'language': None, 'confidence': 0.0, 'method': 'musicbrainz_failed'}
-    
-    try:
-        headers = {
-            'User-Agent': 'LanguageDetectionApp/1.0 (contact@example.com)'
+    """Query MusicBrainz API for language metadata (via shared client)."""
+    lang = query_musicbrainz_recording_language(title, artist)
+    if lang:
+        return {
+            'language': lang,
+            'confidence': 0.85,
+            'method': 'musicbrainz'
         }
-        
-        url = "https://musicbrainz.org/ws/2/recording/"
-        params = {
-            'query': f'recording:"{title}"' + (f' AND artist:"{artist}"' if artist else ''),
-            'fmt': 'json',
-            'limit': 3
-        }
-        
-        response = requests.get(url, params=params, headers=headers, timeout=8)
-        time.sleep(0.3)  # MusicBrainz rate limit
-        
-        if response.status_code == 200:
-            data = response.json()
-            if 'recordings' in data and len(data['recordings']) > 0:
-                for recording in data['recordings'][:2]:
-                    if 'work-relation-list' in recording:
-                        for relation in recording['work-relation-list']:
-                            work = relation.get('work', {})
-                            if 'language' in work:
-                                lang_code = work['language']
-                                lang_map = {
-                                    'eng': 'English', 'hin': 'Hindi', 'tel': 'Telugu',
-                                    'kan': 'Kannada', 'tam': 'Tamil', 'mar': 'Marathi',
-                                    'ben': 'Bengali', 'guj': 'Gujarati', 'pan': 'Punjabi',
-                                    'mal': 'Malayalam'
-                                }
-                                detected_lang = lang_map.get(lang_code, None)
-                                if detected_lang:
-                                    return {
-                                        'language': detected_lang,
-                                        'confidence': 0.85,
-                                        'method': 'musicbrainz'
-                                    }
-        
-        return {'language': None, 'confidence': 0.0, 'method': 'musicbrainz_no_match'}
-    except Exception:
-        return {'language': None, 'confidence': 0.0, 'method': 'musicbrainz_error'}
+    return {'language': None, 'confidence': 0.0, 'method': 'musicbrainz_failed'}
 
 
 # ============================================================================
 # PHASE 2: LYRICS-BASED DETECTION
 # ============================================================================
-
-def _map_language_code(code: str) -> str:
-    """Convert ISO 639-1 language codes to full language names."""
-    code_to_lang = {
-        'en': 'English', 'hi': 'Hindi', 'bn': 'Bengali', 'te': 'Telugu',
-        'ta': 'Tamil', 'pa': 'Punjabi', 'gu': 'Gujarati', 'kn': 'Kannada',
-        'ml': 'Malayalam', 'or': 'Odia', 'ur': 'Urdu', 'ar': 'Arabic',
-        'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian',
-        'pt': 'Portuguese', 'ru': 'Russian', 'zh': 'Chinese',
-        'ja': 'Japanese', 'ko': 'Korean', 'th': 'Thai', 'vi': 'Vietnamese',
-    }
-    return code_to_lang.get(code, 'Unknown')
-
 
 def _detect_language_from_keywords(text: str) -> Optional[str]:
     """Detect language from transliterated text using language-specific keywords."""
@@ -250,7 +119,7 @@ def _detect_language_from_keywords(text: str) -> Optional[str]:
 
 
 def _detect_language_from_lyrics(lyrics: str) -> Dict[str, Any]:
-    """Detect language from lyrics using langdetect."""
+    """Detect language from lyrics using langdetect and keyword matching."""
     if not lyrics or not HAS_LANGDETECT:
         return {'language': None, 'confidence': 0.0}
     
@@ -271,7 +140,7 @@ def _detect_language_from_lyrics(lyrics: str) -> Dict[str, Any]:
             detected_probs = detect_langs(line)
             if detected_probs and detected_probs[0].prob >= 0.7:
                 lang_code = detected_probs[0].lang
-                lang_name = _map_language_code(lang_code)
+                lang_name = map_iso_639_1_language(lang_code)
                 detected_langs[lang_name] = detected_langs.get(lang_name, 0) + 1
             else:
                 keyword_lang = _detect_language_from_keywords(line)
@@ -468,6 +337,13 @@ def enrich_for_download(
         'language': 'English',
         'lyrics-eng': None,
     }
+
+    # HARDENING: ensure album_artist exists for downstream embedding
+    existing_album_artist = str(enriched.get('album_artist', '')).strip()
+    if not existing_album_artist and artist:
+        primary_artist = re.split(r',|&|\bfeat\.?\b|\bft\.?\b|\bwith\b', artist, maxsplit=1, flags=re.IGNORECASE)[0].strip()
+        if primary_artist:
+            enriched['album_artist'] = primary_artist
     
     # Clean title to remove featured artists markers for searching
     clean_title, featured_artists = _extract_featured_artists(title)

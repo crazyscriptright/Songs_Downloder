@@ -62,7 +62,7 @@ A powerful web-based music downloader that searches and downloads music from mul
 
    ```bash
    # from repo root
-   copy backend\env.example backend\.env
+   copy backend\.env.example backend\.env
    # or on macOS/Linux: cp backend/env.example backend/.env
    ```
 

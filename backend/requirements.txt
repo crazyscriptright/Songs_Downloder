@@ -18,5 +18,3 @@ langdetect
 # Picard fallback enrichment
 musicbrainzngs>=0.7.0
 pyacoustid>=1.3.0
-# spotdl>=4.2.0  (no longer used; replaced by soundcloud downloader)
-

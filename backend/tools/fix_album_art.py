@@ -41,7 +41,8 @@ from PIL import Image
 import io
 import traceback
 
-sys.path.insert(0, str(Path(__file__).parent))
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BACKEND_DIR))
 
 try:
     import requests
@@ -571,6 +572,86 @@ def get_audio_files(folder_path: Path) -> list:
     return sorted(audio_files)
 
 
+def process_single_file(file_path: Path, dry_run: bool = False, remove_mode: bool = False) -> Dict[str, Any]:
+    """Process one music file: ensure artwork exists and is square, then fix if needed."""
+    result = {
+        'file': str(file_path),
+        'had_artwork': False,
+        'was_square': False,
+        'updated': False,
+        'removed': False,
+        'status': 'skipped',
+    }
+
+    if not file_path.exists() or not file_path.is_file():
+        logger.error(f"❌ File not found: {file_path}")
+        result['status'] = 'file_not_found'
+        return result
+
+    if file_path.suffix.lower() not in {'.mp3', '.flac', '.m4a', '.mp4', '.aac', '.wav'}:
+        logger.warning(f"⚠️  Not a supported audio file: {file_path.name}")
+        result['status'] = 'unsupported_extension'
+        return result
+
+    logger.info(f"\n🎵 Processing single file: {file_path.name}")
+
+    artwork_bytes, _ = get_artwork_from_file(file_path)
+    if artwork_bytes:
+        result['had_artwork'] = True
+        aspect_ratio, dimensions = check_artwork_aspect_ratio(artwork_bytes)
+        if aspect_ratio is not None and is_square_artwork(artwork_bytes, tolerance=0.05):
+            logger.info(f"   ✅ Already square artwork ({dimensions[0]}x{dimensions[1]})")
+            result['was_square'] = True
+            result['status'] = 'already_square'
+            return result
+
+        if aspect_ratio is not None:
+            logger.warning(f"   ⚠️  Non-square artwork ({dimensions[0]}x{dimensions[1]} - {aspect_ratio:.2f}:1)")
+    else:
+        logger.warning("   ❌ No artwork found")
+
+    if dry_run:
+        result['status'] = 'dry_run'
+        return result
+
+    if remove_mode:
+        if remove_artwork_from_file(file_path):
+            logger.info("   ✅ Artwork removed")
+            result['removed'] = True
+            result['status'] = 'removed'
+        else:
+            logger.error("   ❌ Failed to remove artwork")
+            result['status'] = 'failed_remove'
+        return result
+
+    title = _get_tag(file_path, 'title') or file_path.stem
+    artist = _get_tag(file_path, 'artist') or ''
+    album = _get_tag(file_path, 'album') or ''
+
+    logger.info("   🌐 Fetching replacement artwork...")
+    new_artwork = fetch_artwork_from_apis(title=title, artist=artist, album=album)
+    if not new_artwork:
+        logger.warning("   ❌ Could not fetch artwork from APIs")
+        result['status'] = 'failed_fetch'
+        return result
+
+    square_artwork = resize_artwork_to_square(new_artwork, target_size=1080)
+    if not square_artwork:
+        logger.warning("   ❌ Could not resize artwork")
+        result['status'] = 'failed_resize'
+        return result
+
+    if embed_artwork_to_file(file_path, square_artwork):
+        logger.info("   ✅ Artwork updated (1080x1080)")
+        result['updated'] = True
+        result['status'] = 'updated'
+    else:
+        logger.error("   ❌ Failed to embed artwork")
+        result['status'] = 'failed_embed'
+
+    return result
+
+
 def scan_missing_artwork(folder_path: Path, dry_run: bool = False, limit: Optional[int] = None) -> Dict[str, Any]:
     """
     Scan folder and find files WITHOUT artwork.
@@ -925,6 +1006,13 @@ Examples:
   python fix_album_art.py --folder "B:\\music\\Artist"  # Specific folder
         '''
     )
+
+    parser.add_argument(
+        'target',
+        nargs='?',
+        default=None,
+        help='Optional single file or folder path (if omitted, uses --folder)'
+    )
     
     parser.add_argument(
         '--folder',
@@ -955,10 +1043,10 @@ Examples:
     
     args = parser.parse_args()
     
-    folder_path = Path(args.folder)
+    target_path = Path(args.target) if args.target else Path(args.folder)
     
-    if not folder_path.exists():
-        logger.error(f"❌ Folder not found: {folder_path}")
+    if not target_path.exists():
+        logger.error(f"❌ Path not found: {target_path}")
         sys.exit(1)
     
     if args.dry_run:
@@ -970,17 +1058,20 @@ Examples:
     else:
         mode = "REPLACE MODE (fetch & embed new artwork)"
     
-    logger.info(f"\n📁 Music folder: {folder_path}")
+    logger.info(f"\n📁 Target: {target_path}")
     logger.info(f"🔧 Mode: {mode}")
     if args.limit:
         logger.info(f"📊 Limit: {args.limit} files")
     logger.info("")
     
-    # Scan and process based on mode
-    if args.fill_missing:
-        result = scan_missing_artwork(folder_path, dry_run=args.dry_run, limit=args.limit)
+    # Single-file mode
+    if target_path.is_file():
+        process_single_file(target_path, dry_run=args.dry_run, remove_mode=args.remove)
+    # Folder mode
+    elif args.fill_missing:
+        result = scan_missing_artwork(target_path, dry_run=args.dry_run, limit=args.limit)
     else:
-        result = scan_and_report(folder_path, dry_run=args.dry_run, remove_mode=args.remove)
+        result = scan_and_report(target_path, dry_run=args.dry_run, remove_mode=args.remove)
     
     logger.info(f"\n{'='*70}")
     logger.info("✨ DONE!")

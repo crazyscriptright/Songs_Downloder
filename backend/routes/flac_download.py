@@ -9,8 +9,11 @@ Integrates the spoflac_core/main.py SpotiFLAC download logic into the Flask app.
 """
 
 import os
+import subprocess
+import sys
 import threading
 from datetime import datetime
+from pathlib import Path
 
 from flask import Blueprint, jsonify, request, send_file
 
@@ -28,6 +31,32 @@ from spoflac_core.modules import url_resolver
 from spoflac_core.modules import utils
 
 flac_bp = Blueprint("flac", __name__, url_prefix="/flac")
+
+
+def _run_cli_music_hardening(file_path: str) -> None:
+    """Run CLI metadata hardening for a local music file."""
+    try:
+        path = Path(file_path).resolve()
+        if not path.exists() or not path.is_file():
+            return
+        if path.suffix.lower() not in {'.mp3', '.flac', '.m4a', '.mp4', '.aac', '.wav'}:
+            return
+
+        backend_dir = Path(__file__).resolve().parents[1]
+        python_exec = sys.executable
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"
+
+        subprocess.run(
+            [python_exec, 'tools/enrich_metadata.py', str(path), '-y'],
+            cwd=str(backend_dir),
+            env=env,
+            check=False,
+            capture_output=True,
+        )
+    except Exception as exc:
+        print(f"[flac] CLI hardening skipped: {exc}")
 
 def _update(download_id: str, status: str, progress: int | None = None, message: str = "") -> None:
     """Mutate the shared status entry and persist it."""
@@ -180,6 +209,8 @@ def _run_flac_download(
             )
         except Exception as post_exc:
             print(f"[flac] post-process skipped: {post_exc}")
+
+        _run_cli_music_hardening(output_path)
 
         state.download_status[download_id].update(
             status="complete",

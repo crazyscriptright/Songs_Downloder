@@ -50,7 +50,8 @@ try:
 except ImportError:
     requests = None
 
-sys.path.insert(0, str(Path(__file__).parent))
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BACKEND_DIR))
 
 from mutagen.mp3 import MP3
 from mutagen.flac import FLAC
@@ -68,7 +69,7 @@ from spoflac_core.modules.url_resolver import _romanize_lrc_lyrics, _detect_scri
 
 # Import Picard fallback enricher (optional)
 try:
-    from picard_fallback_enricher import run_picard_fallback_enrichment, install_requirements as check_picard_requirements
+    from tools.picard_fallback_enricher import run_picard_fallback_enrichment, install_requirements as check_picard_requirements
     PICARD_AVAILABLE = check_picard_requirements()
 except ImportError:
     PICARD_AVAILABLE = False

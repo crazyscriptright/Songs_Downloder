@@ -18,8 +18,12 @@ import logging
 import os
 import re
 import shutil
+import sys
 from pathlib import Path
 from typing import Optional, Dict, Any
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BACKEND_DIR))
 
 try:
     import musicbrainzngs as mb

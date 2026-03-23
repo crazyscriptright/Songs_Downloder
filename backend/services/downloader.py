@@ -9,9 +9,11 @@ import os
 import re
 import shlex
 import subprocess
+import sys
 import time
 import urllib.parse
 from datetime import datetime
+from pathlib import Path
 
 import requests
 
@@ -25,6 +27,50 @@ from services.post_download_enricher import run_post_download_enrichment
 
 def _safe_title(title: str) -> str:
     return re.sub(r'[<>:"/\\|?*]', "_", title)
+
+
+def _run_cli_music_hardening(file_path: str) -> None:
+    """
+    Run CLI metadata hardening command on a completed local music file:
+            python tools/enrich_metadata.py "<file>" -y
+    """
+    try:
+        path = Path(file_path).resolve()
+        if not path.exists() or not path.is_file():
+            return
+
+        if path.suffix.lower() not in {'.mp3', '.flac', '.m4a', '.mp4', '.aac', '.wav'}:
+            return
+
+        backend_dir = Path(__file__).resolve().parents[1]
+        python_exec = sys.executable
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"
+
+        print(f" Running CLI metadata hardening for: {path.name}")
+
+        hardening = subprocess.run(
+            [python_exec, 'tools/enrich_metadata.py', str(path), '-y'],
+            cwd=str(backend_dir),
+            env=env,
+            check=False,
+            capture_output=True,
+            timeout=180,
+        )
+
+        if hardening.returncode == 0:
+            print(f" CLI metadata hardening completed: {path.name}")
+        else:
+            stderr_text = (hardening.stderr or b"").decode("utf-8", errors="replace")
+            stdout_text = (hardening.stdout or b"").decode("utf-8", errors="replace")
+            stderr_line = stderr_text.strip().splitlines()
+            stdout_line = stdout_text.strip().splitlines()
+            err_preview = stderr_line[-1] if stderr_line else (stdout_line[-1] if stdout_line else 'unknown error')
+            print(f" CLI metadata hardening failed ({hardening.returncode}): {path.name} | {err_preview}")
+
+    except Exception as cli_exc:
+        print(f" CLI hardening skipped: {cli_exc}")
 
 
 # ── SpotiFLAC core integration ─────────────────────────────────────────────────
@@ -279,6 +325,9 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
         except Exception as post_exc:
             print(f" Post-process skipped (SpotiFLAC): {post_exc}")
 
+        # Force CLI hardening pass for every completed music download
+        _run_cli_music_hardening(output_path)
+
         file_size = os.path.getsize(output_path) / (1024 * 1024)
         print(f" SpotiFLAC done: {os.path.basename(output_path)} ({file_size:.1f} MB)")
 
@@ -378,16 +427,32 @@ def download_with_proxy_api(url: str, title: str, download_id: str, advanced_opt
                     raise Exception("No download URL in completed response")
 
                 filename = f"{_safe_title(title)}.{file_extension}"
+                download_dir = os.path.join(config.DOWNLOAD_FOLDER, download_id)
+                os.makedirs(download_dir, exist_ok=True)
+                local_path = os.path.join(download_dir, filename)
+
+                print(f" Proxy download completed remotely, saving local file: {filename}")
+                with requests.get(dl_url, stream=True, timeout=120) as file_resp:
+                    file_resp.raise_for_status()
+                    with open(local_path, 'wb') as out_file:
+                        for chunk in file_resp.iter_content(chunk_size=1024 * 128):
+                            if chunk:
+                                out_file.write(chunk)
+
+                if not is_video:
+                    _run_cli_music_hardening(local_path)
+
                 state.download_status[download_id].update(
                     status="complete", progress=100, file=filename,
                     speed="Complete", eta="0:00",
                     completed_at=datetime.now().isoformat(),
                     downloaded_via="proxy_api",
-                    download_url=dl_url,
+                    download_url=f"/get_file/{download_id}/{filename}",
+                    source_download_url=dl_url,
                     alternative_download_urls=prog_data.get("alternative_download_urls", []),
                 )
                 state.save_download_status()
-                print(f" Proxy download complete: {dl_url}")
+                print(f" Proxy download complete (local): {local_path}")
                 return
 
             time.sleep(2)
@@ -796,7 +861,22 @@ def _build_cmd(url: str, advanced_options) -> list[str]:
         if embed_subs:
             cmd.extend(["--embed-subs", "--write-auto-subs", "--sub-langs", "en.*,hi.*,all"])
     else:
+        url_lower = (url or "").lower()
+        if any(host in url_lower for host in ("music.youtube.com", "youtube.com", "youtu.be")):
+            # Prefer highest available audio stream for YouTube/YT Music
+            cmd.extend(["-f", "bestaudio[abr>=128]/bestaudio/best"])
+
         cmd.extend(["-x", "--audio-format", audio_fmt, "--audio-quality", aq])
+
+        if audio_fmt == "mp3":
+            # Force target MP3 bitrate profile for predictable output bitrate.
+            mp3_bitrate = {
+                "0": "320k",
+                "2": "256k",
+                "5": "192k",
+                "9": "128k",
+            }.get(aq, "320k")
+            cmd.extend(["--postprocessor-args", f"ExtractAudio+ffmpeg_o:-b:a {mp3_bitrate}"])
 
     if add_metadata:
         cmd.append("--embed-metadata")
@@ -913,6 +993,7 @@ def _finalise_success(
                     run_post_download_enrichment(file_path, metadata_context={"title": os.path.splitext(fname)[0]})
                 except Exception as post_exc:
                     print(f" Post-process skipped for {fname}: {post_exc}")
+                _run_cli_music_hardening(file_path)
 
         # Playlist
         if completed_files:
@@ -955,11 +1036,15 @@ def _finalise_success(
             )
 
         opts = advanced_options or {}
-        if fname and opts.get('addMetadata', True) and not opts.get('keepVideo', False):
+        if fname and not opts.get('keepVideo', False):
             target_path = os.path.join(download_dir, fname)
-            post_result = run_post_download_enrichment(target_path, metadata_context={"title": title})
-            if not post_result.get("metadata_enriched"):
-                _embed_lyrics_for_file(target_path)
+            try:
+                post_result = run_post_download_enrichment(target_path, metadata_context={"title": title})
+                if not post_result.get("metadata_enriched"):
+                    _embed_lyrics_for_file(target_path)
+            except Exception as post_exc:
+                print(f" Post-process skipped for {fname}: {post_exc}")
+            _run_cli_music_hardening(target_path)
 
         download_status[download_id] = {
             "status": "complete", "progress": 100,

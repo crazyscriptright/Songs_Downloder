@@ -3,7 +3,7 @@ import os
 import re
 import requests
 from mutagen.flac import FLAC, Picture
-from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC, TRCK, TPOS, TPE2, USLT, APIC, TSRC, TCON, TXXX
+from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC, TYER, TRCK, TPOS, TPE2, USLT, APIC, TSRC, TCON, TXXX
 from mutagen.mp4 import MP4, MP4Cover
 from config import USER_AGENT
 
@@ -45,6 +45,16 @@ def should_override_lyrics(existing_lyrics: str, incoming_lyrics: str) -> bool:
         return True
     
     return False
+
+
+def _extract_year(metadata) -> str:
+    """Get a clean 4-digit year from metadata keys: release_date/date/year."""
+    raw_date = metadata.get('release_date') or metadata.get('date') or metadata.get('year')
+    if raw_date is None:
+        return ''
+
+    year = str(raw_date).strip().split('-')[0]
+    return year if (year.isdigit() and len(year) == 4) else ''
 
 def download_cover_art(cover_url, output_path):
     """Download album cover art"""
@@ -89,8 +99,9 @@ def embed_flac_metadata(filepath, metadata, cover_path=None):
         if metadata.get('album_artist') and metadata['album_artist'] not in ['Unknown Artist', '']:
             audio['ALBUMARTIST'] = metadata['album_artist']
         
-        if metadata.get('release_date') and metadata['release_date'] not in ['', 'Unknown']:
-            audio['DATE'] = metadata['release_date'][:4]
+        year = _extract_year(metadata)
+        if year:
+            audio['DATE'] = year
 
         if metadata.get('track_number') and metadata['track_number'] not in [0, '0']:
             audio['TRACKNUMBER'] = str(metadata['track_number'])
@@ -137,11 +148,9 @@ def embed_flac_metadata(filepath, metadata, cover_path=None):
         if metadata.get('language') and metadata['language'] not in ['Unknown', '']:
             audio['LANGUAGE'] = metadata['language']
         
-        # Year (from release_date)
-        if metadata.get('release_date'):
-            year = metadata['release_date'][:4]
-            if year.isdigit():
-                audio['DATE'] = year
+        # Year (DATE)
+        if year:
+            audio['DATE'] = year
         
         lyrics_val = metadata.get('lyrics-eng') or metadata.get('lyrics')
         if lyrics_val:
@@ -188,10 +197,11 @@ def embed_mp3_metadata(filepath, metadata, cover_path=None):
     try:
         try:
             audio = ID3(filepath)
-        except:
-            # If no ID3 tags exist, create new ones
+        except Exception:
             from mutagen.mp3 import MP3
-            audio = MP3(filepath).add_tags()
+            mp3_file = MP3(filepath)
+            mp3_file.add_tags()
+            audio = mp3_file.tags
         
         # Only update fields if they have values (don't overwrite with empty/Unknown)
         if metadata.get('title') and metadata['title'] not in ['Unknown Title', '']:
@@ -206,8 +216,12 @@ def embed_mp3_metadata(filepath, metadata, cover_path=None):
         if metadata.get('album_artist') and metadata['album_artist'] not in ['Unknown Artist', '']:
             audio.add(TPE2(encoding=3, text=metadata['album_artist']))
         
-        if metadata.get('release_date') and metadata['release_date'] not in ['', 'Unknown']:
-            audio.add(TDRC(encoding=3, text=metadata['release_date'][:4]))
+        year = _extract_year(metadata)
+        if year:
+            audio.delall('TDRC')
+            audio.delall('TYER')
+            audio.add(TDRC(encoding=3, text=year))
+            audio.add(TYER(encoding=3, text=year))
 
         if metadata.get('track_number') and metadata['track_number'] not in [0, '0']:
             audio.add(TRCK(encoding=3, text=str(metadata['track_number'])))
@@ -310,8 +324,9 @@ def embed_m4a_metadata(filepath, metadata, cover_path=None):
         if metadata.get('album_artist') and metadata['album_artist'] not in ['Unknown Artist', '']:
             audio['aART'] = metadata['album_artist']
         
-        if metadata.get('release_date') and metadata['release_date'] not in ['', 'Unknown']:
-            audio['\xa9day'] = metadata['release_date'][:4]
+        year = _extract_year(metadata)
+        if year:
+            audio['\xa9day'] = year
 
         if metadata.get('track_number') and metadata['track_number'] not in [0, '0']:
             audio['trkn'] = [(metadata['track_number'], 0)]
