@@ -8,7 +8,7 @@ import os
 import requests
 from flask import Blueprint, Response, jsonify, request
 
-import config
+from core import config
 from utils.image import get_responsive_image_url
 
 proxy_bp = Blueprint("proxy", __name__)

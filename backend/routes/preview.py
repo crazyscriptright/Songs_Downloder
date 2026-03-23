@@ -16,8 +16,8 @@ import mimetypes
 
 from flask import Blueprint, Response, jsonify, request, send_file
 
-import config
-import state
+from core import config
+from core import state
 from services.preview import (
     download_preview_audio,
     get_jiosaavn_stream_fast,

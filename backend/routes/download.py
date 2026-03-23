@@ -12,8 +12,8 @@ from datetime import datetime
 
 from flask import Blueprint, current_app, jsonify, request, send_file
 
-import config
-import state
+from core import config
+from core import state
 from services.downloader import download_song
 
 download_bp = Blueprint("download", __name__)

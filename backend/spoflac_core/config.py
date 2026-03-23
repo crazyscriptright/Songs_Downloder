@@ -1,9 +1,9 @@
 """
 spoflac_core/config.py — thin shim.
 
-All constants live in backend/config.py (single source of truth).
+All constants live in backend/core/config.py (single source of truth).
 When running under Flask (backend/ is on sys.path), modules that do
-`from config import ...` pick up backend/config.py directly and this
+`from core.config import ...` pick up backend/core/config.py directly and this
 file is never loaded.  This shim only kicks in when running scripts
 standalone (e.g. `python main.py`) from inside the spoflac_core/ dir.
 """
@@ -13,4 +13,4 @@ _backend_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if _backend_dir not in _sys.path:
     _sys.path.insert(0, _backend_dir)
 
-from config import *   # noqa: F401, F403, E402
+from core.config import *   # noqa: F401, F403, E402

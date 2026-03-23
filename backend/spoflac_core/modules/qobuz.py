@@ -4,7 +4,7 @@ import json
 import random
 import os
 from tqdm import tqdm
-from config import (
+from core.config import (
     QOBUZ_STANDARD_APIS, QOBUZ_JUMO_API, QOBUZ_SEARCH_API,
     QOBUZ_APP_ID, QOBUZ_QUALITY, USER_AGENT
 )

@@ -5,7 +5,7 @@ import requests
 from mutagen.flac import FLAC, Picture
 from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC, TYER, TRCK, TPOS, TPE2, USLT, APIC, TSRC, TCON, TXXX
 from mutagen.mp4 import MP4, MP4Cover
-from config import USER_AGENT
+from core.config import USER_AGENT
 
 
 def has_timestamps(lyrics: str) -> bool:

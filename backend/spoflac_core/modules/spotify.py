@@ -6,7 +6,7 @@ import base64
 import json
 import re
 from datetime import datetime, timedelta
-from config import (
+from core.config import (
     SPOTIFY_TOKEN_URL, SPOTIFY_HOME_URL, SPOTIFY_CLIENT_TOKEN_URL,
     SPOTIFY_GRAPHQL_URL, SPOTIFY_LYRICS_URL, TOTP_SECRET_V61, USER_AGENT
 )

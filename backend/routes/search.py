@@ -13,7 +13,7 @@ from datetime import datetime
 import requests
 from flask import Blueprint, jsonify, render_template, request
 
-import state
+from core import state
 from utils.url_utils import is_url, validate_url_simple
 
 search_bp = Blueprint("search", __name__)
@@ -27,7 +27,7 @@ def get_apis():
     from integrations.ytmusic_dynamic_tokens import YouTubeMusicAPI
     from integrations.ytmusic_dynamic_video_tokens import YouTubeMusicVideoAPI
     from integrations.jiosaavn_search import JioSaavnAPI
-    import config
+    from core import config
 
     if not _ytmusic_api:
         _ytmusic_api = YouTubeMusicAPI(

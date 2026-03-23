@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
 from tqdm import tqdm
-from config import TIDAL_APIS, TIDAL_QUALITY, USER_AGENT
+from core.config import TIDAL_APIS, TIDAL_QUALITY, USER_AGENT
 
 
 class TidalDownloader:

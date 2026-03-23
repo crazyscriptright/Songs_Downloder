@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 PY = sys.executable
 
 
@@ -23,11 +23,11 @@ def main() -> int:
 
     compile_targets = [
         "app.py",
-        "api_metadata_enricher.py",
-        "tools/enrich_metadata.py",
-        "tools/picard_fallback_enricher.py",
-        "config.py",
-        "state.py",
+        "services/api_metadata_enricher.py",
+        "tools/music_metadata_enhancer/enrich_metadata.py",
+        "tools/music_metadata_enhancer/picard_fallback_enricher.py",
+        "core/config.py",
+        "core/state.py",
         "routes",
         "services",
         "integrations",
@@ -48,10 +48,11 @@ def main() -> int:
             "-m",
             "py_compile",
             "app.py",
+            "services/api_metadata_enricher.py",
             "services/downloader.py",
             "routes/flac_download.py",
-            "tools/enrich_metadata.py",
-            "tools/picard_fallback_enricher.py",
+            "tools/music_metadata_enhancer/enrich_metadata.py",
+            "tools/music_metadata_enhancer/picard_fallback_enricher.py",
         ],
         ROOT,
     )

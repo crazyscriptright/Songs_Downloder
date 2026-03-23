@@ -1,9 +1,0 @@
-Flask
-Flask-CORS
-gunicorn
-yt-dlp
-requests
-python-dotenv
-beautifulsoup4
-lxml
-yt-dlp-proxy

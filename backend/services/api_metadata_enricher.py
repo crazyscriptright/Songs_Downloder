@@ -16,7 +16,7 @@ Used by:
 - services/downloader.py (background downloads)
 
 Usage:
-    from api_metadata_enricher import enrich_for_download
+    from services.api_metadata_enricher import enrich_for_download
     
     enriched = enrich_for_download(
         title="Jo Tum Mere Ho",
@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 import re
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 try:
     from langdetect import detect, detect_langs, LangDetectException

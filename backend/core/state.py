@@ -12,7 +12,7 @@ import shutil
 from datetime import datetime
 from typing import Any
 
-import config
+from core import config
 
 # ── In-memory stores ───────────────────────────────────────────────────────────
 download_status: dict[str, Any] = {}

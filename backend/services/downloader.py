@@ -17,9 +17,9 @@ from pathlib import Path
 
 import requests
 
-import config
-import state
-import api_metadata_enricher
+from core import config
+from core import state
+from services import api_metadata_enricher
 from services.post_download_enricher import run_post_download_enrichment
 
 
@@ -32,7 +32,7 @@ def _safe_title(title: str) -> str:
 def _run_cli_music_hardening(file_path: str) -> None:
     """
     Run CLI metadata hardening command on a completed local music file:
-            python tools/enrich_metadata.py "<file>" -y
+        python tools/music_metadata_enhancer/enrich_metadata.py "<file>" -y
     """
     try:
         path = Path(file_path).resolve()
@@ -51,7 +51,7 @@ def _run_cli_music_hardening(file_path: str) -> None:
         print(f" Running CLI metadata hardening for: {path.name}")
 
         hardening = subprocess.run(
-            [python_exec, 'tools/enrich_metadata.py', str(path), '-y'],
+            [python_exec, 'tools/music_metadata_enhancer/enrich_metadata.py', str(path), '-y'],
             cwd=str(backend_dir),
             env=env,
             check=False,
@@ -531,7 +531,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
     Progress is written into ``state.download_status[download_id]`` in
     real-time.
     """
-    from state import download_status, active_processes, save_download_status
+    from core.state import download_status, active_processes, save_download_status
 
     # ── SpotiFLAC route ───────────────────────────────────────────────────────
     platform = _detect_spoflac_platform(url)
@@ -968,7 +968,7 @@ def _finalise_success(
     download_id, url, title, safe, download_dir,
     completed_files, total_files, has_progress, advanced_options,
 ):
-    from state import download_status, save_download_status
+    from core.state import download_status, save_download_status
 
     try:
         files = os.listdir(download_dir)

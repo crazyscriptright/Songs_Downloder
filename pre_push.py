@@ -22,7 +22,7 @@ def run_step(label: str, cmd: list[str], cwd: Path) -> None:
 def main() -> int:
     print("Running monorepo pre-push checks...")
 
-    backend_script = ROOT / "backend" / "pre_push_backend.py"
+    backend_script = ROOT / "backend" / "scripts" / "pre_push_backend.py"
     run_step(
         "Backend checks",
         [PY, str(backend_script)],

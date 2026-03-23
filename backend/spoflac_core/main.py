@@ -3,7 +3,7 @@ import os
 import sys
 import click
 from modules import tidal, qobuz, amazon, soundcloud, metadata, utils, url_resolver
-from config import DEFAULT_OUTPUT_DIR, DEFAULT_SERVICE, DEFAULT_QUALITY
+from core.config import DEFAULT_OUTPUT_DIR, DEFAULT_SERVICE, DEFAULT_QUALITY
 
 @click.command()
 @click.argument('music_url')

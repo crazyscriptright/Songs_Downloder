@@ -8,7 +8,7 @@ loop — never call the API once per service.
 import time
 import requests
 from urllib.parse import quote
-from config import SONGLINK_API, DEEZER_API, SONGLINK_MIN_DELAY, SONGLINK_RETRY_DELAY, USER_AGENT
+from core.config import SONGLINK_API, DEEZER_API, SONGLINK_MIN_DELAY, SONGLINK_RETRY_DELAY, USER_AGENT
 
 
 class SongLinkClient:

@@ -17,9 +17,9 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify, request, send_file
 
-import config
-import state
-import api_metadata_enricher
+from core import config
+from core import state
+from services import api_metadata_enricher
 from services.post_download_enricher import run_post_download_enrichment
 
 from spoflac_core.modules import amazon
@@ -49,7 +49,7 @@ def _run_cli_music_hardening(file_path: str) -> None:
         env["PYTHONUTF8"] = "1"
 
         subprocess.run(
-            [python_exec, 'tools/enrich_metadata.py', str(path), '-y'],
+            [python_exec, 'tools/music_metadata_enhancer/enrich_metadata.py', str(path), '-y'],
             cwd=str(backend_dir),
             env=env,
             check=False,

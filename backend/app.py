@@ -15,8 +15,8 @@ load_dotenv()
 from flask import Flask
 from flask_cors import CORS
 
-import config
-import state
+from core import config
+from core import state
 from routes import register_blueprints
 
 
@@ -52,4 +52,5 @@ if __name__ == "__main__":
 
     port = config.PORT
     debug = config.FLASK_ENV == "development"
+
     app.run(host="0.0.0.0", port=port, debug=debug, threaded=True, use_reloader=debug)

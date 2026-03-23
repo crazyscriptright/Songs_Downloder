@@ -5,7 +5,7 @@ import os
 import subprocess
 from urllib.parse import urlparse, parse_qs
 from tqdm import tqdm
-from config import AMAZON_APIS, USER_AGENT
+from core.config import AMAZON_APIS, USER_AGENT
 
 
 class AmazonDownloader:
