@@ -48,6 +48,7 @@ dummy.*
 # tools ignore
 backend/tools/.github
 backend/tools/*.md
+backend/tools/.gitignore
 backend/tools/.env.example
 backend/tools/requirements.txt
 *.js
@@ -55,8 +56,10 @@ node_modules
 backend/download_status.json
 backend/tools/CONTRIBUTING.md
 backend/tools/.env.*
-*/*/*/env.example
-*/*/*/requirements.txt
-*/*/*/CONTRIBUTING.md
-*/*/*/.github
-*/*/*/LICENSE
+backend/tools/pyproject.toml
+*/*/env.example
+*/*/requirements.txt
+*/*/CONTRIBUTING.md
+*/*/.github
+*/*/LICENSE
+
