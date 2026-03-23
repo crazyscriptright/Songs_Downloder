@@ -1,37 +1,62 @@
 __pycache__/
-schedulestart.bat
-backend/*.json
+*.py[cod]
+
+# Environment files
 .env
-.vscode/
-.DS_Store
-.idea/
-*.log
-*.sqlite3
+backend/.env
+spotiflac-frontend/.env
+spotiflac-frontend/.env.local
+
+# Virtual environments
 venv/
 env/
-frontend/.env
-backend/.env
 backend/venv/
 backend/env/
-node_modules/
-dist/
-backend/schedulestart.bat
-frontend/schedulestart.bat
-frontend/node_modules/
-frontend/dist/
-frontend/.DS_Store
+backend/new_venv/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
 backend/.DS_Store
+spotiflac-frontend/.DS_Store
+*.code-workspace
+
+# Logs / databases
+*.log
+*.sqlite3
+
+# Frontend build artifacts
+node_modules/
+spotiflac-frontend/node_modules/
+dist/
+build/
+spotiflac-frontend/dist/
+.vite/
+
+# Local/generated backend artifacts
+backend/*.json
+backend/old/
 backend/__pycache__/
+downloads/
 cookies.txt
-build
-node_modules
-venv
-.vite
-package-lock.json
-backend/old
-downloas_status.json
 music_api_cache.json
+download_status.json
 *.dummy.*
 dummy.*
-*.code-workspace
-downloads
+
+# tools ignore
+backend/tools/.github
+backend/tools/*.md
+backend/tools/.env.example
+backend/tools/requirements.txt
+*.js
+node_modules
+backend/download_status.json
+backend/tools/CONTRIBUTING.md
+backend/tools/.env.*
+*/*/*/env.example
+*/*/*/requirements.txt
+*/*/*/CONTRIBUTING.md
+*/*/*/.github
+*/*/*/LICENSE
