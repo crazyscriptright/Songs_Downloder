@@ -103,7 +103,7 @@ class SoundCloudDownloader:
             self._ytdlp,
             search_input,
             '--output', outtmpl,
-            '--format', 'bestaudio',
+            '--format', 'bestaudio[acodec=opus][abr>=96]/bestaudio',
             '--no-playlist',
             '--no-part',
             '--newline',

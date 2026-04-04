@@ -43,3 +43,20 @@ tools/**/dist/
 tools/**/build/
 tools/**/.vscode/
 tools/**/.idea/
+# tools ignore
+tools/.github
+tools/*.md
+tools/.gitignore
+tools/.env.example
+tools/requirements.txt
+*.js
+node_modules
+download_status.json
+tools/CONTRIBUTING.md
+tools/.env.*
+tools/pyproject.toml
+*/env.example
+*/requirements.txt
+*/CONTRIBUTING.md
+*/.github
+*/LICENSE

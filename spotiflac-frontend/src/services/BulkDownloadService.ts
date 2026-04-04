@@ -32,6 +32,11 @@ export interface BulkAdvancedOptions {
   audioQuality?: string;
   embedThumbnail?: boolean;
   embedSubtitles?: boolean;
+  speedLimit?: string;
+  geoBypass?: boolean;
+  preferFreeFormats?: boolean;
+  maxFileSize?: string;
+  customArgs?: string;
 }
 
 export interface PlaylistVideo {
@@ -494,8 +499,9 @@ export class BulkDownloadService {
         `Downloading ${videos.length} video(s) from playlist...`,
       );
 
-      const format = type === "video" ? videoOptions.quality : "mp3";
-      const quality = type === "audio" ? audioOptions.quality || "128" : null;
+      const format =
+        type === "video" ? videoOptions.quality : audioOptions.format || "best";
+      const quality = type === "audio" ? audioOptions.quality || "0" : null;
 
       const playlistTimestamp = Date.now();
       videos.forEach((video, i) => {

@@ -16,6 +16,7 @@ Usage:
   python test_ytdlp_endpoint.py                    # Without proxy
   python test_ytdlp_endpoint.py --proxy http://proxy:8080
   python test_ytdlp_endpoint.py --proxy socks5://127.0.0.1:9050
+    python test_ytdlp_endpoint.py --free-proxy      # Auto-fetch a free proxy
   python test_ytdlp_endpoint.py --skip-api        # Direct library only (no Flask API)
 """
 
@@ -24,6 +25,13 @@ import json
 import os
 from pathlib import Path
 import time
+from datetime import datetime
+import subprocess
+
+try:
+        from fp.fp import FreeProxy
+except ImportError:
+        FreeProxy = None
 
 # Try importing yt-dlp
 try:
@@ -43,6 +51,83 @@ DEFAULT_PROXIES = {
     "socks5_tor": "socks5://127.0.0.1:9050",  # Tor default
     "socks5_localhost": "socks5h://127.0.0.1:1080",  # Local SOCKS5
 }
+
+CACHE_FILE = Path(__file__).resolve().parent / "music_api_cache.json"
+
+
+def load_music_cache():
+    """Load cache JSON file if available."""
+    if not CACHE_FILE.exists():
+        return {}
+
+    try:
+        with CACHE_FILE.open("r", encoding="utf-8") as cache_file:
+            return json.load(cache_file)
+    except Exception as error:
+        print(f"⚠️  Could not read cache file: {error}")
+        return {}
+
+
+def save_music_cache(cache_data: dict):
+    """Persist cache JSON file."""
+    with CACHE_FILE.open("w", encoding="utf-8") as cache_file:
+        json.dump(cache_data, cache_file, indent=2)
+
+
+def save_working_proxy(proxy_url: str, source: str, test_url: str):
+    """Save latest working proxy into music_api_cache.json."""
+    cache_data = load_music_cache()
+    cache_data["proxy"] = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "last_working_proxy": proxy_url,
+        "source": source,
+        "test_url": test_url,
+    }
+    save_music_cache(cache_data)
+    print(f"💾 Saved working proxy to cache: {CACHE_FILE}")
+
+
+def fetch_free_proxy(https_only: bool = True):
+    """Fetch a proxy from free-proxy library."""
+    if FreeProxy is None:
+        print("❌ free-proxy library not installed. Install with: pip install free-proxy")
+        return None
+
+    mode = "HTTPS-only" if https_only else "any"
+    print(f"🔎 Fetching free proxy ({mode})... this may take a few seconds")
+
+    fetch_code = (
+        "from fp.fp import FreeProxy; "
+        f"p = FreeProxy(rand=True, timeout=1.0, anonym=True, elite=True, https={https_only}).get(); "
+        "print(p if p else '')"
+    )
+
+    try:
+        process = subprocess.Popen(
+            [sys.executable, "-c", fetch_code],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        deadline = time.time() + 15
+        while process.poll() is None and time.time() < deadline:
+            time.sleep(0.2)
+
+        if process.poll() is None:
+            process.kill()
+            print(f"⚠️  Free proxy fetch timed out after 15s ({mode})")
+            return None
+
+        stdout, _ = process.communicate(timeout=2)
+        proxy_url = stdout.strip().splitlines()[-1] if stdout.strip() else None
+        if proxy_url:
+            return proxy_url
+    except Exception as error:
+        print(f"⚠️  Free proxy fetch failed ({'https only' if https_only else 'any'}): {error}")
+        return None
+
+    return None
 
 def print_section(title):
     print(f"\n{'='*70}")
@@ -73,6 +158,7 @@ def test_yt_dlp_direct(url: str, proxy: str = None, extract_audio: bool = False)
             'quiet': False,
             'no_warnings': False,
             'socket_timeout': 30,
+            'noplaylist': True,
         }
         
         # Add proxy if provided
@@ -164,6 +250,7 @@ def download_yt_dlp_direct(url: str, output_path: str = "./downloads/ytdlp-test"
             'quiet': False,
             'no_warnings': False,
             'socket_timeout': 60,
+            'noplaylist': True,
         }
         
         # Add proxy if provided
@@ -273,6 +360,7 @@ def main():
     
     parser = argparse.ArgumentParser(description='Test yt-dlp with proxy support')
     parser.add_argument('--proxy', type=str, help='Proxy URL (http, https, socks5, socks5h)')
+    parser.add_argument('--free-proxy', action='store_true', help='Auto-fetch proxy using free-proxy library')
     parser.add_argument('--all-proxies', action='store_true', help='Test all default proxies')
     parser.add_argument('--download', action='store_true', help='Download audio (not just info)')
     parser.add_argument('--url', type=str, default=TEST_YOUTUBE_URL, help='YouTube URL')
@@ -282,9 +370,24 @@ def main():
     args = parser.parse_args()
     
     print(f"\n🎵 Test URL: {args.url}\n")
+
+    selected_proxy = args.proxy
+    proxy_source = "cli-proxy"
+
+    if args.free_proxy and args.proxy:
+        print("⚠️  Both --proxy and --free-proxy provided. Using --proxy value.")
+
+    if args.free_proxy and not selected_proxy:
+        print_section("TEST 0: FETCH FREE PROXY")
+        selected_proxy = fetch_free_proxy(https_only=True) or fetch_free_proxy(https_only=False)
+        if selected_proxy:
+            proxy_source = "free-proxy"
+            print(f"✅ Free proxy found: {selected_proxy}")
+        else:
+            print("❌ Could not fetch a free proxy. Continuing without proxy.")
     
     # Test 1: Direct library without proxy
-    if not args.proxy and not args.all_proxies:
+    if not selected_proxy and not args.all_proxies:
         print_section("TEST 1: DIRECT (No Proxy)")
         result = test_yt_dlp_direct(args.url)
         
@@ -298,16 +401,17 @@ def main():
             print("   python test_ytdlp_endpoint.py --proxy socks5://127.0.0.1:9050")
     
     # Test 2: With custom proxy
-    if args.proxy:
+    if selected_proxy:
         print_section("TEST 2: WITH CUSTOM PROXY")
-        result = test_yt_dlp_direct(args.url, proxy=args.proxy)
+        result = test_yt_dlp_direct(args.url, proxy=selected_proxy)
         
         if result['success']:
             print("\n✅ Proxy connection works!")
+            save_working_proxy(selected_proxy, source=proxy_source, test_url=args.url)
         else:
             print(f"\n❌ Proxy error: {result['error']}")
             print("\n💡 Make sure proxy is running:")
-            print(f"   URL: {args.proxy}")
+            print(f"   URL: {selected_proxy}")
     
     # Test 3: All proxies
     if args.all_proxies:
@@ -331,7 +435,7 @@ def main():
     # Test 4: Download
     if args.download:
         print_section("TEST: DOWNLOAD")
-        result = download_yt_dlp_direct(args.url, output_path=args.output, proxy=args.proxy)
+        result = download_yt_dlp_direct(args.url, output_path=args.output, proxy=selected_proxy)
         
         if result['success']:
             print(f"\n✅ Download complete!")
@@ -377,6 +481,9 @@ Examples:
     
 8️⃣  Skip API tests (direct library only):
     python test_ytdlp_endpoint.py --skip-api --proxy http://proxy:8080
+
+9️⃣  Auto-fetch a proxy and save it to music_api_cache.json:
+    python test_ytdlp_endpoint.py --free-proxy --skip-api
 
 Default Proxies Available:
     """)

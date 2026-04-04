@@ -193,6 +193,37 @@ def get_yt_dlp_info(url: str, proxy: str = None) -> dict:
         }
 
 
+def _is_true(value) -> bool:
+    """Parse truthy values from query/body values."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def get_yt_dlp_info_with_policy(url: str, proxy: str = None, proxy_required: bool = False) -> dict:
+    """Get yt-dlp info with optional strict proxy policy."""
+    effective_proxy = proxy
+
+    if not effective_proxy:
+        logger.info("🔄 Auto-fetching proxy...")
+        effective_proxy = get_working_proxy()
+        if effective_proxy:
+            logger.info(f"🌐 Using auto-fetched proxy: {effective_proxy}")
+        elif proxy_required:
+            return {
+                'success': False,
+                'error': 'Proxy is required but no working proxy was found. Direct connection is disabled.',
+                'proxy_used': 'none',
+                'proxy_required': True,
+            }
+        else:
+            logger.warning("⚠️  Could not fetch proxy, trying direct connection")
+
+    return get_yt_dlp_info(url, proxy=effective_proxy)
+
+
 def download_yt_video(url: str, output_path: str, proxy: str = None) -> dict:
     """
     Download audio from YouTube using yt-dlp Python library.
@@ -281,6 +312,28 @@ def download_yt_video(url: str, output_path: str, proxy: str = None) -> dict:
         }
 
 
+def download_yt_video_with_policy(url: str, output_path: str, proxy: str = None, proxy_required: bool = False) -> dict:
+    """Download yt-dlp audio with optional strict proxy policy."""
+    effective_proxy = proxy
+
+    if not effective_proxy:
+        logger.info("🔄 Auto-fetching proxy for download...")
+        effective_proxy = get_working_proxy()
+        if effective_proxy:
+            logger.info(f"🌐 Using auto-fetched proxy: {effective_proxy}")
+        elif proxy_required:
+            return {
+                'success': False,
+                'error': 'Proxy is required but no working proxy was found. Direct connection is disabled.',
+                'proxy_used': 'none',
+                'proxy_required': True,
+            }
+        else:
+            logger.warning("⚠️  Could not fetch proxy, trying direct connection")
+
+    return download_yt_video(url, output_path, proxy=effective_proxy)
+
+
 @ytdlp_bp.route('/info', methods=['GET', 'POST'])
 def get_video_info():
     """
@@ -289,23 +342,33 @@ def get_video_info():
     
     Query params or JSON body:
         url: YouTube URL (optional, uses hardcoded test URL if not provided)
+        proxy: Proxy URL (optional; if provided, request uses this proxy)
+        proxy_required: true/false (optional; when true, direct connection is disabled)
     
     Examples:
         GET  /api/ytdlp-test/info
         POST /api/ytdlp-test/info
     """
     try:
-        # Get URL from query string or JSON body
-        url = request.args.get('url') or (request.get_json().get('url') if request.is_json else None)
+        data = request.get_json(silent=True) or {}
+
+        # Get values from query string or JSON body
+        url = request.args.get('url') or data.get('url')
         url = url or TEST_YOUTUBE_URL
+
+        proxy = request.args.get('proxy') or data.get('proxy')
+        proxy_required = _is_true(request.args.get('proxy_required')) or _is_true(data.get('proxy_required'))
         
-        logger.info(f"🔍 Getting info for: {url} (auto-fetching proxy)")
+        logger.info(
+            f"🔍 Getting info for: {url} (proxy={'provided' if proxy else 'auto'}, proxy_required={proxy_required})"
+        )
         
-        # Auto-fetches proxy internally
-        info = get_yt_dlp_info(url, proxy=None)
+        info = get_yt_dlp_info_with_policy(url, proxy=proxy, proxy_required=proxy_required)
         
         return jsonify({
             'url': url,
+            'proxy': proxy or None,
+            'proxy_required': proxy_required,
             'result': info
         }), 200 if info['success'] else 400
     
@@ -326,6 +389,8 @@ def download_video():
     JSON body:
         url: YouTube URL (optional, uses hardcoded test URL if not provided)
         output_path: Output directory (default: ./downloads/ytdlp-test)
+        proxy: Proxy URL (optional; if provided, request uses this proxy)
+        proxy_required: true/false (optional; when true, direct connection is disabled)
     
     Examples:
         POST /api/ytdlp-test/download
@@ -342,17 +407,27 @@ def download_video():
     try:
         data = request.get_json() or {}
         
-        url = data.get('url') or TEST_YOUTUBE_URL
+        url = data.get('url') or request.args.get('url') or TEST_YOUTUBE_URL
         output_path = data.get('output_path', './downloads/ytdlp-test')
+        proxy = data.get('proxy') or request.args.get('proxy')
+        proxy_required = _is_true(data.get('proxy_required')) or _is_true(request.args.get('proxy_required'))
         
-        logger.info(f"📥 Download request - URL: {url} (auto-fetching proxy)")
+        logger.info(
+            f"📥 Download request - URL: {url} (proxy={'provided' if proxy else 'auto'}, proxy_required={proxy_required})"
+        )
         
-        # Auto-fetches proxy internally
-        result = download_yt_video(url, output_path, proxy=None)
+        result = download_yt_video_with_policy(
+            url,
+            output_path,
+            proxy=proxy,
+            proxy_required=proxy_required,
+        )
         
         return jsonify({
             'url': url,
             'output_path': output_path,
+            'proxy': proxy or None,
+            'proxy_required': proxy_required,
             'result': result
         }), 200 if result['success'] else 400
     
@@ -416,8 +491,8 @@ def check_status():
             'endpoints': [
                 'GET  /api/ytdlp-test/status (this endpoint)',
                 'GET  /api/ytdlp-test/test (get video info with auto-proxy)',
-                'GET|POST /api/ytdlp-test/info (get video info with optional URL)',
-                'POST /api/ytdlp-test/download (download audio with optional URL & output path)'
+                'GET|POST /api/ytdlp-test/info (url, proxy, proxy_required)',
+                'POST /api/ytdlp-test/download (url, output_path, proxy, proxy_required)'
             ]
         }), 200
     

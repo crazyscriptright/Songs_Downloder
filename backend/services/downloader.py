@@ -22,12 +22,8 @@ from core import state
 from services import api_metadata_enricher
 from services.post_download_enricher import run_post_download_enrichment
 
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
 def _safe_title(title: str) -> str:
     return re.sub(r'[<>:"/\\|?*]', "_", title)
-
 
 def _run_cli_music_hardening(file_path: str) -> None:
     """
@@ -72,15 +68,11 @@ def _run_cli_music_hardening(file_path: str) -> None:
     except Exception as cli_exc:
         print(f" CLI hardening skipped: {cli_exc}")
 
-
-# ── SpotiFLAC core integration ─────────────────────────────────────────────────
-
-# yt-dlp audioQuality "0"=best … "9"=worst
-_MP3_VBR    = {"0": 0, "2": 2, "5": 5, "9": 9}          # ffmpeg -q:a (0=best)
-_AAC_VBR    = {"0": 5, "2": 4, "5": 3, "9": 1}          # ffmpeg -vbr  (5=best)
-_OGG_VBR    = {"0": 10, "2": 8, "5": 6, "9": 3}         # ffmpeg -q:a  (10=best)
+_MP3_VBR    = {"0": 0, "2": 2, "5": 5, "9": 9}
+_AAC_VBR    = {"0": 5, "2": 4, "5": 3, "9": 1}
+_OGG_VBR    = {"0": 10, "2": 8, "5": 6, "9": 3}
 _OPUS_KBPS  = {"0": "320k", "2": "256k", "5": "192k", "9": "128k"}
-_WAV_KBPS   = {}                                          # lossless – no bitrate
+_WAV_KBPS   = {}
 
 def _converter_quality_kwargs(audio_format: str, audio_quality: str) -> dict:
     """
@@ -99,8 +91,8 @@ def _converter_quality_kwargs(audio_format: str, audio_quality: str) -> dict:
     if fmt == "opus":
         return {"bitrate": _OPUS_KBPS.get(q, "320k")}
     if fmt in ("flac", "wav"):
-        return {}                                   # lossless – no quality setting
-    return {"bitrate": "320k"}                      # safe default
+        return {}
+    return {"bitrate": "320k"}
 
 def download_with_spoflac(url: str, title: str, download_id: str, advanced_options=None) -> None:
     """
@@ -152,7 +144,6 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
         )
         state.save_download_status()
 
-        # Try services in order
         services_to_try = [
             ('tidal', sl_result.get('tidal_url')),
             ('qobuz', sl_result.get('isrc')),
@@ -191,11 +182,11 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
                     break
 
                 elif service_name == 'amazon':
-                    # Amazon outputs .m4a
+
                     ext = '.m4a'
                     filename = utils.build_filename(track_metadata, '{artist} - {title}', ext)
                     output_path = os.path.join(download_dir, filename)
-                    
+
                     downloader = amazon.AmazonDownloader()
                     downloader.download(service_data, output_path, asin=sl_result.get('amazon_asin'))
                     download_success = True
@@ -221,7 +212,6 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
         if not download_success:
             raise Exception(f"All services failed. Last error: {last_error}")
 
-        # Update progress to embedding metadata
         state.download_status[download_id].update(
             progress=85,
             eta="Enriching metadata (language detection + lyrics)...",
@@ -229,7 +219,6 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
         )
         state.save_download_status()
 
-        # Enrich metadata with language detection + lyrics
         try:
             enriched_metadata = api_metadata_enricher.enrich_track_metadata(track_metadata)
             print(f"   ✅ Language detected: {enriched_metadata.get('language', 'Unknown')} ({enriched_metadata.get('language_detected_from', 'api')})")
@@ -238,22 +227,21 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
             track_metadata.update(enriched_metadata)
         except Exception as e:
             print(f"   ⚠️  Enrichment failed (will embed with basic metadata): {e}")
-        
+
         metadata.embed_metadata(output_path, track_metadata)
 
-        # ── Post-download format conversion ───────────────────────────────────
         req_format   = ((advanced_options or {}).get("audioFormat") or "flac").lower()
+        if req_format == "best":
+            req_format = "opus"
         req_quality  = str((advanced_options or {}).get("audioQuality", "0"))
         embed_thumb  = (advanced_options or {}).get("embedThumbnail", True)
-        downloaded_ext = os.path.splitext(output_path)[1].lstrip(".").lower()  # flac / m4a
+        downloaded_ext = os.path.splitext(output_path)[1].lstrip(".").lower()
 
-        # Convert only when the downloaded format differs from what was requested,
-        # and only when the target format is actually supported by AudioConverter.
         _SUPPORTED_CONVERT_FMTS = {"mp3", "aac", "m4a", "ogg", "opus", "flac", "wav"}
         needs_conversion = (
             req_format in _SUPPORTED_CONVERT_FMTS
             and req_format != downloaded_ext
-            # Don't convert lossy → lossless (pointless quality-wise)
+
             and not (downloaded_ext in ("m4a",) and req_format == "flac")
         )
 
@@ -279,12 +267,11 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
                     output_path,
                     converted_path,
                     req_format,
-                    preserve_metadata=True,   # keeps embedded art + tags
+                    preserve_metadata=True,
                     overwrite=True,
                     **quality_kwargs,
                 )
 
-                # Remove the intermediate FLAC/M4A source
                 try:
                     os.remove(output_path)
                 except OSError:
@@ -292,8 +279,7 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
 
                 output_path = converted_path
                 print(f" Converted → {os.path.basename(output_path)}")
-                
-                # ── Re-embed lyrics for MP3 after conversion ──────────────────
+
                 if req_format == 'mp3' and track_metadata.get('lyrics-eng'):
                     try:
                         print(f" Re-embedding lyrics-eng into MP3...")
@@ -306,9 +292,8 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
             except Exception as conv_exc:
                 print(f" Conversion to {req_format.upper()} failed: {conv_exc} — keeping {downloaded_ext.upper()}")
         else:
-            pass  # formats match
+            pass
 
-        # ── Final success status ──────────────────────────────────────────────
         state.download_status[download_id].update(
             progress=95,
             eta="Enhancing metadata/artwork...",
@@ -325,7 +310,6 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
         except Exception as post_exc:
             print(f" Post-process skipped (SpotiFLAC): {post_exc}")
 
-        # Force CLI hardening pass for every completed music download
         _run_cli_music_hardening(output_path)
 
         file_size = os.path.getsize(output_path) / (1024 * 1024)
@@ -354,11 +338,12 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
         state.save_download_status()
         raise
 
-
-# ── Proxy API fallback ─────────────────────────────────────────────────────────
-
 def download_with_proxy_api(url: str, title: str, download_id: str, advanced_options=None) -> None:
-    """Fallback download via p.savenow.to when yt-dlp fails."""
+    """
+    Fallback download via p.savenow.to when yt-dlp fails.
+    Audio: Always downloads FLAC (lossless source), then converts to requested format/quality.
+    Video: Downloads video directly in requested format.
+    """
     try:
         print(f" Proxy API fallback for: {title}")
         if not config.VIDEO_DOWNLOAD_API_KEY:
@@ -371,15 +356,16 @@ def download_with_proxy_api(url: str, title: str, download_id: str, advanced_opt
         state.save_download_status()
 
         is_video = advanced_options and advanced_options.get("keepVideo", False)
+        download_dir = os.path.join(config.DOWNLOAD_FOLDER, download_id)
+        os.makedirs(download_dir, exist_ok=True)
 
         if is_video:
             video_quality = advanced_options.get("videoQuality", "1080")
             format_type = video_quality
             file_extension = "mp4"
         else:
-            audio_format = (advanced_options or {}).get("audioFormat", "mp3")
-            format_type = audio_format if audio_format in ("mp3", "m4a", "flac", "wav", "opus") else "mp3"
-            file_extension = format_type
+            format_type = "flac"
+            file_extension = "flac"
 
         params: dict = {
             "copyright": "0",
@@ -389,10 +375,6 @@ def download_with_proxy_api(url: str, title: str, download_id: str, advanced_opt
             "api": config.VIDEO_DOWNLOAD_API_KEY,
             "add_info": "1",
         }
-        if advanced_options:
-            aq = advanced_options.get("audioQuality")
-            if aq:
-                params["audio_quality"] = aq
 
         api_url = "https://p.savenow.to/ajax/download.php"
         print(" Calling proxy API:", api_url + "?" + urllib.parse.urlencode(params))
@@ -410,7 +392,7 @@ def download_with_proxy_api(url: str, title: str, download_id: str, advanced_opt
 
         print(f" Proxy job ID: {job_id}")
 
-        for _ in range(60):  # 2-minute max
+        for _ in range(60):
             prog_resp = requests.get(f"https://p.savenow.to/api/progress?id={job_id}", timeout=10)
             prog_data = prog_resp.json()
             pct = round((prog_data.get("progress", 0) / 1000) * 100)
@@ -427,8 +409,6 @@ def download_with_proxy_api(url: str, title: str, download_id: str, advanced_opt
                     raise Exception("No download URL in completed response")
 
                 filename = f"{_safe_title(title)}.{file_extension}"
-                download_dir = os.path.join(config.DOWNLOAD_FOLDER, download_id)
-                os.makedirs(download_dir, exist_ok=True)
                 local_path = os.path.join(download_dir, filename)
 
                 print(f" Proxy download completed remotely, saving local file: {filename}")
@@ -440,6 +420,58 @@ def download_with_proxy_api(url: str, title: str, download_id: str, advanced_opt
                                 out_file.write(chunk)
 
                 if not is_video:
+                    audio_format = ((advanced_options or {}).get("audioFormat") or "flac").lower()
+                    req_quality = str((advanced_options or {}).get("audioQuality", "0"))
+
+                    # If user selected "best" quality, prefer opus codec
+                    if audio_format == "best":
+                        req_format = "opus"
+                    else:
+                        req_format = audio_format
+
+                    state.download_status[download_id].update(
+                        progress=85,
+                        eta=f"Converting to {req_format.upper()}...",
+                        speed="Converting",
+                    )
+                    state.save_download_status()
+
+                    _SUPPORTED_CONVERT_FMTS = {"mp3", "aac", "m4a", "ogg", "opus", "flac", "wav"}
+                    needs_conversion = req_format in _SUPPORTED_CONVERT_FMTS and req_format != "flac"
+
+                    if needs_conversion:
+                        try:
+                            from spoflac_core.modules.audio_converter import AudioConverter
+
+                            converted_filename = os.path.splitext(os.path.basename(local_path))[0] + f".{req_format}"
+                            converted_path = os.path.join(download_dir, converted_filename)
+
+                            quality_kwargs = _converter_quality_kwargs(req_format, req_quality)
+
+                            print(f" Converting {file_extension.upper()} → {req_format.upper()} (quality={req_quality})")
+
+                            converter = AudioConverter()
+                            converter.convert(
+                                local_path,
+                                converted_path,
+                                req_format,
+                                preserve_metadata=True,
+                                overwrite=True,
+                                **quality_kwargs,
+                            )
+
+                            try:
+                                os.remove(local_path)
+                            except OSError:
+                                pass
+
+                            local_path = converted_path
+                            filename = converted_filename
+                            print(f" Converted → {os.path.basename(local_path)}")
+
+                        except Exception as conv_exc:
+                            print(f" Conversion to {req_format.upper()} failed: {conv_exc} — keeping FLAC")
+
                     _run_cli_music_hardening(local_path)
 
                 state.download_status[download_id].update(
@@ -470,9 +502,6 @@ def download_with_proxy_api(url: str, title: str, download_id: str, advanced_opt
         state.save_download_status()
         raise
 
-
-# ── yt-dlp core download ───────────────────────────────────────────────────────
-
 def _detect_spoflac_platform(url: str) -> str | None:
     """
     Return the platform name if the URL should be routed to SpotiFLAC,
@@ -489,7 +518,6 @@ def _detect_spoflac_platform(url: str) -> str | None:
     """
     url_lower = url.lower()
 
-    # ── yt-dlp-native: return None so they bypass SpotiFLAC entirely ──────────
     if 'music.youtube.com' in url_lower:
         return None
     if 'youtube.com' in url_lower or 'youtu.be' in url_lower:
@@ -499,7 +527,6 @@ def _detect_spoflac_platform(url: str) -> str | None:
     if 'jiosaavn.com' in url_lower or 'saavn.com' in url_lower:
         return None
 
-    # ── SpotiFLAC platforms ───────────────────────────────────────────────────
     if 'spotify.com' in url_lower or url.startswith('spotify:'):
         return 'spotify'
     if 'tidal.com' in url_lower:
@@ -513,9 +540,7 @@ def _detect_spoflac_platform(url: str) -> str | None:
     if 'music.apple.com' in url_lower or 'itunes.apple.com' in url_lower:
         return 'appleMusic'
 
-    # Catch-all: any other URL → SpotiFLAC (no yt-dlp fallback)
     return 'unknown'
-
 
 def download_song(url: str, title: str, download_id: str, advanced_options=None) -> None:
     """
@@ -533,11 +558,12 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
     """
     from core.state import download_status, active_processes, save_download_status
 
-    # ── SpotiFLAC route ───────────────────────────────────────────────────────
     platform = _detect_spoflac_platform(url)
 
     if platform is not None:
         audio_format = (advanced_options or {}).get("audioFormat", "flac")
+        if audio_format == "best":
+            audio_format = "opus"
 
         _PLATFORM_LABELS = {
             'spotify':    'Spotify',
@@ -567,9 +593,8 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
                 failed_at=datetime.now().isoformat(),
             )
             save_download_status()
-        return  # never falls through to yt-dlp
+        return
 
-    # ── Proxy-API-only mode (testing flag) ────────────────────────────────────
     if config.FORCE_PROXY_API and ("youtube.com" in url or "youtu.be" in url):
         download_status[download_id] = _initial_status(title, url, advanced_options, "downloading")
         download_status[download_id]["eta"] = "Initiating proxy download…"
@@ -587,7 +612,6 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
             save_download_status()
             return
 
-    # ── Normal yt-dlp path (YouTube / YT Music / SoundCloud / JioSaavn) ────────
     state.cleanup_tmp_directory()
 
     download_status[download_id] = _initial_status(title, url, advanced_options, "downloading")
@@ -624,7 +648,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
 
         if os.name != "nt":
             try:
-                import resource  # noqa: F401
+                import resource
                 os.setpriority(os.PRIO_PROCESS, process.pid, 10)
             except Exception:
                 pass
@@ -651,7 +675,6 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
 
             line = raw_line.strip()
 
-            # Playlist item counter
             pm = re.search(r"Downloading (?:item|video) (\d+) of (\d+)", line)
             if pm:
                 current_idx = int(pm.group(1))
@@ -659,13 +682,11 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
                 download_status[download_id]["title"] = f"Downloading {current_idx}/{total_files}"
                 save_download_status()
 
-            # Error detection
             if "ERROR:" in line:
                 error_messages.append(line.replace("ERROR:", "").strip())
             if any(p.lower() in line.lower() for p in _ERROR_PATTERNS):
                 error_messages.append(line)
 
-            # Progress parsing
             if "[download]" in line and "%" in line:
                 has_progress = True
                 try:
@@ -676,7 +697,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
                     progress = float(pct_m.group(1))
 
                     if progress >= 100.0 and total_files > 0:
-                        # A playlist item just finished — snapshot it
+
                         try:
                             existing = os.listdir(download_dir)
                             if existing:
@@ -763,7 +784,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
                 failed_at=datetime.now().isoformat(),
             )
             save_download_status()
-            # YouTube fallback
+
             if "youtube.com" in url or "youtu.be" in url:
                 try:
                     download_with_proxy_api(url, title, download_id, advanced_options)
@@ -782,9 +803,6 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
         if download_id in state.active_processes:
             del state.active_processes[download_id]
 
-
-# ── Private helpers ────────────────────────────────────────────────────────────
-
 def _initial_status(title: str, url: str, advanced_options, status: str = "queued") -> dict:
     return {
         "status": status, "progress": 0, "title": title, "url": url,
@@ -793,10 +811,9 @@ def _initial_status(title: str, url: str, advanced_options, status: str = "queue
         "advanced_options": advanced_options,
     }
 
-
 def _build_cmd(url: str, advanced_options) -> list[str]:
     """Build the yt-dlp command list (without output path or URL)."""
-    ALLOWED_AUDIO_FMTS = {"mp3", "m4a", "opus", "vorbis", "wav", "flac"}
+    ALLOWED_AUDIO_FMTS = {"best", "mp3", "m4a", "opus", "vorbis", "wav", "flac"}
     ALLOWED_QUALITIES = {"0", "2", "5", "9"}
     ALLOWED_VIDEO_FMTS = {"mkv", "mp4", "webm"}
     SAFE_ARGS = {
@@ -844,6 +861,10 @@ def _build_cmd(url: str, advanced_options) -> list[str]:
     add_metadata = advanced_options.get("addMetadata", True)
     embed_subs = advanced_options.get("embedSubtitles", False)
     custom_args = advanced_options.get("customArgs", "")
+    geo_bypass = advanced_options.get("geoBypass", False)
+    prefer_free_formats = advanced_options.get("preferFreeFormats", False)
+    speed_limit = advanced_options.get("speedLimit", "")
+    max_file_size = advanced_options.get("maxFileSize", "")
 
     if keep_video:
         vq = advanced_options.get("videoQuality", "1080")
@@ -863,13 +884,16 @@ def _build_cmd(url: str, advanced_options) -> list[str]:
     else:
         url_lower = (url or "").lower()
         if any(host in url_lower for host in ("music.youtube.com", "youtube.com", "youtu.be")):
-            # Prefer highest available audio stream for YouTube/YT Music
-            cmd.extend(["-f", "bestaudio[abr>=128]/bestaudio/best"])
-
-        cmd.extend(["-x", "--audio-format", audio_fmt, "--audio-quality", aq])
+            if audio_fmt == "best":
+                cmd.extend(["-f", "bestaudio[acodec=opus][abr>=96]/bestaudio"])
+                cmd.extend(["-x", "--audio-format", "opus", "--audio-quality", aq])
+            else:
+                cmd.extend(["-x", "--audio-format", audio_fmt, "--audio-quality", aq])
+        else:
+            cmd.extend(["-x", "--audio-format", audio_fmt, "--audio-quality", aq])
 
         if audio_fmt == "mp3":
-            # Force target MP3 bitrate profile for predictable output bitrate.
+
             mp3_bitrate = {
                 "0": "320k",
                 "2": "256k",
@@ -882,8 +906,15 @@ def _build_cmd(url: str, advanced_options) -> list[str]:
         cmd.append("--embed-metadata")
     if embed_thumbnail and not keep_video:
         cmd.append("--embed-thumbnail")
+    if geo_bypass:
+        cmd.append("--geo-bypass")
+    if prefer_free_formats:
+        cmd.append("--prefer-free-formats")
+    if speed_limit:
+        cmd.extend(["--limit-rate", speed_limit])
+    if max_file_size:
+        cmd.extend(["--max-filesize", max_file_size])
 
-    # Custom args — strict whitelist
     DANGEROUS = {"&&", "||", ";", "|", "`", "$", "\n", "\r"}
     if custom_args and not any(d in custom_args for d in DANGEROUS):
         try:
@@ -905,7 +936,6 @@ def _build_cmd(url: str, advanced_options) -> list[str]:
             pass
 
     return cmd
-
 
 def _embed_lyrics_for_file(filepath: str) -> None:
     """
@@ -932,7 +962,7 @@ def _embed_lyrics_for_file(filepath: str) -> None:
         track_album  = _tag('album')
 
         if not track_title:
-            # fall back: parse "Artist - Title" from filename stem
+
             stem = os.path.splitext(os.path.basename(filepath))[0]
             if ' - ' in stem:
                 track_artist, track_title = stem.split(' - ', 1)
@@ -940,7 +970,7 @@ def _embed_lyrics_for_file(filepath: str) -> None:
                 track_title = stem
 
         try:
-            length = audio.info.length * 1000  # ms
+            length = audio.info.length * 1000
         except Exception:
             length = None
 
@@ -961,8 +991,7 @@ def _embed_lyrics_for_file(filepath: str) -> None:
             meta.embed_m4a_metadata(filepath, tag_meta)
 
     except Exception:
-        pass  # lyrics are non-critical
-
+        pass
 
 def _finalise_success(
     download_id, url, title, safe, download_dir,
@@ -995,7 +1024,6 @@ def _finalise_success(
                     print(f" Post-process skipped for {fname}: {post_exc}")
                 _run_cli_music_hardening(file_path)
 
-        # Playlist
         if completed_files:
             fds = completed_files
         else:

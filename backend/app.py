@@ -19,7 +19,6 @@ from core import config
 from core import state
 from routes import register_blueprints
 
-
 def create_app() -> Flask:
     flask_app = Flask(__name__)
 
@@ -33,8 +32,6 @@ def create_app() -> Flask:
 
     return flask_app
 
-
-# Module-level instance used by gunicorn (`gunicorn app:app`)
 app = create_app()
 
 if __name__ == "__main__":

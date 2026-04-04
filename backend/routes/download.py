@@ -18,13 +18,28 @@ from services.downloader import download_song
 
 download_bp = Blueprint("download", __name__)
 
+_TITLE_CLEAN_RE = re.compile(r'[<>:"/\\|?*]+')
+
+def _sanitize_title(raw_title: str) -> str:
+    cleaned = raw_title if isinstance(raw_title, str) else ""
+    cleaned = cleaned.replace("\\", "_").replace("/", "_")
+    cleaned = _TITLE_CLEAN_RE.sub("_", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"\.\.+", ".", cleaned).lstrip("._")
+    if not cleaned:
+        return ""
+    return cleaned[:500]
 
 @download_bp.route("/download", methods=["POST"])
 def download():
     data = request.get_json()
     url = data.get("url")
-    title = data.get("title")
+    title = _sanitize_title(data.get("title"))
     advanced_options = data.get("advancedOptions")
+    if advanced_options and isinstance(advanced_options, dict):
+        advanced_options = {k: v for k, v in advanced_options.items() if k != "customArgs"}
+    else:
+        advanced_options = None
 
     print(f"\n{'='*70}")
     print(f"📥 Download request received")
@@ -37,22 +52,8 @@ def download():
         return jsonify({"error": "Missing url or title"}), 400
     if not isinstance(url, str) or not url.startswith(("http://", "https://")):
         return jsonify({"error": "Invalid URL format. Only HTTP/HTTPS URLs are allowed."}), 400
-    if not isinstance(title, str):
-        return jsonify({"error": "Invalid title type"}), 400
-    if ".." in title:
-        return jsonify({"error": "Invalid title: path traversal detected"}), 400
-    if len(title) > 500:
-        title = title[:500]
     if len(url) > 2048:
         return jsonify({"error": "URL too long"}), 400
-
-    if advanced_options and isinstance(advanced_options, dict):
-        custom_args = advanced_options.get("customArgs", "")
-        if custom_args:
-            DANGEROUS = ["&&", "||", ";", "|", "`", "$", "\n", "\r"]
-            for d in DANGEROUS:
-                if d in custom_args:
-                    return jsonify({"error": "Security: Dangerous character in custom arguments"}), 400
 
     download_id = f"download_{datetime.now().timestamp()}"
     state.download_status[download_id] = {
@@ -66,7 +67,6 @@ def download():
     threading.Thread(target=download_song, args=(url, title, download_id, advanced_options)).start()
     return jsonify({"download_id": download_id, "status": "started"})
 
-
 @download_bp.route("/download_status/<download_id>")
 def download_status_check(download_id):
     if download_id not in state.download_status:
@@ -78,9 +78,8 @@ def download_status_check(download_id):
             status["download_url"] = f"/get_file/{download_id}/{status['file']}"
         elif status.get("downloaded_via") == "proxy_api":
             if status.get("alternative_download_urls"):
-                pass  # already has external URL
+                pass
     return jsonify(status)
-
 
 @download_bp.route("/downloads")
 def get_all_downloads():
@@ -106,12 +105,15 @@ def get_all_downloads():
 
     return jsonify(filtered)
 
-
 @download_bp.route("/bulk_download", methods=["POST"])
 def bulk_download():
     data = request.get_json()
     urls = data.get("urls", [])
     advanced_options = data.get("advancedOptions")
+    if advanced_options and isinstance(advanced_options, dict):
+        advanced_options = {k: v for k, v in advanced_options.items() if k != "customArgs"}
+    else:
+        advanced_options = None
 
     if not urls or not isinstance(urls, list):
         return jsonify({"error": "URLs list is required"}), 400
@@ -146,7 +148,7 @@ def bulk_download():
 
     def process_bulk():
         for i, info in enumerate(bulk_downloads):
-            # Heartbeat check
+
             if bulk_id in state.bulk_heartbeats:
                 hb = state.bulk_heartbeats[bulk_id]
                 if (datetime.now() - hb["last_heartbeat"]).total_seconds() > hb["timeout_seconds"]:
@@ -191,7 +193,6 @@ def bulk_download():
     threading.Thread(target=process_bulk).start()
     return jsonify({"bulk_id": bulk_id, "status": "started", "total": len(valid_urls)})
 
-
 @download_bp.route("/bulk_status/<bulk_id>")
 def bulk_status_check(bulk_id):
     if bulk_id not in state.download_status:
@@ -213,7 +214,6 @@ def bulk_status_check(bulk_id):
                         bulk_data["downloads"][i]["title"] = ind.get("title", bulk_data["downloads"][i]["title"])
     return jsonify(bulk_data)
 
-
 @download_bp.route("/bulk_heartbeat/<bulk_id>", methods=["POST"])
 def bulk_heartbeat(bulk_id):
     if bulk_id in state.bulk_heartbeats:
@@ -223,7 +223,6 @@ def bulk_heartbeat(bulk_id):
         bstatus = state.download_status[bulk_id].get("status", "unknown")
         return jsonify({"status": "ended", "bulk_status": bstatus, "message": f"Bulk download already {bstatus}"})
     return jsonify({"status": "not_found", "message": "Bulk download not found"}), 404
-
 
 @download_bp.route("/cancel_download/<download_id>", methods=["POST"])
 def cancel_download(download_id):
@@ -248,7 +247,6 @@ def cancel_download(download_id):
     state.save_download_status()
     return jsonify({"status": "cancelled", "message": f"Download cancelled: {state.download_status[download_id]['title']}"})
 
-
 @download_bp.route("/clear_downloads", methods=["POST"])
 def clear_downloads():
     to_remove = [did for did, s in state.download_status.items() if s.get("status") in ("complete", "error", "cancelled")]
@@ -256,7 +254,6 @@ def clear_downloads():
         del state.download_status[did]
     state.save_download_status()
     return jsonify({"message": f"Cleared {len(to_remove)} finished downloads", "cleared_count": len(to_remove)})
-
 
 @download_bp.route("/get_file/<download_id>/<filename>")
 def get_file(download_id, filename):

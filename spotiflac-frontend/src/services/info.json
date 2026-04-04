@@ -1,0 +1,36 @@
+sequenceDiagram
+    participant User as User Browser
+    participant React as Home.tsx<br/>(React)
+    participant App as app.ts<br/>(App Class)
+    participant SearchSvc as SearchService<br/>(Frontend)
+    participant Backend as Backend API<br/>(Flask)
+    participant APIs as Music APIs<br/>(JioSaavn, SC,<br/>YTMusic, Spotify)
+    participant ResultsCont as ResultsContainer<br/>(Vanilla JS)
+
+    User->>React: Types "senorita" + clicks Search
+    React->>App: App.init() initializes
+    App->>SearchSvc: performSearch("senorita")
+    
+    SearchSvc->>Backend: POST /search/jiosaavn<br/>{"query":"senorita"}
+    SearchSvc->>Backend: POST /search/soundcloud<br/>{"query":"senorita"}
+    SearchSvc->>Backend: POST /search/ytmusic<br/>{"query":"senorita"}
+    SearchSvc->>Backend: POST /search/spotify<br/>{"query":"senorita"}
+    
+    par Backend Parallel Search
+        Backend->>APIs: JioSaavn search API
+        Backend->>APIs: SoundCloud API
+        Backend->>APIs: YouTube Music API
+        Backend->>APIs: Spotify API
+    end
+    
+    APIs-->>Backend: Results (song data)
+    
+    Backend-->>SearchSvc: jiosaavn: [songs...]
+    Backend-->>SearchSvc: soundcloud: [songs...]
+    Backend-->>SearchSvc: ytmusic: [songs...]
+    Backend-->>SearchSvc: spotify: [songs...]
+    
+    SearchSvc->>App: onSourceResult callback<br/>(each platform)
+    App->>ResultsCont: displayResults({all results})
+    ResultsCont->>ResultsCont: Render HTML into #results div
+    ResultsCont-->>User: Display results on page

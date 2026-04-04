@@ -44,7 +44,7 @@ export class DownloadService {
   /** Load persisted downloads from localStorage. */
   loadFromStorage(): void {
     const loaded = StorageService.loadDownloads();
-    // Ensure all downloads have timestamps
+
     this.allDownloads = {};
     for (const [id, download] of Object.entries(loaded)) {
       this.allDownloads[id] = {
@@ -211,8 +211,6 @@ export class DownloadService {
     );
   }
 
-  // ─── Private helpers ───────────────────────────────────────
-
   private cleanupOngoing(url: string, title: string): void {
     this.ongoingDownloads.delete(`${url}|${title}`);
   }
@@ -238,7 +236,6 @@ export class DownloadService {
     } else if (searchType === "music") {
       isVideoMode = false;
     } else {
-      // 'all' — detect from DOM or URL
       if (document.getElementById("videoQuality")) {
         isVideoMode = true;
       } else if (
@@ -249,23 +246,36 @@ export class DownloadService {
       }
     }
 
+    // ALWAYS read values from DOM if they exist (not just when useAdvanced is true)
     const opts: AdvancedOptions = {
       keepVideo: isVideoMode,
-      embedSubtitles: useAdvanced
-        ? (document.getElementById("embedSubs") as HTMLInputElement)
-            ?.checked !== false
-        : false,
-      addMetadata: useAdvanced
-        ? (document.getElementById("addMetadata") as HTMLInputElement)
-            ?.checked !== false
-        : true,
-      customArgs: "",
+      embedSubtitles:
+        (document.getElementById("embedSubs") as HTMLInputElement)?.checked !==
+        false,
+      addMetadata:
+        (document.getElementById("addMetadata") as HTMLInputElement)
+          ?.checked !== false,
+      customArgs:
+        (document.getElementById("customArgs") as HTMLInputElement)?.value ||
+        "",
+      geoBypass:
+        (document.getElementById("geoBypass") as HTMLInputElement)?.checked ||
+        false,
+      preferFreeFormats:
+        (document.getElementById("preferFreeFormats") as HTMLInputElement)
+          ?.checked || false,
+      speedLimit:
+        (document.getElementById("speedLimit") as HTMLInputElement)?.value ||
+        "",
+      maxFileSize:
+        (document.getElementById("maxFileSize") as HTMLInputElement)?.value ||
+        "",
     };
 
     if (isVideoMode) {
       opts.videoQuality =
         (document.getElementById("videoQuality") as HTMLSelectElement)?.value ||
-        "1080";
+        "best";
       opts.videoFPS =
         (document.getElementById("videoFPS") as HTMLSelectElement)?.value ||
         "30";
@@ -275,14 +285,13 @@ export class DownloadService {
     } else {
       opts.audioFormat =
         (document.getElementById("audioFormat") as HTMLSelectElement)?.value ||
-        "mp3";
+        "best";
       opts.audioQuality =
         (document.getElementById("audioQuality") as HTMLSelectElement)?.value ||
         "0";
-      opts.embedThumbnail = useAdvanced
-        ? (document.getElementById("embedThumbnail") as HTMLInputElement)
-            ?.checked !== false
-        : true;
+      opts.embedThumbnail =
+        (document.getElementById("embedThumbnail") as HTMLInputElement)
+          ?.checked !== false;
     }
 
     return opts;
@@ -308,7 +317,6 @@ export class DownloadService {
     try {
       const requestBody: DownloadRequestBody = { url, title };
 
-      // Determine the current searchType from the DOM active button
       let searchType: SearchType = "music";
       const activeBtn = document.querySelector(
         ".type-btn.active",
@@ -321,6 +329,11 @@ export class DownloadService {
         url,
         useAdvanced,
         searchType,
+      );
+
+      console.log(
+        "Download Request Payload:",
+        JSON.stringify(requestBody, null, 2),
       );
 
       const response = await fetch(`${getApiBaseUrl()}/download`, {
@@ -402,7 +415,6 @@ export class DownloadService {
         }
       }
 
-      // Update local tracking
       this.allDownloads[downloadId] = {
         id: downloadId,
         title: data.title || title,
@@ -457,7 +469,6 @@ export class DownloadService {
           POLL_INTERVAL,
         );
       } else {
-        // not_found, preparing, etc.
         setTimeout(
           () =>
             this.pollStatus(downloadId, button, title, url, attemptCount + 1),
@@ -507,7 +518,7 @@ export class DownloadService {
         const isVideo = req?.advancedOptions?.keepVideo === true;
         const format = isVideo
           ? req?.advancedOptions?.videoQuality || "360"
-          : "mp3";
+          : req?.advancedOptions?.audioFormat || "best";
         const audioQuality = req?.advancedOptions?.audioQuality || "128";
 
         await YouTubeService.downloadViaProxy(
@@ -527,7 +538,6 @@ export class DownloadService {
           },
         );
 
-        // Mark complete
         if (this.allDownloads[downloadId]) {
           this.allDownloads[downloadId].status = "complete";
           this.allDownloads[downloadId].progress = 100;
@@ -564,7 +574,6 @@ export class DownloadService {
       }
     }
 
-    // Non-YouTube or fallback already attempted
     button.className = "download-btn";
     button.innerHTML = "❌ Failed";
     button.disabled = false;

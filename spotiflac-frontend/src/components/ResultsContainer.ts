@@ -12,12 +12,12 @@ import type {
 } from "@/types";
 import { initLazyLoadingForNewImages } from "@/utils/lazyLoader";
 import { convertYouTubeMusicUrl } from "@/utils/urlDetector";
+import { PreviewCard, previewSupported } from "./PreviewCard";
 import {
   createSourceSection,
   type AdvancedCallback,
   type DownloadCallback,
 } from "./SongCard";
-import { PreviewCard, previewSupported } from "./PreviewCard";
 import { SourceNavigation } from "./SourceNavigation";
 
 const PREVIEW_ICON_PLAY =
@@ -240,7 +240,7 @@ export class ResultsContainer {
         previewBtn.addEventListener("click", () => {
           const url = previewBtn.dataset.url!;
           const title = previewBtn.dataset.title!;
-          // inject player inside the card wrapper (parent of the flex row)
+
           const cardEl =
             (previewBtn.closest(".url-result-card") as HTMLElement) ??
             (previewBtn.parentElement as HTMLElement);
@@ -383,7 +383,8 @@ export class ResultsContainer {
       <div class="option-row">
         <div class="option-group"><label>Audio Format</label>
           <select id="audioFormat">
-            <option value="mp3" selected>MP3</option><option value="m4a">M4A</option>
+            <option value="best" selected>Best</option>
+            <option value="mp3">MP3</option><option value="m4a">M4A</option>
             <option value="opus">Opus</option><option value="vorbis">Vorbis</option>
             <option value="wav">WAV</option><option value="flac">FLAC</option>
           </select></div>
@@ -453,7 +454,6 @@ export class ResultsContainer {
         </div>
         <div class="option-row"><div class="option-group">
           <label><input type="checkbox" id="preferFreeFormats"> Prefer Free Formats</label>
-          <label><input type="checkbox" id="addMetadata" checked> Add Metadata</label>
         </div></div>`;
     }
 
@@ -524,12 +524,13 @@ export class ResultsContainer {
     section: HTMLElement,
   ): void {
     const html = PreviewCard.buildRecommendationsHTML(tracks);
-    // Insert after the download-actions-row div (not the button inside it)
-    // to avoid making the recs a flex item inside the button row
+
     const actionsRow = section.querySelector("#download-actions-row");
     if (actionsRow) {
       actionsRow.insertAdjacentHTML("afterend", html);
-      const grid = section.querySelector(".recommendations-section:last-of-type");
+      const grid = section.querySelector(
+        ".recommendations-section:last-of-type",
+      );
       if (grid)
         PreviewCard.wireRecommendationPreviews(
           grid as HTMLElement,
@@ -537,12 +538,6 @@ export class ResultsContainer {
         );
     }
   }
-
-
-
-  /* ---------------------------------------------------------------- */
-  /* Interactive wiring helpers                                        */
-  /* ---------------------------------------------------------------- */
 
   private wireAdvancedToggle(): void {
     const toggle = document.getElementById("advancedToggleBtn");

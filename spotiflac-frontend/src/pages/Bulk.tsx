@@ -78,7 +78,7 @@ export default function Bulk() {
   const [bulkUrls, setBulkUrls] = useState("");
   const [bulkDownloadType, setBulkDownloadType] =
     useState<DownloadType>("music");
-  const [bulkAudioFormat, setBulkAudioFormat] = useState("mp3");
+  const [bulkAudioFormat, setBulkAudioFormat] = useState("best");
   const [bulkAudioQuality, setBulkAudioQuality] = useState("0");
   const [bulkEmbedThumbnail, setBulkEmbedThumbnail] = useState(true);
   const [bulkVideoQuality, setBulkVideoQuality] = useState("1080");
@@ -86,13 +86,18 @@ export default function Bulk() {
   const [bulkVideoFormat, setBulkVideoFormat] = useState("mkv");
   const [bulkEmbedSubs, setBulkEmbedSubs] = useState(true);
   const [bulkAddMetadata, setBulkAddMetadata] = useState(true);
+  const [bulkSpeedLimit, setBulkSpeedLimit] = useState("");
+  const [bulkGeoBypass, setBulkGeoBypass] = useState(false);
+  const [bulkPreferFreeFormats, setBulkPreferFreeFormats] = useState(false);
+  const [bulkMaxFileSize, setBulkMaxFileSize] = useState("");
+  const [bulkCustomArgs, setBulkCustomArgs] = useState("");
 
   /* ---- playlist state ---- */
   const [playlistUrl, setPlaylistUrl] = useState("");
   const [playlistType, setPlaylistType] = useState<"audio" | "video">("audio");
   const [playlistItemsOption, setPlaylistItemsOption] = useState("all");
   const [customRange, setCustomRange] = useState("");
-  const [plAudioFormat, setPlAudioFormat] = useState("mp3");
+  const [plAudioFormat, setPlAudioFormat] = useState("best");
   const [plAudioQuality, setPlAudioQuality] = useState("0");
   const [plEmbedThumbnail, setPlEmbedThumbnail] = useState(true);
   const [plAddMetadata, setPlAddMetadata] = useState(true);
@@ -157,6 +162,11 @@ export default function Bulk() {
     const opts: BulkAdvancedOptions = {
       keepVideo: isVideo,
       addMetadata: bulkAddMetadata,
+      speedLimit: bulkSpeedLimit,
+      geoBypass: bulkGeoBypass,
+      preferFreeFormats: bulkPreferFreeFormats,
+      maxFileSize: bulkMaxFileSize,
+      customArgs: bulkCustomArgs,
       ...(isVideo
         ? {
             videoQuality: bulkVideoQuality,
@@ -283,6 +293,7 @@ export default function Bulk() {
                     value={bulkAudioFormat}
                     onChange={(e) => setBulkAudioFormat(e.target.value)}
                   >
+                    <option value="best">Best</option>
                     <option value="mp3">MP3</option>
                     <option value="m4a">M4A</option>
                     <option value="opus">Opus</option>
@@ -297,7 +308,7 @@ export default function Bulk() {
                     value={bulkAudioQuality}
                     onChange={(e) => setBulkAudioQuality(e.target.value)}
                   >
-                    <option value="0">Best (0)</option>
+                    <option value="0">Best</option>
                     <option value="2">High (2)</option>
                     <option value="5">Medium (5)</option>
                     <option value="9">Low (9)</option>
@@ -469,6 +480,7 @@ export default function Bulk() {
                     value={plAudioFormat}
                     onChange={(e) => setPlAudioFormat(e.target.value)}
                   >
+                    <option value="best">Best</option>
                     <option value="mp3">MP3</option>
                     <option value="m4a">M4A</option>
                     <option value="opus">Opus</option>
@@ -483,7 +495,7 @@ export default function Bulk() {
                     value={plAudioQuality}
                     onChange={(e) => setPlAudioQuality(e.target.value)}
                   >
-                    <option value="0">Best (0)</option>
+                    <option value="0">Best</option>
                     <option value="2">High (2)</option>
                     <option value="5">Medium (5)</option>
                     <option value="9">Low (9)</option>
