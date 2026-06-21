@@ -54,7 +54,7 @@ if '-h' in sys.argv or '--help' in sys.argv:
 try:
     from PIL import Image
 except ImportError:
-    print("Error: Pillow library not installed. Install with: pip install Pillow", file=sys.stderr)
+    print("Error: Pillow library not installed. Install with: uv pip install Pillow", file=sys.stderr)
     sys.exit(1)
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -65,7 +65,7 @@ try:
     HAS_REQUESTS = True
 except ImportError:
     HAS_REQUESTS = False
-    print("WARNING: httpx library not found. Install with: pip install httpx")
+    print("WARNING: httpx library not found. Install with: uv pip install httpx")
 
 try:
     from mutagen.flac import FLAC, Picture
@@ -75,7 +75,7 @@ try:
     HAS_MUTAGEN = True
 except ImportError:
     HAS_MUTAGEN = False
-    print("WARNING: mutagen library not found. Install with: pip install mutagen")
+    print("WARNING: mutagen library not found. Install with: uv pip install mutagen")
 
 
 logging.basicConfig(

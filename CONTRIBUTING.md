@@ -19,10 +19,8 @@ Thanks for contributing to SpotiFLAC Python.
 ### Backend
 
 1. `cd backend`
-2. Create and activate virtualenv
-   - Windows: `venv\Scripts\activate`
-3. Install deps: `pip install -r requirements.txt`
-4. Run: `python app.py`
+2. Install deps: `uv sync`
+3. Run: `uv run app.py`
 
 ### Frontend
 

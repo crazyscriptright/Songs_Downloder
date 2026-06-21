@@ -82,7 +82,7 @@ try:
     from mutagen.mp4 import MP4
     from mutagen.id3 import ID3
 except ImportError as e:
-    print(f"Error: mutagen library not installed. Install with: pip install mutagen", file=sys.stderr)
+    print(f"Error: mutagen library not installed. Install with: uv pip install mutagen", file=sys.stderr)
     sys.exit(1)
 
 try:
@@ -1922,7 +1922,7 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
         elif picard_result['ran']:
             logger.info(f"   ℹ️  Picard ran but no new fields to fill")
     else:
-        logger.debug("Picard enricher not available - install with: pip install musicbrainzngs acoustid")
+        logger.debug("Picard enricher not available - install with: uv pip install musicbrainzngs acoustid")
     
     # ===================================================================
     # FALLBACK CHAIN FOR MISSING GENRE (if still missing after all attempts)

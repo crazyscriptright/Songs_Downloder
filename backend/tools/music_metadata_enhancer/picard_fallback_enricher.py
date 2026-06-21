@@ -364,7 +364,7 @@ def install_requirements():
         missing.append("acoustid")
     
     if missing:
-        logger.warning(f"⚠️  Picard fallback disabled - install with: pip install {' '.join(missing)}")
+        logger.warning(f"⚠️  Picard fallback disabled - install with: uv pip install {' '.join(missing)}")
         return False
     
     return True

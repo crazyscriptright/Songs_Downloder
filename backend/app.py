@@ -34,7 +34,9 @@ def create_app() -> Flask:
 
 app = create_app()
 
-if __name__ == "__main__":
+
+def main():
+    """Run the development server."""
     print(" Universal Music Downloader")
     print(f" Downloads : {config.DOWNLOAD_FOLDER}")
     print(f" Cache file: {config.UNIFIED_CACHE_FILE}")
@@ -51,3 +53,7 @@ if __name__ == "__main__":
     debug = config.FLASK_ENV == "development"
 
     app.run(host="0.0.0.0", port=port, debug=debug, threaded=True, use_reloader=debug)
+
+
+if __name__ == "__main__":
+    main()

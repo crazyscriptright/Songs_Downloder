@@ -43,12 +43,7 @@ A powerful web-based music downloader that searches and downloads music from mul
 
    ```bash
    cd backend
-   python -m venv venv
-   # Windows
-   venv\Scripts\activate
-   # macOS/Linux
-   # source venv/bin/activate
-   pip install -r requirements.txt
+   uv sync
    ```
 
 3. Set up frontend:
@@ -99,8 +94,7 @@ Run backend:
 
 ```bash
 cd backend
-venv\Scripts\activate
-python app.py
+uv run app.py
 ```
 
 Run frontend (new terminal):

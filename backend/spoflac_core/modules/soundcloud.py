@@ -26,7 +26,7 @@ def _get_free_proxies(count: int = 5) -> list[str]:
                 continue
         return proxies
     except ImportError:
-        print("  [proxy] free-proxy not installed — run: pip install free-proxy")
+        print("  [proxy] free-proxy not installed — run: uv pip install free-proxy")
         return []
 
 class SoundCloudDownloader:
@@ -57,7 +57,7 @@ class SoundCloudDownloader:
                 continue
             except subprocess.TimeoutExpired:
                 continue
-        raise Exception("yt-dlp not installed. Run: pip install yt-dlp")
+        raise Exception("yt-dlp not installed. Run: uv pip install yt-dlp")
 
     def download_with_metadata(self, spotify_url, output_path, metadata=None):
         """Download track and save to output_path.
@@ -166,7 +166,7 @@ class SoundCloudDownloader:
         print("  [geo] Geo-restriction detected — trying free proxies…")
         proxies = _get_free_proxies(5)
         if not proxies:
-            raise Exception("Geo-restricted and no free proxies available (install free-proxy: pip install free-proxy)")
+            raise Exception("Geo-restricted and no free proxies available (install free-proxy: uv pip install free-proxy)")
 
         last_error = f"yt-dlp failed (exit {returncode})"
         for i, proxy in enumerate(proxies, 1):

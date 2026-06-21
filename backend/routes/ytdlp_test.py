@@ -122,7 +122,7 @@ def get_yt_dlp_info(url: str, proxy: str = None) -> dict:
     if not HAS_YTDLP:
         return {
             'success': False,
-            'error': 'yt-dlp not installed - install with: pip install yt-dlp'
+            'error': 'yt-dlp not installed - install with: uv pip install yt-dlp'
         }
     
     # Auto-fetch proxy if not provided
@@ -239,7 +239,7 @@ def download_yt_video(url: str, output_path: str, proxy: str = None) -> dict:
     if not HAS_YTDLP:
         return {
             'success': False,
-            'error': 'yt-dlp not installed - install with: pip install yt-dlp'
+            'error': 'yt-dlp not installed - install with: uv pip install yt-dlp'
         }
     
     # Auto-fetch proxy if not provided
@@ -473,7 +473,7 @@ def check_status():
         return jsonify({
             'status': 'error',
             'installed': False,
-            'message': 'yt-dlp Python library not found - install with: pip install yt-dlp'
+            'message': 'yt-dlp Python library not found - install with: uv pip install yt-dlp'
         }), 500
     
     try:
