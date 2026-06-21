@@ -4,8 +4,11 @@ Used as fallback when Spotify metadata is unavailable.
 
 Includes improved title/artist parsing for YouTube Music and lyrics-eng fetching via lrclib.net
 """
+import logging
 import re
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 # ── Helper functions (defined first so they can be called throughout) ──────
@@ -125,7 +128,7 @@ def _parse_soundcloud_date(date_str: str) -> str:
         return ''
     try:
         return date_str.split('T')[0]
-    except:
+    except Exception:
         return ''
 
 
@@ -371,9 +374,9 @@ def _parse_jiosaavn_tags(track_data: dict) -> list[str]:
                 tags.append('2000s')
             elif 2010 <= year < 2020:
                 tags.append('2010s')
-    except:
+    except Exception:
         pass
-    
+
     return tags
 
 
@@ -472,7 +475,7 @@ def extract_youtube_metadata(video_info: dict, title: str = '', artist: str = ''
         try:
             date_str = video_info['upload_date']
             metadata['release_date'] = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
-        except:
+        except Exception:
             pass
     
     # Extract thumbnail as cover art (prefer highest resolution)

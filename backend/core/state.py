@@ -102,7 +102,7 @@ def cleanup_tmp_directory() -> None:
                     os.remove(path)
                     deleted += 1
             except Exception:
-                pass
+                print(f"Warning: Could not remove file: {path}")
 
         total, used, _ = shutil.disk_usage(tmp_dir)
         new_pct = (used / total) * 100

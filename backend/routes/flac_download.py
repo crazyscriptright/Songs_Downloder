@@ -8,6 +8,7 @@ Routes:
 Integrates the spoflac_core/main.py SpotiFLAC download logic into the Flask app.
 """
 
+import logging
 import os
 import subprocess
 import sys
@@ -29,6 +30,8 @@ from spoflac_core.modules import soundcloud
 from spoflac_core.modules import tidal
 from spoflac_core.modules import url_resolver
 from spoflac_core.modules import utils
+
+logger = logging.getLogger(__name__)
 
 flac_bp = Blueprint("flac", __name__, url_prefix="/flac")
 
@@ -56,7 +59,7 @@ def _run_cli_music_hardening(file_path: str) -> None:
             capture_output=True,
         )
     except Exception as exc:
-        print(f"[flac] CLI hardening skipped: {exc}")
+        logger.warning("CLI hardening skipped: %s", exc)
 
 def _update(download_id: str, status: str, progress: int | None = None, message: str = "") -> None:
     """Mutate the shared status entry and persist it."""
@@ -77,7 +80,7 @@ def _run_flac_download(
     fallback: bool,
 ) -> None:
     """
-    Background thread: URL → metadata → download → embed tags.
+    Background thread: URL -> metadata -> download -> embed tags.
     Uses URLResolver which accepts any platform URL (Spotify/Tidal/Qobuz/Amazon/SoundCloud).
     """
     try:
@@ -100,7 +103,7 @@ def _run_flac_download(
                 service = detected_platform
             else:
                 service = "tidal"
-            print(f"[flac] Auto-selected: {service}  (platform={detected_platform})")
+            logger.info("Auto-selected: %s (platform=%s)", service, detected_platform)
 
         ext = ".m4a" if service == "amazon" else ".flac"
         filename = utils.build_filename(track_metadata, template, ext)
@@ -179,7 +182,7 @@ def _run_flac_download(
 
             except Exception as exc:
                 last_error = exc
-                print(f"[flac] {current_service} failed: {exc}")
+                logger.warning("%s failed: %s", current_service, exc)
                 if not fallback or current_service == services_to_try[-1]:
                     break
 
@@ -187,28 +190,29 @@ def _run_flac_download(
             raise Exception(f"All services failed. Last error: {last_error}")
 
         _update(download_id, "processing", 92, "Enriching metadata (language + lyrics)…")
-        
+
         # Enrich metadata with language detection + lyrics
         try:
             enriched_metadata = api_metadata_enricher.enrich_track_metadata(track_metadata)
-            print(f"[flac] ✓ Language: {enriched_metadata.get('language', 'Unknown')} ({enriched_metadata.get('language_detected_from', 'api')})")
+            logger.info("Language: %s (%s)", enriched_metadata.get('language', 'Unknown'), enriched_metadata.get('language_detected_from', 'api'))
             if enriched_metadata.get('lyrics-eng'):
-                print(f"[flac] ✓ Lyrics: {len(enriched_metadata['lyrics-eng'])} characters")
+                logger.info("Lyrics: %s characters", len(enriched_metadata['lyrics-eng']))
             track_metadata.update(enriched_metadata)
         except Exception as e:
-            print(f"[flac] ⚠ Enrichment failed (will embed with basic metadata): {e}")
-        
+            logger.warning("Enrichment failed (will embed with basic metadata): %s", e)
+
         metadata.embed_metadata(output_path, track_metadata)
 
         _update(download_id, "processing", 96, "Enhancing metadata/artwork…")
         try:
             enrichment_result = run_post_download_enrichment(output_path, metadata_context=track_metadata)
-            print(
-                f"[flac] post-process metadata={enrichment_result.get('metadata_enriched')} "
-                f"artwork={enrichment_result.get('artwork_updated')}"
+            logger.info(
+                "post-process metadata=%s artwork=%s",
+                enrichment_result.get('metadata_enriched'),
+                enrichment_result.get('artwork_updated'),
             )
         except Exception as post_exc:
-            print(f"[flac] post-process skipped: {post_exc}")
+            logger.warning("post-process skipped: %s", post_exc)
 
         _run_cli_music_hardening(output_path)
 
@@ -221,12 +225,12 @@ def _run_flac_download(
             eta="Done",
         )
         state.save_download_status()
-        print(f"[flac] ✓ {filename}  ({os.path.getsize(output_path) / 1_048_576:.2f} MB)")
+        logger.info("%s (%.2f MB)", filename, os.path.getsize(output_path) / 1_048_576)
 
     except Exception as exc:
         state.download_status[download_id].update(status="error", progress=0, eta=str(exc))
         state.save_download_status()
-        print(f"[flac] ✗ download error: {exc}")
+        logger.error("download error: %s", exc)
 
 @flac_bp.route("/download", methods=["POST"])
 def flac_download():

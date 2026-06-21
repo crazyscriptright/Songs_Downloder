@@ -150,7 +150,7 @@ def get_valid_client_id(force_refresh=False):
                             save_cache(client_id)
                             print(f"Working client_id from main page: {client_id}")
                             return client_id
-                except:
+                except Exception:
                     continue
                     
             raise RuntimeError("All SoundCloud client_id extraction methods failed")

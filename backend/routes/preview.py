@@ -5,6 +5,7 @@ Routes: /preview, /preview_url, /jiosaavn_suggestions/<pid>,
 """
 
 import json
+import logging
 import os
 import re
 import subprocess
@@ -23,6 +24,8 @@ from services.preview import (
     get_jiosaavn_stream_fast,
     get_soundcloud_stream_fast,
 )
+
+logger = logging.getLogger(__name__)
 
 preview_bp = Blueprint("preview", __name__)
 
@@ -139,7 +142,7 @@ def extract_soundcloud_metadata_with_recommendations(soundcloud_url):
         return None
 
     except Exception as e:
-        print(f"SoundCloud metadata error: {e}")
+        logger.warning("SoundCloud metadata error: %s", e)
         return None
 
 def extract_jiosaavn_metadata(jiosaavn_url):
@@ -173,7 +176,7 @@ def extract_jiosaavn_metadata(jiosaavn_url):
 
             img_m = re.search(r'"image":\["([^"]+)"\]', sc)
             if img_m:
-                metadata["thumbnail"] = img_m.group(1).replace(r"\u002F", "/")
+                metadata["thumbnail"] = img_m.group(1).replace(r"/", "/")
 
             art_m = re.search(
                 r'"song":\{"status":"fulfilled","song":\{"type":"song","album":\{[^}]+\},"artists":\[([^\]]+)\]', sc
@@ -229,7 +232,7 @@ def extract_jiosaavn_metadata(jiosaavn_url):
         return metadata
 
     except Exception as e:
-        print(f"JioSaavn metadata error: {e}")
+        logger.warning("JioSaavn metadata error: %s", e)
         return None
 
 def _extract_video_id(url):
@@ -329,7 +332,6 @@ def preview_url():
             from routes.search import get_spotify_client
             spotify_client = get_spotify_client()
             track = spotify_client.get_track_metadata(track_id)
-            # format duration_ms → "m:ss"
             dur_ms = track.get("duration_ms", 0)
             total_sec = (dur_ms or 0) // 1000
             duration_str = f"{total_sec // 60}:{total_sec % 60:02d}"
@@ -349,7 +351,7 @@ def preview_url():
         return jsonify({"error": f"Invalid {source} URL — unable to extract information"}), 400
 
     except Exception as e:
-        print(f"❌ Preview URL error: {e}")
+        logger.error("Preview URL error: %s", e)
         return jsonify({"error": str(e)}), 500
 
 @preview_bp.route("/preview", methods=["GET"])
@@ -358,8 +360,8 @@ def audio_preview():
     Resolve and serve a low-quality audio preview.
 
     Resolution order:
-      1. SoundCloud / JioSaavn native API → CDN URL → proxied
-      2. yt-dlp actual download → temp file → served with send_file
+      1. SoundCloud / JioSaavn native API -> CDN URL -> proxied
+      2. yt-dlp actual download -> temp file -> served with send_file
     """
     url = request.args.get("url")
     if not url:
@@ -404,7 +406,7 @@ def audio_preview():
                     client_id = soundcloud.get_valid_client_id()
                     cdn_url = get_soundcloud_stream_fast(url, client_id)
                 except Exception as e:
-                    print(f"[/preview] SoundCloud fallback error: {e}")
+                    logger.warning("SoundCloud fallback error: %s", e)
             elif "jiosaavn.com" in url_lower or "saavn.com" in url_lower:
                 cdn_url = get_jiosaavn_stream_fast(url)
 
@@ -426,7 +428,7 @@ def audio_preview():
                 max_age=config.PREVIEW_CACHE_TTL,
             )
         except Exception as e:
-            print(f"[/preview] send_file failed: {e}")
+            logger.warning("send_file failed: %s", e)
             return jsonify({"error": "Preview unavailable"}), 503
 
     try:
@@ -465,7 +467,7 @@ def audio_preview():
 
         return Response(upstream.iter_content(chunk_size=4096), status=upstream.status_code, headers=resp_headers)
     except Exception as e:
-        print(f"[/preview] CDN proxy failed: {e}")
+        logger.warning("CDN proxy failed: %s", e)
         return jsonify({"error": "Stream proxy failed"}), 502
 
 @preview_bp.route("/jiosaavn_suggestions/<pid>")
@@ -488,7 +490,7 @@ def get_jiosaavn_suggestions_by_pid(pid):
         if suggestions:
             method_used = "artistOtherTopSongs"
     except Exception as e:
-        print(f"JioSaavn suggestions error: {e}")
+        logger.warning("JioSaavn suggestions error: %s", e)
 
     if suggestions:
         return jsonify({"success": True, "pid": pid, "language": language, "suggestions": suggestions, "count": len(suggestions), "method": method_used})

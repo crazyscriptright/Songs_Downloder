@@ -4,6 +4,7 @@ Routes: /, /search, /search/jiosaavn, /search/soundcloud,
         /search/ytmusic, /search/ytvideo, /suggestions, /search_status/<id>
 """
 
+import logging
 import os
 import re
 import threading
@@ -15,6 +16,8 @@ from flask import Blueprint, jsonify, render_template, request
 
 from core import state
 from utils.url_utils import is_url, validate_url_simple
+
+logger = logging.getLogger(__name__)
 
 search_bp = Blueprint("search", __name__)
 
@@ -61,7 +64,7 @@ def search_ytmusic(query):
                 "type": "song",
             })
     except Exception as e:
-        print(f"YT Music error: {e}")
+        logger.warning("YT Music search error: %s", e)
     return results
 
 def search_ytvideo(query):
@@ -82,7 +85,7 @@ def search_ytvideo(query):
                 "type": "video",
             })
     except Exception as e:
-        print(f"YT Video error: {e}")
+        logger.warning("YT Video search error: %s", e)
     return results
 
 def search_jiosaavn(query):
@@ -111,7 +114,7 @@ def search_jiosaavn(query):
                 "type": "song",
             })
     except Exception as e:
-        print(f"JioSaavn error: {e}")
+        logger.warning("JioSaavn search error: %s", e)
     return results
 
 _spotify_client = None
@@ -148,7 +151,7 @@ def search_soundcloud(query):
                 "type": "song",
             })
     except Exception as e:
-        print(f"SoundCloud error: {e}")
+        logger.warning("SoundCloud search error: %s", e)
     return results
 
 def search_all_sources(query, search_id, search_type="music"):
@@ -183,7 +186,7 @@ def search_all_sources(query, search_id, search_type="music"):
             with lock:
                 all_results[source_name] = res
         except Exception as e:
-            print(f"Error searching {source_name}: {e}")
+            logger.warning("Error searching %s: %s", source_name, e)
 
     if search_type == "music":
         threads = [
@@ -266,7 +269,7 @@ def _yt_suggestions(query):
                     out.append(orig)
                 return out[:5]
     except Exception as e:
-        print(f"YouTube suggestions error: {e}")
+        logger.warning("YouTube suggestions error: %s", e)
     return []
 
 def _jiosaavn_suggestions(query):
@@ -280,7 +283,7 @@ def _jiosaavn_suggestions(query):
                 if "title" in s and len(s["title"]) > 3
             ]
     except Exception as e:
-        print(f"JioSaavn suggestions error: {e}")
+        logger.warning("JioSaavn suggestions error: %s", e)
     return []
 
 @search_bp.route("/")
@@ -369,7 +372,7 @@ def get_suggestions():
                 unique.append(s)
         return jsonify({"suggestions": unique[:6]})
     except Exception as e:
-        print(f"Suggestions error: {e}")
+        logger.warning("Suggestions error: %s", e)
         return jsonify({"suggestions": [f"{query} song", f"{query} music", f"{query} latest"]})
 
 @search_bp.route("/search_status/<search_id>")
@@ -387,7 +390,6 @@ def spotify_search():
     """
     body = request.get_json(silent=True) or {}
     query = (body.get("query") or "").strip()
-    #type=(body.get("type")or "music").strip().lower()
 
     if not query:
         return jsonify({"error": "Missing 'query' in request body"}), 400
@@ -418,5 +420,5 @@ def spotify_search():
         })
 
     except Exception as e:
-        print(f"Spotify search error: {e}")
+        logger.warning("Spotify search error: %s", e)
         return jsonify({"error": str(e)}), 500

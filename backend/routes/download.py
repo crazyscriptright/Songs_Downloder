@@ -5,6 +5,7 @@ Routes: /download, /download_status/<id>, /downloads, /bulk_download,
         /clear_downloads, /get_file/<id>/<filename>
 """
 
+import logging
 import os
 import re
 import threading
@@ -15,6 +16,8 @@ from flask import Blueprint, current_app, jsonify, request, send_file
 from core import config
 from core import state
 from services.downloader import download_song
+
+logger = logging.getLogger(__name__)
 
 download_bp = Blueprint("download", __name__)
 
@@ -41,12 +44,7 @@ def download():
     else:
         advanced_options = None
 
-    print(f"\n{'='*70}")
-    print(f"📥 Download request received")
-    print(f"   URL: {url}")
-    print(f"   Title: {title}")
-    print(f"   Advanced Options: {advanced_options}")
-    print(f"{'='*70}\n")
+    logger.info("Download request received — URL: %s, Title: %s", url, title)
 
     if not url or not title:
         return jsonify({"error": "Missing url or title"}), 400
@@ -152,7 +150,7 @@ def bulk_download():
             if bulk_id in state.bulk_heartbeats:
                 hb = state.bulk_heartbeats[bulk_id]
                 if (datetime.now() - hb["last_heartbeat"]).total_seconds() > hb["timeout_seconds"]:
-                    print(f"⏱️ Heartbeat timeout for {bulk_id}")
+                    logger.warning("Heartbeat timeout for %s", bulk_id)
                     state.download_status[bulk_id]["status"] = "timeout"
                     state.download_status[bulk_id]["error"] = "Client disconnected"
                     state.save_download_status()
@@ -188,7 +186,7 @@ def bulk_download():
         state.download_status[bulk_id]["status"] = "complete"
         state.save_download_status()
         state.bulk_heartbeats.pop(bulk_id, None)
-        print(f"✅ Bulk complete: {state.download_status[bulk_id]['completed']}/{len(valid_urls)}")
+        logger.info("Bulk complete: %s/%s", state.download_status[bulk_id]["completed"], len(valid_urls))
 
     threading.Thread(target=process_bulk).start()
     return jsonify({"bulk_id": bulk_id, "status": "started", "total": len(valid_urls)})
@@ -242,7 +240,7 @@ def cancel_download(download_id):
         try:
             state.active_processes[download_id].terminate()
         except Exception as e:
-            print(f"Warning: Could not terminate process: {e}")
+            logger.warning("Could not terminate process: %s", e)
 
     state.save_download_status()
     return jsonify({"status": "cancelled", "message": f"Download cancelled: {state.download_status[download_id]['title']}"})
@@ -265,4 +263,5 @@ def get_file(download_id, filename):
             return send_file(file_path, as_attachment=True, download_name=filename)
         return jsonify({"error": "File not found"}), 404
     except Exception as e:
+        logger.error("Error serving file: %s", e)
         return jsonify({"error": str(e)}), 500
