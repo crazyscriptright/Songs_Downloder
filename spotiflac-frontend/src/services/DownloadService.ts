@@ -4,11 +4,12 @@ import {
   MAX_POLL_ATTEMPTS,
   POLL_INTERVAL,
 } from "@/config";
+import { ApiService } from "@/services/ApiService";
 import type {
   AdvancedOptions,
+  ApiResponse,
   DownloadItem,
   DownloadRequestBody,
-  DownloadResponse,
   DownloadStatusResponse,
   QueueItem,
   SearchType,
@@ -168,13 +169,14 @@ export class DownloadService {
         `${getApiBaseUrl()}/cancel_download/${downloadId}`,
         { method: "POST" },
       );
-      const result = await response.json();
+      const result: ApiResponse<{ status: string; title: string }> =
+        await response.json();
       if (this.allDownloads[downloadId]) {
         this.allDownloads[downloadId].status = "cancelled";
         this.saveToStorage();
         this.onChange();
       }
-      if (response.ok) {
+      if (response.ok && result.success) {
         this.showToast(
           "info",
           "Download Cancelled",
@@ -185,7 +187,7 @@ export class DownloadService {
         this.showToast(
           "error",
           "Cancel Failed",
-          result.error || "Could not cancel download.",
+          result.message || result.data?.title || "Could not cancel download.",
         );
       }
     } catch {
@@ -336,16 +338,10 @@ export class DownloadService {
         JSON.stringify(requestBody, null, 2),
       );
 
-      const response = await fetch(`${getApiBaseUrl()}/download`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
-
-      const data: DownloadResponse = await response.json();
-      if (!response.ok || (data as any).error) {
-        throw new Error((data as any).error || "Download request failed");
-      }
+      const data = await ApiService.post<{ download_id: string }>(
+        "/download",
+        requestBody,
+      );
 
       const downloadId = data.download_id;
 
@@ -402,18 +398,9 @@ export class DownloadService {
     }
 
     try {
-      const response = await fetch(
-        `${getApiBaseUrl()}/download_status/${downloadId}`,
+      const data = await ApiService.get<DownloadStatusResponse>(
+        `/download_status/${downloadId}`,
       );
-      const data: DownloadStatusResponse = await response.json();
-
-      if (!response.ok && (data as any).error) {
-        if ((data as any).error.toLowerCase().includes("not found")) {
-          (data as any).status = "not_found";
-        } else {
-          throw new Error((data as any).error);
-        }
-      }
 
       this.allDownloads[downloadId] = {
         id: downloadId,

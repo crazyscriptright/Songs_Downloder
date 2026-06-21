@@ -33,8 +33,9 @@ Priorities (in order):
 ### Backend
 ```bash
 cd backend
-uv sync
-uv run app.py            # Start on http://localhost:5000
+uv sync                         # Install deps (pyproject.toml at project root)
+uv run src/backend/app.py       # Start on http://localhost:5000
+# or: uvicorn backend.app:app --reload
 ```
 
 ### Frontend
@@ -61,17 +62,44 @@ React Frontend → REST API → Flask Routes → Services → Integrations / Spo
 2. **Download**: POST /download queues the job. download_song() routes to either SpotiFLAC pipeline (Spotify/Tidal/Qobuz/Amazon/Deezer/Apple Music URLs) or yt-dlp (YouTube/JioSaavn/SoundCloud), with proxy API fallback.
 3. **Post-download**: Metadata enrichment — language detection, lyrics fetch, album art embedding.
 
-### Key directories
+### Project structure
 
-- `backend/app.py` — Flask app factory / entry point
-- `backend/core/config.py` — All env vars, constants, API endpoints, feature flags in one place (nothing reads os.getenv directly)
-- `backend/core/state.py` — Shared in-memory state (download status, search results) with JSON persistence
-- `backend/routes/` — 6 Flask Blueprints: search, download, flac_download, preview, proxy, ytdlp_test
-- `backend/services/` — Business logic: downloader.py (orchestration), post_download_enricher.py, api_metadata_enricher.py, preview.py
-- `backend/integrations/` — Platform API clients (ytmusic, jiosaavn, soundcloud, video_proxy)
-- `backend/spoflac_core/` — Semi-autonomous lossless download sub-package. URLResolver is the central hub: resolves any platform URL → metadata + equivalent URLs, then tries Tidal → Qobuz → Amazon → SoundCloud fallback chain. Has modules/ for each platform (tidal.py, qobuz.py, amazon.py, soundcloud.py, spotify.py), metadata.py for ID3/Vorbis tagging, audio_converter.py for FFmpeg conversion.
-- `backend/tools/music_metadata_enhancer/` — Standalone metadata enrichment CLI (language, genre, lyrics, album art, MusicBrainz/AcoustID fallback)
-- `spotiflac-frontend/src/` — React app: pages/ (Home, Bulk, NotFound), components/ (SearchBox, SongCard, DownloadManager, etc.), services/ (API wrappers), config/ (API URL, constants)
+```
+├── pyproject.toml                  ← Python project config (uv / setuptools)
+├── backend/
+│   ├── src/backend/               ← Python package root (import `backend.xxx`)
+│   │   ├── app.py                  ← Flask app factory / entry point
+│   │   ├── core/config.py          ← All env vars, constants, API endpoints, feature flags (no direct os.getenv)
+│   │   ├── core/state.py           ← Shared in-memory state (download status, search results) with JSON persistence
+│   │   ├── routes/                 ← 6 Flask Blueprints: search, download, flac_download, preview, proxy, ytdlp_test
+│   │   ├── services/               ← Business logic: downloader, post_download_enricher, api_metadata_enricher, preview
+│   │   ├── integrations/           ← Platform API clients (ytmusic, jiosaavn, soundcloud, video_proxy)
+│   │   ├── spoflac_core/           ← Lossless download pipeline. URLResolver tries Tidal → Qobuz → Amazon → SC fallback
+│   │   ├── utils/response.py       ← API response helpers: `success()` / `error()` → `{success, message, data, meta?}`
+│   │   └── tools/                  ← Standalone CLI tools (music_metadata_enhancer)
+│   ├── Procfile                    ← Heroku process config
+│   ├── .env.example
+│   └── .gitignore
+└── spotiflac-frontend/             ← Vite + React 19 + Tailwind 4
+    └── src/                        ← pages/, components/, services/, config/, types/
+```
+
+### API Response Format
+
+Every API endpoint returns a standardized envelope:
+
+```json
+{
+  "success": true|false,
+  "message": "Human-readable status message",
+  "data": { ... } | null,
+  "meta": { ... }    // optional (pagination, timestamps, etc.)
+}
+```
+
+- Use `backend/utils/response.py` helpers: `success(data, message, meta, status)` and `error(message, status, data)`
+- Frontend `ApiService` unwraps the envelope automatically — components access `response.data`
+- Toast notifications display `response.message` to the user
 
 ### Key patterns
 

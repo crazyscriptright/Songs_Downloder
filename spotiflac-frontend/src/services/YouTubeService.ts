@@ -1,5 +1,5 @@
 import { getApiBaseUrl } from '@/config';
-import type { ProxyProgressResponse } from '@/types';
+import type { ApiResponse, ProxyProgressResponse } from '@/types';
 
 /**
  * YouTube-specific helpers: URL conversion, iframe creation, and proxy download.
@@ -75,13 +75,15 @@ export class YouTubeService {
     }
 
     const response = await fetch(downloadUrl);
-    const data = await response.json();
+    const body: ApiResponse<Record<string, unknown>> = await response.json();
 
-    if (!response.ok || data.success === false) {
-      throw new Error(data.message || 'Proxy API initiation failed');
+    // Proxy endpoints wrap upstream data in the standard envelope
+    if (!body.success || !body.data) {
+      throw new Error(body.message || 'Proxy API initiation failed');
     }
 
-    const jobId = data.id as string;
+    const proxyData = body.data;
+    const jobId = proxyData.id as string;
     const maxAttempts = 60;
     let attempts = 0;
     let lastPercent = 0;
@@ -91,7 +93,15 @@ export class YouTubeService {
         attempts++;
         try {
           const progressResponse = await fetch(`${API_BASE}/proxy/progress?id=${jobId}`);
-          const progressData: ProxyProgressResponse = await progressResponse.json();
+          const progressBody: ApiResponse<ProxyProgressResponse> = await progressResponse.json();
+
+          if (!progressBody.success || !progressBody.data) {
+            clearInterval(pollInterval);
+            reject(new Error(progressBody.message || 'Progress check failed'));
+            return;
+          }
+
+          const progressData = progressBody.data;
 
           let percent: number;
           let statusText: string;

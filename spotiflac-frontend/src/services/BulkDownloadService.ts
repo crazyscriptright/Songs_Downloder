@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from "@/config";
+import type { ApiResponse } from "@/types";
 
 export type BulkDownloadStatus =
   | "queued"
@@ -269,21 +270,21 @@ export class BulkDownloadService {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ urls: validUrls, advancedOptions: options }),
       });
-      const data = await resp.json();
+      const body: ApiResponse<{ bulk_id: string; status: string; total: number }> = await resp.json();
 
-      if (data.bulk_id) {
+      if (body.success && body.data?.bulk_id) {
         this.showToast(
           "success",
           "Download Submitted",
           `Successfully submitted ${validUrls.length} URL(s) for download.`,
           4000,
         );
-        this.pollBulkProgress(data.bulk_id);
+        this.pollBulkProgress(body.data.bulk_id);
       } else {
         this.showToast(
           "error",
           "Bulk Download Failed",
-          "Failed to start bulk download",
+          body.message || "Failed to start bulk download",
         );
         this.ongoingBulk = false;
       }
@@ -315,10 +316,14 @@ export class BulkDownloadService {
     const poll = setInterval(async () => {
       try {
         const resp = await fetch(`${getApiBaseUrl()}/bulk_status/${bulkId}`);
-        const data = await resp.json();
+        const body: ApiResponse<Record<string, any>> = await resp.json();
 
-        if (!resp.ok && data.error?.toLowerCase().includes("not found")) return;
-        if (data.error?.toLowerCase().includes("not found")) return;
+        if (!body.success) {
+          if (body.message?.toLowerCase().includes("not found")) return;
+          return;
+        }
+
+        const data = body.data!;
 
         if (data.status === "timeout") {
           clearInterval(poll);
@@ -472,11 +477,13 @@ export class BulkDownloadService {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: playlistUrl, playlistItems }),
       });
-      const extractData = await extractResp.json();
-      if (!extractResp.ok || !extractData.success)
-        throw new Error(extractData.error || "Failed to extract playlist");
+      const extractBody: ApiResponse<{ videos: PlaylistVideo[]; count: number }> = await extractResp.json();
 
-      const videos: PlaylistVideo[] = extractData.videos;
+      if (!extractResp.ok || !extractBody.success || !extractBody.data) {
+        throw new Error(extractBody.message || "Failed to extract playlist");
+      }
+
+      const videos: PlaylistVideo[] = extractBody.data.videos;
       if (videos.length === 0) {
         this.showToast(
           "error",
@@ -582,10 +589,17 @@ export class BulkDownloadService {
 
       fetch(dlUrl)
         .then((r) => r.json())
-        .then((data) => {
-          if (!data.success)
-            throw new Error(data.error || "Proxy download failed");
-          const progressId = data.id;
+        .then((body: ApiResponse<Record<string, unknown>>) => {
+          if (!body.success || !body.data) {
+            throw new Error(body.message || "Proxy download failed");
+          }
+
+          const proxyData = body.data;
+          if (!proxyData.success) {
+            throw new Error(String(proxyData.error || "Proxy download failed"));
+          }
+
+          const progressId = proxyData.id as string;
           let lastPct = 0;
 
           const poll = setInterval(async () => {
@@ -593,10 +607,18 @@ export class BulkDownloadService {
               const pr = await fetch(
                 `${base}/proxy/progress?progress_id=${progressId}`,
               );
-              const pd = await pr.json();
+              const progressBody: ApiResponse<Record<string, unknown>> = await pr.json();
+
+              if (!progressBody.success || !progressBody.data) {
+                clearInterval(poll);
+                reject(new Error(progressBody.message || "Progress check failed"));
+                return;
+              }
+
+              const pd = progressBody.data;
 
               if (pd.success) {
-                const raw = pd.progress ?? 0;
+                const raw = (pd.progress as number) ?? 0;
                 const pct = Math.min(Math.round((raw / 1000) * 100), 100);
                 if (pct > lastPct) {
                   lastPct = pct;
@@ -608,7 +630,7 @@ export class BulkDownloadService {
                     item.status = pct >= 100 ? "complete" : "downloading";
 
                     if (pd.title) {
-                      item.title = pd.title;
+                      item.title = pd.title as string;
                     }
                     this.saveToStorage();
                     this.onChange();
@@ -626,16 +648,16 @@ export class BulkDownloadService {
                   if (item) {
                     item.status = "complete";
                     item.progress = 100;
-                    item.download_url = pd.download_url;
+                    item.download_url = pd.download_url as string;
 
                     if (pd.title) {
-                      item.title = pd.title;
+                      item.title = pd.title as string;
                     }
                     this.saveToStorage();
                     this.onChange();
                   }
 
-                  const fileUrl = `${base}/proxy/file?file_url=${encodeURIComponent(pd.download_url)}`;
+                  const fileUrl = `${base}/proxy/file?file_url=${encodeURIComponent(pd.download_url as string)}`;
                   const a = document.createElement("a");
                   a.href = fileUrl;
                   a.download = `${title}.${format}`;
@@ -646,7 +668,7 @@ export class BulkDownloadService {
                 }
               } else if (pd.error) {
                 clearInterval(poll);
-                reject(new Error(pd.error));
+                reject(new Error(pd.error as string));
               }
             } catch (e: any) {
               clearInterval(poll);
