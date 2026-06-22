@@ -20,7 +20,7 @@ import re
 import shutil
 import sys
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(BACKEND_DIR))
@@ -45,7 +45,10 @@ try:
     from utils.shared_api_client import query_musicbrainz_by_id, query_musicbrainz_fuzzy
 except Exception:
     try:
-        from music_metadata_enhancer.standalone_compat import query_musicbrainz_by_id, query_musicbrainz_fuzzy
+        from music_metadata_enhancer.standalone_compat import (
+            query_musicbrainz_by_id,
+            query_musicbrainz_fuzzy,
+        )
     except Exception:
         from standalone_compat import query_musicbrainz_by_id, query_musicbrainz_fuzzy
 
@@ -67,21 +70,21 @@ def _generate_acoustid_fingerprint(file_path: Path) -> Optional[tuple[int, str]]
     if shutil.which("fpcalc") is None:
         logger.info("   ⚠️  Picard AcoustID disabled: 'fpcalc' not found in PATH")
         return None
-    
+
     try:
         logger.debug(f"Generating AcoustID fingerprint for {file_path.name}...")
-        
+
         # Calculate fingerprint using acoustid library
         # This internally uses fpcalc if available
         duration, fingerprint = acoustid.fingerprint_file(str(file_path))
-        
+
         if fingerprint:
             logger.debug(f"✅ Fingerprint generated ({len(fingerprint)} chars), duration: {duration}s")
             return int(duration), fingerprint
         else:
             logger.debug("❌ Failed to generate fingerprint")
             return None
-    
+
     except Exception as e:
         logger.debug(f"AcoustID fingerprinting failed: {e}")
         return None
@@ -100,18 +103,18 @@ def _identify_via_acoustid(file_path: Path, acoustid_key: Optional[str] = None) 
     if not acoustid_key:
         logger.debug("AcoustID API key missing, skipping fingerprint lookup")
         return None
-    
+
     try:
         fingerprint_data = _generate_acoustid_fingerprint(file_path)
         if not fingerprint_data:
             return None
         duration, fingerprint = fingerprint_data
-        
+
         logger.debug("Querying AcoustID for recording match...")
-        
+
         # Query AcoustID API
         results = acoustid.lookup(acoustid_key, fingerprint, duration, meta='recordings')
-        
+
         # pyacoustid may return either dict or iterable depending on version.
         if isinstance(results, dict):
             result_items = results.get('results') or []
@@ -130,14 +133,14 @@ def _identify_via_acoustid(file_path: Path, acoustid_key: Optional[str] = None) 
 
         if result_items:
             best_match = result_items[0]
-            
+
             if 'recordings' in best_match and best_match['recordings']:
                 recording = best_match['recordings'][0]
                 mbid = recording.get('id')
                 score = best_match.get('score', 0)
-                
+
                 logger.debug(f"✅ Found match: MBID={mbid}, Score={score:.2f}")
-                
+
                 return {
                     'mbid': mbid,
                     'score': score,
@@ -145,10 +148,10 @@ def _identify_via_acoustid(file_path: Path, acoustid_key: Optional[str] = None) 
                     'artists': recording.get('artists', []),
                     'method': 'acoustid'
                 }
-        
+
         logger.debug("No AcoustID matches found")
         return None
-    
+
     except Exception as e:
         logger.debug(f"AcoustID lookup failed: {e}")
         return None
@@ -165,12 +168,12 @@ def is_enrichment_complete(enriched_metadata: Dict[str, Any]) -> bool:
     has_genre = bool(enriched_metadata.get('genre'))
     has_date = bool(enriched_metadata.get('date'))
     has_language = bool(enriched_metadata.get('language'))
-    
+
     # Consider complete if has genre AND (date OR language)
     is_complete = (has_genre and (has_date or has_language))
-    
+
     logger.debug(f"Enrichment completeness: genre={has_genre}, date={has_date}, language={has_language} → complete={is_complete}")
-    
+
     return is_complete
 
 
@@ -202,24 +205,24 @@ def run_picard_fallback_enrichment(
         'confidence': 0.0,
         'errors': []
     }
-    
+
     try:
         # Check if enrichment is already complete
         if is_enrichment_complete(existing_metadata):
             logger.info("   ℹ️  Primary enrichment complete, skipping Picard fallback")
             return result
-        
+
         logger.info("   🎵 Running Picard fallback enrichment...")
         result['ran'] = True
-        
+
         title = existing_metadata.get('title', '').strip()
         artist = existing_metadata.get('artist', '').strip()
-        
+
         if not (title and artist):
             logger.debug("   ⚠️  Missing title/artist, cannot use Picard fallback")
             result['errors'].append("Missing title/artist")
             return result
-        
+
         if not acoustid_key:
             acoustid_key = (os.getenv("ACOUSTID_API_KEY") or os.getenv("ACOUSTID_KEY") or "").strip()
 
@@ -228,7 +231,7 @@ def run_picard_fallback_enrichment(
         if HAS_ACOUSTID and file_path and file_path.exists() and acoustid_key:
             logger.debug("   [PHASE 1] Attempting AcoustID fingerprinting...")
             picard_metadata = _identify_via_acoustid(file_path, acoustid_key)
-            
+
             if picard_metadata:
                 # Query full MusicBrainz data using MBID (via shared client)
                 if picard_metadata.get('mbid'):
@@ -244,7 +247,7 @@ def run_picard_fallback_enrichment(
                 logger.info("   ⚠️  Picard AcoustID key missing (ACOUSTID_API_KEY)")
             elif not (file_path and file_path.exists()):
                 logger.info("   ⚠️  Picard AcoustID skipped: file not found")
-        
+
         # PHASE 2: Fallback to fuzzy MusicBrainz search (via shared client)
         if not picard_metadata:
             logger.debug("   [PHASE 2] Attempting fuzzy MusicBrainz search...")
@@ -269,24 +272,24 @@ def run_picard_fallback_enrichment(
             if picard_metadata:
                 result['method'] = 'fuzzy_match'
                 picard_metadata['confidence'] = 0.80  # Fuzzy match lower confidence
-        
+
         # Apply Picard results to fill gaps
         if picard_metadata:
             filled_count = 0
-            
+
             # Fill missing genre
             if not existing_metadata.get('genre') and picard_metadata.get('genre'):
                 existing_metadata['genre'] = picard_metadata['genre']
                 result['filled_fields'].append('genre')
                 filled_count += 1
                 logger.info(f"      ✅ Filled genre: {picard_metadata['genre']}")
-            
+
             # Fill missing date OR update with Picard's more accurate year
             # Always prefer Picard's release year for accuracy (Picard uses MusicBrainz)
             if picard_metadata.get('release_date'):
                 existing_date = existing_metadata.get('date', '').strip()
                 picard_year = picard_metadata['release_date'][:4]
-                
+
                 if not existing_date:
                     # No date in file, add it
                     existing_metadata['date'] = picard_year
@@ -300,20 +303,20 @@ def run_picard_fallback_enrichment(
                     if 'date' not in result['filled_fields']:
                         result['filled_fields'].append('date')
                     filled_count += 1
-            
+
             # Fill missing album
             if not existing_metadata.get('album') and picard_metadata.get('album'):
                 existing_metadata['album'] = picard_metadata['album']
                 result['filled_fields'].append('album')
                 filled_count += 1
                 logger.info(f"      ✅ Filled album: {picard_metadata['album']}")
-            
+
             # Override track number with Picard's value (fixes wrong track numbers like 47)
             # Picard gives authoritative track position from MusicBrainz
             if picard_metadata.get('track_number'):
                 existing_track = existing_metadata.get('track_number')
                 picard_track = str(picard_metadata['track_number'])
-                
+
                 if not existing_track:
                     # No track in file, add it
                     existing_metadata['track_number'] = picard_track
@@ -327,27 +330,27 @@ def run_picard_fallback_enrichment(
                     if 'track_number' not in result['filled_fields']:
                         result['filled_fields'].append('track_number')
                     filled_count += 1
-            
+
             # Fill ISRC if we have it
             if picard_metadata.get('isrc'):
                 existing_metadata['isrc'] = picard_metadata['isrc']
                 result['filled_fields'].append('isrc')
                 filled_count += 1
-            
+
             if filled_count > 0:
                 result['metadata_enriched'] = True
                 result['confidence'] = picard_metadata.get('confidence', 0.80)
                 logger.info(f"   ✅ Picard fallback enriched {filled_count} fields ({result['method']})")
             else:
-                logger.info(f"   ℹ️  No new fields to fill from Picard data")
-        
+                logger.info("   ℹ️  No new fields to fill from Picard data")
+
         else:
-            logger.info(f"   ⚠️  Picard fallback could not identify song")
-    
+            logger.info("   ⚠️  Picard fallback could not identify song")
+
     except Exception as e:
         logger.error(f"   ❌ Picard fallback error: {e}")
         result['errors'].append(str(e))
-    
+
     return result
 
 
@@ -357,14 +360,14 @@ def install_requirements():
     Provides helpful message if not.
     """
     missing = []
-    
+
     if not HAS_MUSICBRAINZ:
         missing.append("musicbrainzngs")
     if not HAS_ACOUSTID:
         missing.append("acoustid")
-    
+
     if missing:
         logger.warning(f"⚠️  Picard fallback disabled - install with: uv pip install {' '.join(missing)}")
         return False
-    
+
     return True

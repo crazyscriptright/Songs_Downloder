@@ -28,28 +28,30 @@ Usage:
     # Returns: enriched dict with language, lyrics, featured_artists, etc.
 """
 
-import sys
-import os
-from pathlib import Path
-from typing import Optional, Dict, Any
 import re
+from typing import Any, Dict, Optional
 
 try:
-    from langdetect import detect, detect_langs, LangDetectException
+    from langdetect import LangDetectException, detect, detect_langs
     HAS_LANGDETECT = True
 except ImportError:
     HAS_LANGDETECT = False
 
 from backend.spoflac_core.modules.platform_metadata import (
-    _fetch_lyrics_with_fallbacks,
-    _extract_featured_artists,
     _detect_version_type,
+    _extract_featured_artists,
     _extract_tags_from_text,
+    _fetch_lyrics_with_fallbacks,
 )
-from backend.spoflac_core.modules.url_resolver import _romanize_lrc_lyrics, _detect_script
-from backend.utils.shared_language_utils import map_jiosaavn_language, map_iso_639_1_language, map_musicbrainz_language
-from backend.utils.shared_api_client import query_jiosaavn_track, query_jiosaavn_album, query_musicbrainz_recording_language
-
+from backend.spoflac_core.modules.url_resolver import _romanize_lrc_lyrics
+from backend.utils.shared_api_client import (
+    query_jiosaavn_album,
+    query_jiosaavn_track,
+    query_musicbrainz_recording_language,
+)
+from backend.utils.shared_language_utils import (
+    map_iso_639_1_language,
+)
 
 # ============================================================================
 # PHASE 1: EXTERNAL APIs (JioSaavn, MusicBrainz) - Using Shared Client
@@ -99,20 +101,20 @@ def _detect_language_from_keywords(text: str) -> Optional[str]:
     """Detect language from transliterated text using language-specific keywords."""
     if not text or not HAS_LANGDETECT:
         return None
-    
+
     text_lower = text.lower()
-    
+
     hindi_keywords = {
         'ho', 'hai', 'mere', 'tum', 'jo', 'aur', 'ka', 'ke', 'kya', 'nahi',
         'main', 'meri', 'mera', 'tera', 'teri', 'tere', 'jab', 'kab', 'kaise',
         'pyar', 'prem', 'dil', 'bhay', 'bhool', 'raat', 'din', 'kal', 'aaj'
     }
-    
+
     keywords_found = {'Hindi': sum(1 for kw in hindi_keywords if kw in text_lower)}
-    
+
     if keywords_found['Hindi'] > 0:
         return 'Hindi'
-    
+
     return None
 
 
@@ -120,19 +122,19 @@ def _detect_language_from_lyrics(lyrics: str) -> Dict[str, Any]:
     """Detect language from lyrics using langdetect and keyword matching."""
     if not lyrics or not HAS_LANGDETECT:
         return {'language': None, 'confidence': 0.0}
-    
+
     # Remove timestamps
     lines = []
     for line in lyrics.split('\n'):
         clean_line = re.sub(r'\[\d{1,2}:\d{2}(?:\.\d+)?\]', '', line).strip()
         if clean_line and len(clean_line) > 2:
             lines.append(clean_line)
-    
+
     if not lines:
         return {'language': None, 'confidence': 0.0}
-    
+
     detected_langs = {}
-    
+
     for line in lines:
         try:
             detected_probs = detect_langs(line)
@@ -152,7 +154,7 @@ def _detect_language_from_lyrics(lyrics: str) -> Dict[str, Any]:
                 detected_langs[keyword_lang] = detected_langs.get(keyword_lang, 0) + 1
             else:
                 detected_langs['English'] = detected_langs.get('English', 0) + 1
-    
+
     if detected_langs:
         total = sum(detected_langs.values())
         primary = max(detected_langs, key=detected_langs.get)
@@ -160,7 +162,7 @@ def _detect_language_from_lyrics(lyrics: str) -> Dict[str, Any]:
             'language': primary,
             'confidence': detected_langs[primary] / total if total > 0 else 0.0
         }
-    
+
     return {'language': None, 'confidence': 0.0}
 
 
@@ -171,7 +173,7 @@ def _detect_language_from_lyrics(lyrics: str) -> Dict[str, Any]:
 def _detect_language_from_metadata_patterns(title: str, artist: str, filename: str) -> Dict[str, Any]:
     """Detect language from filename, title, and artist patterns."""
     text = f"{filename} {title} {artist}".lower()
-    
+
     patterns = {
         'Hindi': [r'\b(bollywood|hindi\s+song|hindustani)\b'],
         'Telugu': [r'\b(tollywood|telugu\s+song)\b'],
@@ -182,12 +184,12 @@ def _detect_language_from_metadata_patterns(title: str, artist: str, filename: s
         'Bengali': [r'\b(bengali|tolly|bangla)\b'],
         'Malayalam': [r'\b(malayalam|mollywood)\b'],
     }
-    
+
     for lang, pattern_list in patterns.items():
         for pattern in pattern_list:
             if re.search(pattern, text):
                 return {'language': lang, 'confidence': 0.65}
-    
+
     artist_map = {
         'hindi': ['sonu nigam', 'arijit singh', 'shreya ghoshal', 'kumar sanu', 'udit narayan'],
         'telugu': ['sp balasubrahmanyam', 'ghantasala', 'p susheela'],
@@ -196,12 +198,12 @@ def _detect_language_from_metadata_patterns(title: str, artist: str, filename: s
         'punjabi': ['diljit dosanjh', 'gurdas maan', 'sidhu moose wala'],
         'marathi': ['asha bhosle', 'suresh wadkar']
     }
-    
+
     artist_lower = artist.lower()
     for lang, artists in artist_map.items():
         if any(famous_artist in artist_lower for famous_artist in artists):
             return {'language': lang.title(), 'confidence': 0.72}
-    
+
     return {'language': None, 'confidence': 0.0}
 
 
@@ -232,7 +234,7 @@ def detect_language_with_phases(
     """
     best_result = None
     best_confidence = 0.0
-    
+
     # PHASE 1: Try JioSaavn API
     if title and artist:
         result = _detect_language_jiosaavn(title, artist)
@@ -245,21 +247,21 @@ def detect_language_with_phases(
                     'confidence': result['confidence'],
                     'detected_from': 'api'
                 }
-    
+
     # PHASE 1B: Try JioSaavn Album Search
     if album and artist and best_confidence < 0.85:
         result = _detect_language_jiosaavn_album(album, artist)
         if result['language'] and result['confidence'] > best_confidence:
             best_result = result
             best_confidence = result['confidence']
-    
+
     # PHASE 1C: Try MusicBrainz
     if title and best_confidence < 0.85:
         result = _detect_language_musicbrainz(title, artist)
         if result['language'] and result['confidence'] > best_confidence:
             best_result = result
             best_confidence = result['confidence']
-    
+
     # PHASE 2: Lyrics-based detection
     if lyrics and best_confidence < 0.75:
         result = _detect_language_from_lyrics(lyrics)
@@ -267,7 +269,7 @@ def detect_language_with_phases(
             best_result = result
             best_confidence = result['confidence']
             best_result['detected_from'] = 'lyrics'
-    
+
     # PHASE 4: Metadata-based detection
     if best_confidence < 0.65:
         result = _detect_language_from_metadata_patterns(title or '', artist or '', filename or '')
@@ -275,13 +277,13 @@ def detect_language_with_phases(
             best_result = result
             best_confidence = result['confidence']
             best_result['detected_from'] = 'metadata'
-    
+
     # If we found something, return it
     if best_result and best_confidence > 0:
         if 'detected_from' not in best_result:
             best_result['detected_from'] = 'api'
         return best_result
-    
+
     # Fallback to English
     return {
         'language': 'English',
@@ -326,7 +328,7 @@ def enrich_for_download(
     """
     if existing_metadata is None:
         existing_metadata = {}
-    
+
     enriched = {
         **existing_metadata,
         'featured_artists': [],
@@ -342,21 +344,21 @@ def enrich_for_download(
         primary_artist = re.split(r',|&|\bfeat\.?\b|\bft\.?\b|\bwith\b', artist, maxsplit=1, flags=re.IGNORECASE)[0].strip()
         if primary_artist:
             enriched['album_artist'] = primary_artist
-    
+
     # Clean title to remove featured artists markers for searching
     clean_title, featured_artists = _extract_featured_artists(title)
     if featured_artists:
         enriched['featured_artists'] = featured_artists
-    
+
     # Detect version type
     version_type = _detect_version_type(title, album)
     enriched['version_type'] = version_type
-    
+
     # Extract tags
     tags = _extract_tags_from_text(f"{title} {album}")
     if tags:
         enriched['tags'] = list(dict.fromkeys(tags))
-    
+
     # Fetch lyrics
     try:
         lyrics = _fetch_lyrics_with_fallbacks(
@@ -366,7 +368,7 @@ def enrich_for_download(
             duration_ms=duration_ms,
             platform='local'
         )
-        
+
         # Detect language using multi-phase approach
         if lyrics:
             lang_result = detect_language_with_phases(
@@ -376,7 +378,7 @@ def enrich_for_download(
                 filename=filename,
                 lyrics=lyrics
             )
-            
+
             # Romanize non-Latin scripts
             lyrics = _romanize_lrc_lyrics(lyrics)
             enriched['lyrics-eng'] = lyrics
@@ -389,17 +391,17 @@ def enrich_for_download(
                 filename=filename,
                 lyrics=''
             )
-        
+
         enriched['language'] = lang_result['language']
         enriched['language_detected_from'] = lang_result.get('detected_from', 'api')
         enriched['language_confidence'] = lang_result.get('confidence', 0.0)
-    
-    except Exception as e:
+
+    except Exception:
         # On any error, just use English as default
         enriched['language'] = 'English'
         enriched['language_detected_from'] = 'default'
         enriched['language_confidence'] = 0.0
-    
+
     return enriched
 
 

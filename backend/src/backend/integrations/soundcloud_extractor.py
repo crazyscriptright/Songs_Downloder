@@ -1,13 +1,13 @@
 import json
+
 import requests
 from bs4 import BeautifulSoup
-import re
 
 # Take URL input from user
 url = input("Enter SoundCloud URL: ").strip()
 
 # Validate URL
-if not url or not ("soundcloud.com" in url):
+if not url or "soundcloud.com" not in url:
     print("Please enter a valid SoundCloud URL")
     exit(1)
 
@@ -61,22 +61,22 @@ raw_text = script_tag.string
 try:
     # Parse the entire JSON object
     data = json.loads(raw_text)
-    
+
     # Try different possible structures for tracks data
     tracks_data = None
-    
+
     # Method 1: Mobile/new structure - props -> pageProps -> initialStoreState -> entities -> tracks
     initial_store = data.get("props", {}).get("pageProps", {}).get("initialStoreState", {})
     entities = initial_store.get("entities", {})
     if entities and "tracks" in entities:
         tracks_data = entities.get("tracks", {})
         print("Found tracks using mobile/new structure")
-    
+
     # Method 2: Direct tracks access (if it's at root level)
     elif "tracks" in data:
         tracks_data = data.get("tracks", {})
         print("Found tracks using direct access")
-    
+
     # Method 3: Look for tracks in any nested structure
     else:
         def find_tracks_recursive(obj, path=""):
@@ -87,7 +87,7 @@ try:
                     if any(key.startswith("soundcloud:tracks") for key in tracks_obj.keys()):
                         print(f"Found tracks using recursive search at path: {path}")
                         return tracks_obj
-                
+
                 for key, value in obj.items():
                     result = find_tracks_recursive(value, f"{path}.{key}" if path else key)
                     if result:
@@ -98,13 +98,13 @@ try:
                     if result:
                         return result
             return None
-        
+
         tracks_data = find_tracks_recursive(data)
-    
+
     if not tracks_data:
         print("Could not find tracks data in any expected structure")
         print("Available top-level keys:", list(data.keys()) if isinstance(data, dict) else "Data is not a dict")
-        
+
         # Debug: Show structure of first few keys
         if isinstance(data, dict):
             for key in list(data.keys())[:5]:
@@ -116,9 +116,9 @@ try:
                 else:
                     print(f"  {key}: {type(value)}")
         exit(1)
-    
+
     print(f"Found {len(tracks_data)} track(s)")
-    
+
 except json.JSONDecodeError as e:
     print(f"JSON decode error: {e}")
     print("First 1000 characters of script content:")
@@ -132,30 +132,30 @@ except Exception as e:
 if tracks_data:
     track_count = 0
     main_track_id = None
-    
+
     # Get all soundcloud tracks
     soundcloud_tracks = []
     for key, value in tracks_data.items():
         if key.startswith("soundcloud:tracks"):
             soundcloud_tracks.append((key, value))
-    
+
     if not soundcloud_tracks:
         print("No soundcloud tracks found")
         exit(1)
-    
+
     print(f"Found {len(soundcloud_tracks)} SoundCloud track(s)\n")
-    
+
     # Display all tracks
     for i, (key, value) in enumerate(soundcloud_tracks):
         track_data = value.get("data", {})
-        
+
         # Determine if this is the main track or recommended
         if i == 0:
             track_type = " MAIN TRACK"
             main_track_id = key
         else:
             track_type = " RECOMMENDED"
-        
+
         print(f"{track_type}")
         print(f"Track ID: {key}")
         print(f"Title: {track_data.get('title', 'N/A')}")
@@ -165,19 +165,19 @@ if tracks_data:
         print(f"Likes: {track_data.get('likes_count', 'N/A')}")
         print(f"Plays: {track_data.get('playback_count', 'N/A')}")
         print(f"Artwork URL: {track_data.get('artwork_url', 'N/A')}")
-        
+
         # Get user info if available
         user_id = track_data.get('user_id')
         if user_id:
             print(f"User ID: {user_id}")
-        
+
         print("-" * 60)
-    
+
     # Summary
-    print(f"\n SUMMARY:")
+    print("\n SUMMARY:")
     print(f"Main Track: {soundcloud_tracks[0][1].get('data', {}).get('title', 'N/A')}")
     print(f"Recommended Tracks: {len(soundcloud_tracks) - 1}")
     print(f"Total Tracks Found: {len(soundcloud_tracks)}")
-    
+
 else:
     print("No tracks data found")

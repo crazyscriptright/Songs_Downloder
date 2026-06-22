@@ -3,18 +3,16 @@
  * Reads VITE_API_URL from .env, falls back to auto-detecting by hostname.
  */
 
-const PRODUCTION_URL = 'https://song-download-9889cf8e8f85.herokuapp.com';
-const DEV_URL = 'http://localhost:5000';
+const PRODUCTION_URL = "https://song-download-9889cf8e8f85.herokuapp.com";
+const DEV_URL = "http://localhost:5000";
 
 /** Value from .env / .env.production (set VITE_API_URL=...) */
 const ENV_URL: string | undefined = import.meta.env.VITE_API_URL;
 
 function detectApiBaseUrl(): string {
-  if (ENV_URL) return ENV_URL.replace(/\/$/, '');
+  if (ENV_URL) return ENV_URL.replace(/\/$/, "");
   const hostname = window.location.hostname;
-  return hostname === 'localhost' || hostname === '127.0.0.1'
-    ? DEV_URL
-    : PRODUCTION_URL;
+  return hostname === "localhost" || hostname === "127.0.0.1" ? DEV_URL : PRODUCTION_URL;
 }
 
 /** Configured API base URL (no trailing slash) */
@@ -26,7 +24,7 @@ export const API_BASE_URL: string = detectApiBaseUrl();
  */
 export function getApiBaseUrl(): string {
   const win = window as Window & { API?: { baseUrl?: string } };
-  const url = (win.API?.baseUrl ?? API_BASE_URL).replace(/\/$/, '');
+  const url = (win.API?.baseUrl ?? API_BASE_URL).replace(/\/$/, "");
   return url || PRODUCTION_URL;
 }
 

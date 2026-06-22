@@ -36,8 +36,8 @@ export default function Home() {
     <>
       <div className="header">
         <p>
-          Download high-quality music from Spotify, Tidal, Qobuz, Amazon Music,
-          Deezer, Apple Music, YouTube, SoundCloud &amp; more
+          Download high-quality music from Spotify, Tidal, Qobuz, Amazon Music, Deezer, Apple Music,
+          YouTube, SoundCloud &amp; more
           <br />
           <Link
             to="/bulk"
@@ -86,8 +86,8 @@ export default function Home() {
 
         <div id="queryHint" className="query-hint">
           <IoHelpCircleOutline size={16} />
-          Search by name or paste a URL — Spotify · Tidal · Qobuz · Amazon Music
-          · Deezer · Apple Music · YouTube · SoundCloud · JioSaavn
+          Search by name or paste a URL — Spotify · Tidal · Qobuz · Amazon Music · Deezer · Apple
+          Music · YouTube · SoundCloud · JioSaavn
         </div>
       </div>
 

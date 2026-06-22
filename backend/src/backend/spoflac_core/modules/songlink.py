@@ -6,9 +6,16 @@ should call get_all_urls() once and reuse the result across the fallback
 loop — never call the API once per service.
 """
 import time
-import requests
 from urllib.parse import quote
-from backend.core.config import SONGLINK_API, DEEZER_API, SONGLINK_MIN_DELAY, SONGLINK_RETRY_DELAY, USER_AGENT
+
+import requests
+from backend.core.config import (
+    DEEZER_API,
+    SONGLINK_API,
+    SONGLINK_MIN_DELAY,
+    SONGLINK_RETRY_DELAY,
+    USER_AGENT,
+)
 
 
 class SongLinkClient:

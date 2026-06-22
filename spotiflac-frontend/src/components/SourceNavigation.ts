@@ -23,9 +23,7 @@ export class SourceNavigation {
       sources.length > 0 ? "source-navigation active" : "source-navigation";
 
     sources.forEach((source, index) => {
-      const isActive = this.userSelectedTab
-        ? source.id === this.userSelectedTab
-        : index === 0;
+      const isActive = this.userSelectedTab ? source.id === this.userSelectedTab : index === 0;
 
       const btn = document.createElement("button");
       btn.className = "source-nav-btn" + (isActive ? " active" : "");
@@ -41,15 +39,11 @@ export class SourceNavigation {
 
   /** Highlight a specific source button (and deactivate others). */
   setActive(sourceId: SourceId): void {
-    this.container
-      .querySelectorAll<HTMLButtonElement>(".source-nav-btn")
-      .forEach((btn) => {
-        btn.classList.remove("active");
-      });
+    this.container.querySelectorAll<HTMLButtonElement>(".source-nav-btn").forEach((btn) => {
+      btn.classList.remove("active");
+    });
 
-    const btns = Array.from(
-      this.container.querySelectorAll<HTMLButtonElement>(".source-nav-btn"),
-    );
+    const btns = Array.from(this.container.querySelectorAll<HTMLButtonElement>(".source-nav-btn"));
     for (const btn of btns) {
       if (btn.textContent?.includes(sourceId)) {
         btn.classList.add("active");

@@ -2,6 +2,7 @@
 
 import re
 
+
 def upgrade_image_quality(image_url: str, size: str = "500x500") -> str:
     """
     Swap the size token in a CDN image URL to a higher-quality version.

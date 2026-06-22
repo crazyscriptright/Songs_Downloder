@@ -63,14 +63,13 @@ export class App {
 
     this.results.onDownload = (url, title, btn, adv) =>
       this.downloadService.downloadSong(url, title, btn, adv);
-    this.results.onAdvanced = (url, title, _btn) => {
+    this.results.onAdvanced = (url: string) => {
       this.searchBox.query = url;
       this.searchBox.selectSearchType(this.searchType);
       this.performSearch();
     };
     this.results.showStatus = (t, title, sub) => this.showStatus(t, title, sub);
-    this.results.showToast = (t, title, msg, dur) =>
-      this.toast.show(t, title, msg, dur);
+    this.results.showToast = (t, title, msg, dur) => this.toast.show(t, title, msg, dur);
 
     initLazyLoading();
     this.initScrollOverlay();
@@ -110,16 +109,10 @@ export class App {
       const scrollY = window.scrollY || document.documentElement.scrollTop;
       const start = 80;
       const end = 500;
-      const clamped = Math.min(
-        Math.max((scrollY - start) / (end - start), 0),
-        1,
-      );
+      const clamped = Math.min(Math.max((scrollY - start) / (end - start), 0), 1);
       // Max overlay opacity ~0.85 so texture is still subtly visible
       const opacity = +(clamped * 0.85).toFixed(3);
-      document.body.style.setProperty(
-        "--scroll-overlay-opacity",
-        String(opacity),
-      );
+      document.body.style.setProperty("--scroll-overlay-opacity", String(opacity));
     };
 
     let ticking = false;
@@ -144,12 +137,7 @@ export class App {
   /** Show toast when device goes offline/online */
   private initOfflineDetection(): void {
     window.addEventListener("offline", () => {
-      this.toast.show(
-        "error",
-        "You're offline",
-        "Check your internet connection",
-        8000,
-      );
+      this.toast.show("error", "You're offline", "Check your internet connection", 8000);
     });
 
     window.addEventListener("online", () => {
@@ -170,11 +158,7 @@ export class App {
       try {
         new URL(query);
       } catch {
-        this.toast.show(
-          "error",
-          "Invalid URL Format",
-          "Please enter a valid URL.",
-        );
+        this.toast.show("error", "Invalid URL Format", "Please enter a valid URL.");
         this.searchBox.setSearchInProgress(false);
         return;
       }
@@ -195,11 +179,7 @@ export class App {
   }
 
   private async searchByUrl(query: string): Promise<void> {
-    this.showStatus(
-      "searching",
-      "Processing URL...",
-      "Extracting music information",
-    );
+    this.showStatus("searching", "Processing URL...", "Extracting music information");
     this.searchBox.input.disabled = true;
 
     const timeoutId = setTimeout(() => {
@@ -217,16 +197,8 @@ export class App {
       this.pollSearchResults();
     } catch {
       clearTimeout(timeoutId);
-      this.showStatus(
-        "error",
-        "URL processing failed!",
-        "Please check the URL and try again",
-      );
-      this.toast.show(
-        "error",
-        "URL Processing Failed",
-        "Please check the URL and try again.",
-      );
+      this.showStatus("error", "URL processing failed!", "Please check the URL and try again");
+      this.toast.show("error", "URL Processing Failed", "Please check the URL and try again.");
       this.searchBox.input.disabled = false;
       this.searchBox.setSearchInProgress(false);
     }
@@ -239,11 +211,7 @@ export class App {
       const data = await SearchService.pollSearchStatus(this.currentSearchId);
 
       if (data.status === "complete") {
-        if (
-          data.query_type === "url" &&
-          data.direct_url &&
-          data.direct_url.length > 0
-        ) {
+        if (data.query_type === "url" && data.direct_url && data.direct_url.length > 0) {
           await this.results.displayDirectUrl(data.direct_url[0]);
         } else {
           this.results.displayResults({
@@ -264,12 +232,8 @@ export class App {
         if (data.query_type === "url") {
           this.showStatus(
             "complete",
-            total > 0
-              ? "Info extracted successfully!"
-              : "Could not extract info from URL",
-            total > 0
-              ? "Ready to download your content"
-              : "Please check the URL and try again",
+            total > 0 ? "Info extracted successfully!" : "Could not extract info from URL",
+            total > 0 ? "Ready to download your content" : "Please check the URL and try again",
           );
         } else {
           this.showStatus(
@@ -285,11 +249,7 @@ export class App {
         setTimeout(() => this.pollSearchResults(), 500);
       }
     } catch {
-      this.showStatus(
-        "error",
-        "Connection lost!",
-        "Unable to fetch search results",
-      );
+      this.showStatus("error", "Connection lost!", "Unable to fetch search results");
       this.searchBox.input.disabled = false;
       this.searchBox.setSearchInProgress(false);
     }
@@ -332,16 +292,11 @@ export class App {
       if (completed === 1) clearTimeout(timeoutId);
 
       const names: string[] = [];
-      if (allResults.jiosaavn.length)
-        names.push(`JioSaavn (${allResults.jiosaavn.length})`);
-      if (allResults.soundcloud.length)
-        names.push(`SoundCloud (${allResults.soundcloud.length})`);
-      if (allResults.ytmusic.length)
-        names.push(`YTMusic (${allResults.ytmusic.length})`);
-      if (allResults.ytvideo.length)
-        names.push(`YTVideo (${allResults.ytvideo.length})`);
-      if (allResults.spotify?.length)
-        names.push(`Spotify (${allResults.spotify.length})`);
+      if (allResults.jiosaavn.length) names.push(`JioSaavn (${allResults.jiosaavn.length})`);
+      if (allResults.soundcloud.length) names.push(`SoundCloud (${allResults.soundcloud.length})`);
+      if (allResults.ytmusic.length) names.push(`YTMusic (${allResults.ytmusic.length})`);
+      if (allResults.ytvideo.length) names.push(`YTVideo (${allResults.ytvideo.length})`);
+      if (allResults.spotify?.length) names.push(`Spotify (${allResults.spotify.length})`);
 
       if (names.length > 0) {
         this.showStatus(
@@ -378,11 +333,7 @@ export class App {
       }
     };
 
-    await SearchService.searchParallel(
-      query,
-      this.searchType,
-      handleSourceResult,
-    );
+    await SearchService.searchParallel(query, this.searchType, handleSourceResult);
     clearTimeout(timeoutId);
   }
 

@@ -10,9 +10,9 @@ All operations are best-effort and never raise to callers.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,11 @@ def run_post_download_enrichment(file_path: str | Path, metadata_context: dict[s
     result["ran"] = True
 
     try:
-        from tools.music_metadata_enhancer.enrich_metadata import read_existing_metadata, enrich_metadata as build_enriched, update_file_metadata
+        from tools.music_metadata_enhancer.enrich_metadata import enrich_metadata as build_enriched
+        from tools.music_metadata_enhancer.enrich_metadata import (
+            read_existing_metadata,
+            update_file_metadata,
+        )
 
         existing_metadata = read_existing_metadata(path)
 

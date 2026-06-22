@@ -610,7 +610,9 @@
 
 /* Spinning loader animation for preview-loading state */
 @keyframes preview-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .preview-spin {

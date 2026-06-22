@@ -16,12 +16,19 @@ function formatDurationMs(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
+interface SpotifyApiItem {
+  name?: string;
+  artists?: string[] | string;
+  spotify_url?: string;
+  uri?: string;
+  cover_url?: string;
+  album?: string;
+  duration_ms?: number;
+}
+
 /** Map a Spotify API result item to the common Song shape. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapSpotifyToSong(item: any): Song {
-  const artists = Array.isArray(item.artists)
-    ? item.artists.join(", ")
-    : (item.artists ?? "");
+function mapSpotifyToSong(item: SpotifyApiItem): Song {
+  const artists = Array.isArray(item.artists) ? item.artists.join(", ") : (item.artists ?? "");
   return {
     title: item.name ?? "",
     artist: artists,
@@ -47,7 +54,11 @@ export class SearchService {
    * Initiate a URL-based search (single endpoint) and return the search_id for polling.
    */
   static async searchByUrl(query: string, type: SearchType): Promise<string> {
-    const data = await ApiService.post<{ search_id: string; status: string; query_type: string }>("/search", { query, type });
+    const data = await ApiService.post<{
+      search_id: string;
+      status: string;
+      query_type: string;
+    }>("/search", { query, type });
     return data.search_id;
   }
 
@@ -92,7 +103,10 @@ export class SearchService {
 
     const promises = endpoints.map(async (source) => {
       try {
-        const data = await ApiService.post<{ results?: Song[] }>(`/search/${source}`, { query, type });
+        const data = await ApiService.post<{ results?: Song[] }>(`/search/${source}`, {
+          query,
+          type,
+        });
         if (source === "spotify") {
           allResults[source] = (data.results || []).map(mapSpotifyToSong);
         } else {
@@ -102,12 +116,7 @@ export class SearchService {
         allResults[source] = [];
       }
       completedSources++;
-      onSourceResult(
-        source,
-        allResults[source]!,
-        completedSources,
-        totalSources,
-      );
+      onSourceResult(source, allResults[source]!, completedSources, totalSources);
     });
 
     await Promise.allSettled(promises);
@@ -118,12 +127,8 @@ export class SearchService {
    * Fetch URL preview data from the backend.
    */
   static async fetchPreview(url: string): Promise<PreviewData | null> {
-    try {
-      const data = await ApiService.post<PreviewData>("/preview_url", { url });
-      return data;
-    } catch (error) {
-      throw error;
-    }
+    const data = await ApiService.post<PreviewData>("/preview_url", { url });
+    return data;
   }
 
   /**

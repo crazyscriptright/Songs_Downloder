@@ -1,8 +1,10 @@
 """CLI tool for audio format conversion"""
-import sys
-import os
 import argparse
+import os
+import sys
+
 from backend.spoflac_core.modules.audio_converter import AudioConverter
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -113,7 +115,7 @@ Supported formats: mp3, aac, m4a, ogg, opus, flac, wav
             )
 
             print(f"\n{'='*60}")
-            print(f"Batch Conversion Complete")
+            print("Batch Conversion Complete")
             print(f"{'='*60}")
             print(f"  Success: {len(results['success'])} files")
             print(f"  Failed:  {len(results['failed'])} files")

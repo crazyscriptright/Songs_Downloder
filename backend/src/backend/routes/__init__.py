@@ -1,10 +1,10 @@
 """Routes package — registers all Flask Blueprints."""
 
-from backend.routes.search import search_bp
 from backend.routes.download import download_bp
+from backend.routes.flac_download import flac_bp
 from backend.routes.preview import preview_bp
 from backend.routes.proxy import proxy_bp
-from backend.routes.flac_download import flac_bp
+from backend.routes.search import search_bp
 from backend.routes.ytdlp_test import ytdlp_bp
 
 

@@ -4,21 +4,21 @@
 
 /* ---- Theme tokens for the vinyl record ---- */
 :root {
-  --nf-vinyl-outer:        #1a1714;
-  --nf-vinyl-groove:       rgba(255, 255, 255, 0.07);
-  --nf-vinyl-label:        var(--accent-color);
+  --nf-vinyl-outer: #1a1714;
+  --nf-vinyl-groove: rgba(255, 255, 255, 0.07);
+  --nf-vinyl-label: var(--accent-color);
   --nf-vinyl-label-border: rgba(255, 255, 255, 0.25);
-  --nf-vinyl-hole:         var(--bg-primary);
-  --nf-vinyl-rim:          rgba(255, 255, 255, 0.06);
-  --nf-needle-color:       var(--text-tertiary);
-  --nf-needle-cap:         var(--accent-secondary);
+  --nf-vinyl-hole: var(--bg-primary);
+  --nf-vinyl-rim: rgba(255, 255, 255, 0.06);
+  --nf-needle-color: var(--text-tertiary);
+  --nf-needle-cap: var(--accent-secondary);
 }
 
 .light-theme {
-  --nf-vinyl-outer:        #1a1714;
-  --nf-vinyl-groove:       rgba(255, 255, 255, 0.1);
-  --nf-vinyl-label:        var(--accent-color);
-  --nf-vinyl-hole:         var(--bg-primary);
+  --nf-vinyl-outer: #1a1714;
+  --nf-vinyl-groove: rgba(255, 255, 255, 0.1);
+  --nf-vinyl-label: var(--accent-color);
+  --nf-vinyl-hole: var(--bg-primary);
 }
 
 /* ---- Page wrapper ---- */
@@ -51,10 +51,20 @@
 }
 
 @keyframes nfNoteFloat {
-  0%   { transform: translateY(0)      rotate(0deg);   opacity: 0;    }
-  8%   { opacity: 0.3; }
-  88%  { opacity: 0.12; }
-  100% { transform: translateY(-105vh) rotate(360deg); opacity: 0;    }
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.3;
+  }
+  88% {
+    opacity: 0.12;
+  }
+  100% {
+    transform: translateY(-105vh) rotate(360deg);
+    opacity: 0;
+  }
 }
 
 /* ---- Content layer ---- */
@@ -92,8 +102,12 @@
 }
 
 @keyframes nfVinylSpin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ---- Needle arm ---- */
@@ -110,8 +124,13 @@
 }
 
 @keyframes nfNeedleBob {
-  0%, 100% { transform: rotate(-20deg); }
-  50%       { transform: rotate(-10deg); }
+  0%,
+  100% {
+    transform: rotate(-20deg);
+  }
+  50% {
+    transform: rotate(-10deg);
+  }
 }
 
 /* ---- 404 heading ---- */
@@ -191,7 +210,10 @@
   font-weight: 600;
   font-size: 1rem;
   box-shadow: 0 4px 20px var(--shadow-color);
-  transition: transform 0.22s ease, box-shadow 0.22s ease, opacity 0.22s ease;
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    opacity 0.22s ease;
   animation: nfFadeInUp 0.65s 0.34s ease both;
   letter-spacing: 0.01em;
 }
@@ -208,8 +230,14 @@
 
 /* ---- Shared fade-in-up ---- */
 @keyframes nfFadeInUp {
-  from { opacity: 0; transform: translateY(28px); }
-  to   { opacity: 1; transform: translateY(0);    }
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ---- Responsive ---- */

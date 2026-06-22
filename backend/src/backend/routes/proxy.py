@@ -6,11 +6,10 @@ Routes: /proxy/download, /proxy/progress, /proxy/file, /api/proxy-image
 import os
 
 import requests
-from flask import Blueprint, Response, request
-
 from backend.core import config
 from backend.utils.image import get_responsive_image_url
 from backend.utils.response import error, success
+from flask import Blueprint, Response, request
 
 proxy_bp = Blueprint("proxy", __name__)
 

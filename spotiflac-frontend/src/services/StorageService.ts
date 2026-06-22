@@ -1,7 +1,7 @@
-import type { DownloadItem } from '@/types';
+import type { DownloadItem } from "@/types";
 
-const DOWNLOADS_KEY = 'allDownloads';
-const THEME_KEY = 'theme';
+const DOWNLOADS_KEY = "allDownloads";
+const THEME_KEY = "theme";
 
 /**
  * Thin wrapper around localStorage for persisting app state.
@@ -13,7 +13,7 @@ export class StorageService {
       const stored = localStorage.getItem(DOWNLOADS_KEY);
       return stored ? JSON.parse(stored) : {};
     } catch (e) {
-      console.error('Error loading downloads from storage:', e);
+      console.error("Error loading downloads from storage:", e);
       return {};
     }
   }
@@ -23,7 +23,7 @@ export class StorageService {
     try {
       localStorage.setItem(DOWNLOADS_KEY, JSON.stringify(downloads));
     } catch (e) {
-      console.error('Error saving downloads to storage:', e);
+      console.error("Error saving downloads to storage:", e);
     }
   }
 
@@ -33,7 +33,7 @@ export class StorageService {
   }
 
   /** Save the theme preference. */
-  static setTheme(theme: 'light' | 'dark'): void {
+  static setTheme(theme: "light" | "dark"): void {
     localStorage.setItem(THEME_KEY, theme);
   }
 }

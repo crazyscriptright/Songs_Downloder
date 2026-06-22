@@ -13,11 +13,7 @@ import type {
 import { initLazyLoadingForNewImages } from "@/utils/lazyLoader";
 import { convertYouTubeMusicUrl } from "@/utils/urlDetector";
 import { PreviewCard, previewSupported } from "./PreviewCard";
-import {
-  createSourceSection,
-  type AdvancedCallback,
-  type DownloadCallback,
-} from "./SongCard";
+import { createSourceSection, type AdvancedCallback, type DownloadCallback } from "./SongCard";
 import { SourceNavigation } from "./SourceNavigation";
 
 const PREVIEW_ICON_PLAY =
@@ -109,9 +105,7 @@ export class ResultsContainer {
   }
 
   switchSource(sourceId: SourceId): void {
-    this.el
-      .querySelectorAll(".source-section")
-      .forEach((s) => s.classList.remove("active"));
+    this.el.querySelectorAll(".source-section").forEach((s) => s.classList.remove("active"));
     const target = document.getElementById(sourceId);
     if (target) {
       target.classList.add("active");
@@ -138,7 +132,7 @@ export class ResultsContainer {
     this.el.appendChild(loadingSection);
     this.el.scrollIntoView({ behavior: "smooth", block: "start" });
 
-    let processedInfo = { ...info };
+    const processedInfo = { ...info };
     let youtubeData: ReturnType<typeof convertYouTubeMusicUrl> | null = null;
 
     if (
@@ -156,11 +150,7 @@ export class ResultsContainer {
     try {
       previewData = await SearchService.fetchPreview(processedInfo.url);
     } catch {
-      this.showStatus(
-        "error",
-        "Invalid URL",
-        "Unable to process the provided URL",
-      );
+      this.showStatus("error", "Invalid URL", "Unable to process the provided URL");
       this.el.innerHTML = "";
       return;
     }
@@ -168,13 +158,9 @@ export class ResultsContainer {
     let urlMode: SearchType = this.searchType;
     if (this.searchType === "all") {
       if (info.url.includes("music.youtube.com")) urlMode = "music";
-      else if (
-        info.url.includes("youtube.com/watch") ||
-        info.url.includes("youtu.be/")
-      )
+      else if (info.url.includes("youtube.com/watch") || info.url.includes("youtu.be/"))
         urlMode = "video";
-      else if (info.source === "SoundCloud" || info.source === "JioSaavn")
-        urlMode = "music";
+      else if (info.source === "SoundCloud" || info.source === "JioSaavn") urlMode = "music";
       else urlMode = "music";
     }
 
@@ -183,11 +169,7 @@ export class ResultsContainer {
     section.style.maxWidth = "900px";
     section.style.margin = "0 auto";
 
-    const previewHTML = this.buildPreviewHTML(
-      processedInfo,
-      previewData,
-      youtubeData,
-    );
+    const previewHTML = this.buildPreviewHTML(processedInfo, previewData, youtubeData);
     const optionsHTML = this.buildOptionsHTML(urlMode, info);
     const downloadTitle = (previewData && previewData.title) || info.url;
 
@@ -214,7 +196,7 @@ export class ResultsContainer {
               : ""
           }
         </div>
-        ${this.buildRecommendationsPlaceholder(previewData, info)}
+        ${this.buildRecommendationsPlaceholder(previewData)}
       </div>
     `;
 
@@ -222,9 +204,7 @@ export class ResultsContainer {
     this.el.appendChild(section);
 
     setTimeout(() => {
-      const btn = document.getElementById(
-        "direct-url-download-btn",
-      ) as HTMLButtonElement | null;
+      const btn = document.getElementById("direct-url-download-btn") as HTMLButtonElement | null;
       if (btn) {
         btn.addEventListener("click", () => {
           const url = btn.dataset.url!;
@@ -255,32 +235,18 @@ export class ResultsContainer {
     }, 0);
 
     if (previewData?.source === "JioSaavn" && previewData.pid) {
-      this.loadJioSaavnSuggestions(
-        previewData.pid,
-        section,
-        previewData.language || "",
-      );
+      this.loadJioSaavnSuggestions(previewData.pid, section, previewData.language || "");
     }
 
     if (
       previewData?.source === "SoundCloud" &&
       previewData.soundcloud_data?.recommended_tracks?.length
     ) {
-      this.renderSoundCloudRecommendations(
-        previewData.soundcloud_data.recommended_tracks,
-        section,
-      );
+      this.renderSoundCloudRecommendations(previewData.soundcloud_data.recommended_tracks, section);
     }
 
-    this.showStatus(
-      "complete",
-      "Ready to download!",
-      "All options configured and ready",
-    );
-    setTimeout(
-      () => this.el.scrollIntoView({ behavior: "smooth", block: "start" }),
-      100,
-    );
+    this.showStatus("complete", "Ready to download!", "All options configured and ready");
+    setTimeout(() => this.el.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
   }
 
   private buildPreviewHTML(
@@ -289,9 +255,7 @@ export class ResultsContainer {
     ytData: ReturnType<typeof convertYouTubeMusicUrl> | null,
   ): string {
     if (ytData?.videoId) {
-      const channel = preview
-        ? preview.uploader || preview.channel || "Unknown"
-        : "Unknown";
+      const channel = preview ? preview.uploader || preview.channel || "Unknown" : "Unknown";
       const title = preview?.title || "YouTube Video";
       return `
         <div class="preview-grid" style="display:grid;grid-template-columns:560px 1fr;gap:20px;margin-bottom:25px;">
@@ -320,11 +284,7 @@ export class ResultsContainer {
       ? this.buildVideoBasicOptions(isYouTube)
       : this.buildAudioBasicOptions();
 
-    const advancedTab = this.buildAdvancedTab(
-      isVideo,
-      info.is_playlist || false,
-      urlMode,
-    );
+    const advancedTab = this.buildAdvancedTab(isVideo, info.is_playlist || false, urlMode);
 
     return `
       <div style="margin-bottom:20px;">
@@ -400,11 +360,7 @@ export class ResultsContainer {
       </div></div>`;
   }
 
-  private buildAdvancedTab(
-    isVideo: boolean,
-    isPlaylist: boolean,
-    urlMode: SearchType,
-  ): string {
+  private buildAdvancedTab(isVideo: boolean, isPlaylist: boolean, urlMode: SearchType): string {
     let html = "";
 
     if (isPlaylist) {
@@ -474,7 +430,6 @@ export class ResultsContainer {
 
   private buildRecommendationsPlaceholder(
     preview: PreviewData | null,
-    info: DirectUrlInfo,
   ): string {
     if (preview?.source === "JioSaavn" && preview.pid) {
       return `
@@ -495,22 +450,16 @@ export class ResultsContainer {
     language: string,
   ): Promise<void> {
     try {
-      const suggestions = await SearchService.fetchJioSaavnSuggestions(
-        pid,
-        language,
-      );
-      const container = section.querySelector(
-        "#jiosaavn-suggestions-container",
-      );
+      const suggestions = await SearchService.fetchJioSaavnSuggestions(pid, language);
+      const container = section.querySelector("#jiosaavn-suggestions-container");
       if (!container || !suggestions.length) {
         container?.remove();
         return;
       }
 
       container.innerHTML = PreviewCard.buildRecommendationsHTML(suggestions);
-      PreviewCard.wireRecommendationPreviews(
-        container as HTMLElement,
-        (url, title, card, btn) => PreviewService.play(url, title, card, btn),
+      PreviewCard.wireRecommendationPreviews(container as HTMLElement, (url, title, card, btn) =>
+        PreviewService.play(url, title, card, btn),
       );
       setTimeout(() => initLazyLoadingForNewImages(), 0);
     } catch {
@@ -519,22 +468,16 @@ export class ResultsContainer {
     }
   }
 
-  private renderSoundCloudRecommendations(
-    tracks: SoundCloudTrack[],
-    section: HTMLElement,
-  ): void {
+  private renderSoundCloudRecommendations(tracks: SoundCloudTrack[], section: HTMLElement): void {
     const html = PreviewCard.buildRecommendationsHTML(tracks);
 
     const actionsRow = section.querySelector("#download-actions-row");
     if (actionsRow) {
       actionsRow.insertAdjacentHTML("afterend", html);
-      const grid = section.querySelector(
-        ".recommendations-section:last-of-type",
-      );
+      const grid = section.querySelector(".recommendations-section:last-of-type");
       if (grid)
-        PreviewCard.wireRecommendationPreviews(
-          grid as HTMLElement,
-          (url, title, card, b) => PreviewService.play(url, title, card, b),
+        PreviewCard.wireRecommendationPreviews(grid as HTMLElement, (url, title, card, b) =>
+          PreviewService.play(url, title, card, b),
         );
     }
   }
@@ -546,38 +489,26 @@ export class ResultsContainer {
     if (!toggle || !panel) return;
     toggle.addEventListener("click", () => {
       const visible = panel.classList.toggle("show");
-      if (text)
-        text.textContent = visible
-          ? "Hide Download Options"
-          : "Show Download Options";
+      if (text) text.textContent = visible ? "Hide Download Options" : "Show Download Options";
     });
   }
 
   private wireOptionsTabSwitcher(): void {
-    document
-      .querySelectorAll<HTMLButtonElement>(".tab-btn[data-tab]")
-      .forEach((btn) => {
-        btn.addEventListener("click", () => {
-          document
-            .querySelectorAll(".tab-btn")
-            .forEach((b) => b.classList.remove("active"));
-          document
-            .querySelectorAll(".options-tab-content")
-            .forEach((c) => c.classList.remove("active"));
-          btn.classList.add("active");
-          const target =
-            btn.dataset.tab === "basic"
-              ? "basicOptionsTab"
-              : "advancedOptionsTab";
-          document.getElementById(target)?.classList.add("active");
-        });
+    document.querySelectorAll<HTMLButtonElement>(".tab-btn[data-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+        document
+          .querySelectorAll(".options-tab-content")
+          .forEach((c) => c.classList.remove("active"));
+        btn.classList.add("active");
+        const target = btn.dataset.tab === "basic" ? "basicOptionsTab" : "advancedOptionsTab";
+        document.getElementById(target)?.classList.add("active");
       });
+    });
   }
 
   private wirePlaylistToggle(): void {
-    const sel = document.getElementById(
-      "playlistOption",
-    ) as HTMLSelectElement | null;
+    const sel = document.getElementById("playlistOption") as HTMLSelectElement | null;
     const group = document.getElementById("playlistItemsGroup");
     if (!sel || !group) return;
     sel.addEventListener("change", () => {

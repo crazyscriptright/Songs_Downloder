@@ -4,14 +4,7 @@ import {
   type BulkDownloadItem,
 } from "@/services/BulkDownloadService";
 import "@/styles/bulk.css";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type FormEvent,
-} from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { IoMusicalNote, IoVideocam } from "react-icons/io5";
 
 /* ------------------------------------------------------------------ */
@@ -76,8 +69,7 @@ export default function Bulk() {
 
   /* ---- bulk state ---- */
   const [bulkUrls, setBulkUrls] = useState("");
-  const [bulkDownloadType, setBulkDownloadType] =
-    useState<DownloadType>("music");
+  const [bulkDownloadType, setBulkDownloadType] = useState<DownloadType>("music");
   const [bulkAudioFormat, setBulkAudioFormat] = useState("best");
   const [bulkAudioQuality, setBulkAudioQuality] = useState("0");
   const [bulkEmbedThumbnail, setBulkEmbedThumbnail] = useState(true);
@@ -86,11 +78,11 @@ export default function Bulk() {
   const [bulkVideoFormat, setBulkVideoFormat] = useState("mkv");
   const [bulkEmbedSubs, setBulkEmbedSubs] = useState(true);
   const [bulkAddMetadata, setBulkAddMetadata] = useState(true);
-  const [bulkSpeedLimit, setBulkSpeedLimit] = useState("");
-  const [bulkGeoBypass, setBulkGeoBypass] = useState(false);
-  const [bulkPreferFreeFormats, setBulkPreferFreeFormats] = useState(false);
-  const [bulkMaxFileSize, setBulkMaxFileSize] = useState("");
-  const [bulkCustomArgs, setBulkCustomArgs] = useState("");
+  const [bulkSpeedLimit] = useState("");
+  const [bulkGeoBypass] = useState(false);
+  const [bulkPreferFreeFormats] = useState(false);
+  const [bulkMaxFileSize] = useState("");
+  const [bulkCustomArgs] = useState("");
 
   /* ---- playlist state ---- */
   const [playlistUrl, setPlaylistUrl] = useState("");
@@ -116,17 +108,13 @@ export default function Bulk() {
     .map((u) => u.trim())
     .filter(Boolean).length;
   const bulkStats = {
-    completed: downloads.filter((d) => d.status === "complete" && !d.isPlaylist)
-      .length,
-    failed: downloads.filter((d) => d.status === "error" && !d.isPlaylist)
-      .length,
+    completed: downloads.filter((d) => d.status === "complete" && !d.isPlaylist).length,
+    failed: downloads.filter((d) => d.status === "error" && !d.isPlaylist).length,
   };
   const plStats = {
     total: downloads.filter((d) => d.isPlaylist).length,
-    completed: downloads.filter((d) => d.isPlaylist && d.status === "complete")
-      .length,
-    failed: downloads.filter((d) => d.isPlaylist && d.status === "error")
-      .length,
+    completed: downloads.filter((d) => d.isPlaylist && d.status === "complete").length,
+    failed: downloads.filter((d) => d.isPlaylist && d.status === "error").length,
   };
 
   /* ---- init service ---- */
@@ -215,9 +203,7 @@ export default function Bulk() {
   return (
     <div className="bulk-page">
       <h2 className="bulk-title">Bulk &amp; Playlist Downloader</h2>
-      <p className="bulk-subtitle">
-        Download multiple songs or entire playlists at once
-      </p>
+      <p className="bulk-subtitle">Download multiple songs or entire playlists at once</p>
 
       {/* Tabs */}
       <div className="tabs">
@@ -246,9 +232,7 @@ export default function Bulk() {
           <textarea
             className="url-input-area"
             value={bulkUrls}
-            onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
-              setBulkUrls(e.target.value)
-            }
+            onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setBulkUrls(e.target.value)}
             placeholder={
               "https://www.youtube.com/watch?v=...\nhttps://soundcloud.com/...\nhttps://www.jiosaavn.com/song/...\n\nPaste your URLs here (one per line)"
             }
@@ -347,10 +331,7 @@ export default function Bulk() {
                 </div>
                 <div className="input-group">
                   <label>Video FPS</label>
-                  <select
-                    value={bulkVideoFPS}
-                    onChange={(e) => setBulkVideoFPS(e.target.value)}
-                  >
+                  <select value={bulkVideoFPS} onChange={(e) => setBulkVideoFPS(e.target.value)}>
                     <option value="60">60 FPS</option>
                     <option value="30">30 FPS</option>
                     <option value="24">24 FPS</option>
@@ -396,11 +377,7 @@ export default function Bulk() {
             <button type="submit" className="btn btn-primary">
               Start Bulk Download
             </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={handleClearBulk}
-            >
+            <button type="button" className="btn btn-secondary" onClick={handleClearBulk}>
               Clear URLs
             </button>
           </div>
@@ -418,9 +395,7 @@ export default function Bulk() {
       {activeTab === "playlist" && (
         <form className="content-box" onSubmit={handleStartPlaylist}>
           <h3 className="section-title">Playlist Downloader</h3>
-          <p className="help-text">
-            Download entire playlists from YouTube with advanced options
-          </p>
+          <p className="help-text">Download entire playlists from YouTube with advanced options</p>
 
           <div className="input-group">
             <label>Playlist URL</label>
@@ -437,9 +412,7 @@ export default function Bulk() {
               <label>Download Type</label>
               <select
                 value={playlistType}
-                onChange={(e) =>
-                  setPlaylistType(e.target.value as "audio" | "video")
-                }
+                onChange={(e) => setPlaylistType(e.target.value as "audio" | "video")}
               >
                 <option value="audio">Audio Only</option>
                 <option value="video">Video</option>
@@ -476,10 +449,7 @@ export default function Bulk() {
               <div className="options-grid">
                 <div className="input-group">
                   <label>Audio Format</label>
-                  <select
-                    value={plAudioFormat}
-                    onChange={(e) => setPlAudioFormat(e.target.value)}
-                  >
+                  <select value={plAudioFormat} onChange={(e) => setPlAudioFormat(e.target.value)}>
                     <option value="best">Best</option>
                     <option value="mp3">MP3</option>
                     <option value="m4a">M4A</option>
@@ -545,10 +515,7 @@ export default function Bulk() {
                 </div>
                 <div className="input-group">
                   <label>Frame Rate</label>
-                  <select
-                    value={plVideoFPS}
-                    onChange={(e) => setPlVideoFPS(e.target.value)}
-                  >
+                  <select value={plVideoFPS} onChange={(e) => setPlVideoFPS(e.target.value)}>
                     <option value="any">Any FPS</option>
                     <option value="60">60 FPS</option>
                     <option value="30">30 FPS</option>
@@ -556,10 +523,7 @@ export default function Bulk() {
                 </div>
                 <div className="input-group">
                   <label>Video Format</label>
-                  <select
-                    value={plVideoFormat}
-                    onChange={(e) => setPlVideoFormat(e.target.value)}
-                  >
+                  <select value={plVideoFormat} onChange={(e) => setPlVideoFormat(e.target.value)}>
                     <option value="mkv">MKV</option>
                     <option value="mp4">MP4</option>
                     <option value="webm">WebM</option>
@@ -583,11 +547,7 @@ export default function Bulk() {
             <button type="submit" className="btn btn-primary">
               Download Playlist
             </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={handleClearPlaylist}
-            >
+            <button type="button" className="btn btn-secondary" onClick={handleClearPlaylist}>
               Clear URL
             </button>
           </div>

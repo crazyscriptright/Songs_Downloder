@@ -1,9 +1,11 @@
-import requests
 import json
-import time
-import re
 import os
+import re
+import time
 from datetime import datetime, timedelta
+
+import requests
+
 
 class YouTubeMusicVideoAPI:
     def __init__(self, cache_file="music_api_cache.json", cache_duration_hours=24):
@@ -17,27 +19,27 @@ class YouTubeMusicVideoAPI:
             self.cache_file = cache_file
         self.cache_duration_hours = cache_duration_hours
         self.cached_tokens = None
-    
+
     def load_cache(self):
         """Load tokens from cache file if valid"""
         try:
             if not os.path.exists(self.cache_file):
                 print(" No cache file found")
                 return None
-            
+
             with open(self.cache_file, 'r', encoding='utf-8') as f:
                 cache_data = json.load(f)
-            
+
             # Get YouTube Music video tokens from unified cache
             if 'ytmusic_videos' not in cache_data:
                 return None
-            
+
             tokens_data = cache_data['ytmusic_videos']
-            
+
             # Check if cache is still valid
             cached_time = datetime.fromisoformat(tokens_data['timestamp'])
             expiry_time = cached_time + timedelta(hours=self.cache_duration_hours)
-            
+
             if datetime.now() < expiry_time:
                 time_left = expiry_time - datetime.now()
                 hours, remainder = divmod(time_left.seconds, 3600)
@@ -47,11 +49,11 @@ class YouTubeMusicVideoAPI:
             else:
                 print(f" Cache expired (was {self.cache_duration_hours} hours old)")
                 return None
-                
+
         except Exception as e:
             print(f" Error loading cache: {e}")
             return None
-    
+
     def save_cache(self, tokens):
         """Save tokens to unified cache file (atomic, race-condition-safe)."""
         try:
@@ -69,21 +71,21 @@ class YouTubeMusicVideoAPI:
 
         except Exception as e:
             print(f" Error saving cache: {e}")
-    
+
     def get_tokens(self, search_query="", force_refresh=False):
         """Get tokens from cache or fetch fresh ones"""
-        
+
         # Try to use cached tokens first
         if not force_refresh:
             cached_tokens = self.load_cache()
             if cached_tokens:
                 self.cached_tokens = cached_tokens
                 return cached_tokens
-        
+
         # If no valid cache or force refresh, try fast HTTP method first
         print(" Fetching fresh tokens...")
         fresh_tokens = self.get_tokens_fast()
-        
+
         if not fresh_tokens or not fresh_tokens.get('api_key'):
             print(" Fast token extraction failed — using empty tokens")
             fresh_tokens = {}
@@ -91,28 +93,28 @@ class YouTubeMusicVideoAPI:
         # Save to cache
         self.save_cache(fresh_tokens)
         self.cached_tokens = fresh_tokens
-        
+
         return fresh_tokens
-    
+
     def get_tokens_fast(self):
         """Get YT Music tokens without Selenium - 10x faster"""
-        
+
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
         }
-        
+
         try:
             print(" Trying fast HTTP method...")
-            
+
             # Direct request to YT Music
             response = requests.get('https://music.youtube.com/', headers=headers, timeout=10)
             html = response.text
-            
+
             # Extract tokens with regex (much faster than Selenium)
             api_key = re.search(r'"INNERTUBE_API_KEY":"([^"]+)"', html)
             visitor_data = re.search(r'"VISITOR_DATA":"([^"]+)"', html)
             client_version = re.search(r'"INNERTUBE_CLIENT_VERSION":"([^"]+)"', html)
-            
+
             # Alternative patterns if first ones don't work
             if not api_key:
                 api_key = re.search(r'innertubeApiKey":"([^"]+)"', html)
@@ -120,34 +122,33 @@ class YouTubeMusicVideoAPI:
                 visitor_data = re.search(r'visitorData":"([^"]+)"', html)
             if not client_version:
                 client_version = re.search(r'clientVersion":"([^"]+)"', html)
-            
+
             if api_key and visitor_data and client_version:
                 tokens = {
                     'api_key': api_key.group(1),
                     'visitor_data': visitor_data.group(1),
                     'client_version': client_version.group(1)
                 }
-                
-                print(f" Fast extraction successful!")
+
+                print(" Fast extraction successful!")
                 print(f" API Key: {tokens['api_key']}")
                 print(f" Visitor Data: {tokens['visitor_data']}")
                 print(f" Client Version: {tokens['client_version']}")
-                
+
                 return tokens
             else:
                 print(f" Fast extraction incomplete - API Key: {bool(api_key)}, Visitor: {bool(visitor_data)}, Version: {bool(client_version)}")
                 return None
-                
+
         except Exception as e:
             print(f" Fast token extraction failed: {e}")
             return None
-        
+
     def build_context(self, visitor_data=None, client_version=None):
         """Build the context object with fresh or default tokens"""
-        import time
-        
+
         current_timestamp = str(int(time.time() * 1000))
-        
+
         return {
             "client": {
                 "hl": "en",
@@ -200,19 +201,19 @@ class YouTubeMusicVideoAPI:
                 ]
             }
         }
-    
+
     def search_videos(self, query, use_fresh_tokens=True, retry_on_error=True):
         """Search for videos on YouTube Music with caching and auto-retry"""
-        
+
         # Get tokens (from cache or fresh)
         tokens = self.get_tokens(query, force_refresh=not use_fresh_tokens)
-        
+
         # Build URL with API key if available
         if tokens.get('api_key'):
             url = f"https://music.youtube.com/youtubei/v1/search?key={tokens['api_key']}&prettyPrint=false"
         else:
             url = "https://music.youtube.com/youtubei/v1/search?prettyPrint=false"
-        
+
         # Build headers
         headers = {
             "Content-Type": "application/json",
@@ -221,7 +222,7 @@ class YouTubeMusicVideoAPI:
             "Origin": "https://music.youtube.com",
             "Referer": f"https://music.youtube.com/search?q={query.replace(' ', '+')}"
         }
-        
+
         # Build payload for VIDEO search (different params than songs)
         payload = {
             "context": self.build_context(
@@ -231,84 +232,84 @@ class YouTubeMusicVideoAPI:
             "query": query,
             "params": "EgWKAQIQAWoQEAQQAxAJEAUQChAVEBAQEQ%3D%3D"  # Video filter params
         }
-        
+
         print(f"\n Searching for videos: {query}")
         print(f" URL: {url}")
-        
+
         # Send request
         response = requests.post(url, headers=headers, json=payload)
-        
+
         print(f" Status Code: {response.status_code}")
-        
+
         if response.status_code == 200:
             return response.json()
         else:
             print(f" Error: {response.status_code}")
             print(response.text[:500])
-            
+
             # If error occurs and retry is enabled, try with fresh tokens
             if retry_on_error and use_fresh_tokens:
                 print("\n Retrying with fresh tokens...")
                 fresh_tokens = self.get_tokens(query, force_refresh=True)
-                
+
                 # Update URL with fresh API key
                 if fresh_tokens.get('api_key'):
                     url = f"https://music.youtube.com/youtubei/v1/search?key={fresh_tokens['api_key']}&prettyPrint=false"
-                
+
                 # Update payload with fresh tokens
                 payload["context"] = self.build_context(
                     visitor_data=fresh_tokens.get('visitor_data'),
                     client_version=fresh_tokens.get('client_version')
                 )
-                
+
                 # Retry request
                 response = requests.post(url, headers=headers, json=payload)
                 print(f" Retry Status Code: {response.status_code}")
-                
+
                 if response.status_code == 200:
                     return response.json()
                 else:
                     print(f" Retry failed: {response.status_code}")
                     print(response.text[:500])
-            
+
             return None
-    
+
     def parse_video_results(self, data):
         """Parse and display video search results"""
         if not data:
             return []
-        
+
         videos = []
-        
+
         try:
             contents = data["contents"]["tabbedSearchResultsRenderer"]["tabs"][0]["tabRenderer"]["content"]["sectionListRenderer"]["contents"]
-            
+
             for section in contents:
                 if "musicShelfRenderer" in section:
                     shelf = section["musicShelfRenderer"]
-                    
+
                     # Get section title
                     title = shelf["title"]["runs"][0]["text"]
-                    
+
                     if title.lower() == "videos":
                         print(f"\n{'='*60}")
                         print(f" {title}")
                         print(f"{'='*60}\n")
-                        
+
                         # Get videos
                         for item in shelf.get("contents", []):
                             if "musicResponsiveListItemRenderer" in item:
                                 renderer = item["musicResponsiveListItemRenderer"]
-                                
+
                                 # Extract video info
                                 video_title = renderer["flexColumns"][0]["musicResponsiveListItemFlexColumnRenderer"]["text"]["runs"][0]["text"]
                                 video_id = renderer["playlistItemData"]["videoId"]
                                 thumbnail = renderer["thumbnail"]["musicThumbnailRenderer"]["thumbnail"]["thumbnails"][-1]["url"]
-                                
+
                                 # Metadata
                                 metadata_runs = renderer["flexColumns"][1]["musicResponsiveListItemFlexColumnRenderer"]["text"]["runs"]
                                 metadata = "".join([run["text"] for run in metadata_runs])
-                                
+
                                 video_info = {
                                     'title': video_title,
                                     'video_id': video_id,
@@ -317,9 +318,9 @@ class YouTubeMusicVideoAPI:
                                     'thumbnail': thumbnail,
                                     'metadata': metadata
                                 }
-                                
+
                                 videos.append(video_info)
-                                
+
                                 print(f" {video_title}")
                                 print(f"   Video ID: {video_id}")
                                 print(f"   YT Music: https://music.youtube.com/watch?v={video_id}")
@@ -327,11 +328,11 @@ class YouTubeMusicVideoAPI:
                                 print(f"   {metadata}")
                                 print(f"   Thumbnail: {thumbnail}")
                                 print("-" * 60)
-                        
+
                         break
         except Exception as e:
             print(f" Error parsing results: {e}")
-        
+
         return videos
 
 
@@ -339,26 +340,26 @@ class YouTubeMusicVideoAPI:
 if __name__ == "__main__":
     # Initialize API with 2-hour cache duration
     api = YouTubeMusicVideoAPI(cache_duration_hours=2)
-    
+
     # Search - will use cache if available, or fetch fresh tokens
     search_query = "follow follow song"
     results = api.search_videos(search_query, use_fresh_tokens=True)
-    
+
     if results:
         videos = api.parse_video_results(results)
         print(f"\n Found {len(videos)} videos")
-        
+
         # Save results (use /tmp on Heroku)
         from utils.atomic_write import atomic_json_write
         output_file = "/tmp/video_search_results.json" if os.getenv('DYNO') else "video_search_results.json"
         atomic_json_write(output_file, videos, ensure_ascii=False)
         print(f" Results saved to {output_file}")
-    
+
     # Example: Search again - will use cached tokens
     print("\n" + "="*60)
     print(" Searching again (should use cache)...")
     print("="*60)
-    
+
     results2 = api.search_videos("another video", use_fresh_tokens=True)
     if results2:
         videos2 = api.parse_video_results(results2)

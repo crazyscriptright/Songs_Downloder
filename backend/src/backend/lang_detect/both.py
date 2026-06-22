@@ -1,22 +1,20 @@
-import whisper
-import os
-import pandas as pd
-from tqdm import tqdm
-from pathlib import Path
-from mutagen.easyid3 import EasyID3
-from mutagen.mp3 import MP3
-from mutagen import File
-from mutagen.id3 import ID3
-import torch
-import numpy as np
-import librosa
-import re
-import time
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
 import random
+import re
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import librosa
+import pandas as pd
+import torch
+import whisper
+from mutagen import File
+from mutagen.id3 import ID3
+from mutagen.mp3 import MP3
+from tqdm import tqdm
+
 
 # Auto-install missing libraries
 def install_if_missing(package):
@@ -90,11 +88,11 @@ def extract_metadata(file_path):
         audio = File(file_path, easy=True)
         if audio is None:
             return None, None, None
-        
+
         title = audio.get('title', [None])[0]
         artist = audio.get('artist', [None])[0]
         album = audio.get('album', [None])[0]
-        
+
         return title, artist, album
     except Exception:
         return None, None, None
@@ -104,13 +102,13 @@ def detect_language_from_jiosaavn(title, artist, proxy=None):
     """Search JioSaavn API for song and get language + important metadata"""
     if not title:
         return None, 0.0, 'no_title', {}
-    
+
     try:
         # Build search query
         query = f"{title}"
         if artist:
             query += f" {artist}"
-        
+
         # JioSaavn search API
         url = "https://www.jiosaavn.com/api.php"
         params = {
@@ -123,7 +121,7 @@ def detect_language_from_jiosaavn(title, artist, proxy=None):
             'n': 10,  # Get more results for better matching
             '__call': 'search.getResults'
         }
-        
+
         # Setup headers to mimic Indian browser request
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -132,40 +130,40 @@ def detect_language_from_jiosaavn(title, artist, proxy=None):
             'Referer': 'https://www.jiosaavn.com/',
             'Origin': 'https://www.jiosaavn.com'
         }
-        
+
         # Setup proxy if provided
         proxies = {'http': proxy, 'https': proxy} if proxy else None
-        
+
         response = requests.get(url, params=params, timeout=10, headers=headers, proxies=proxies)
-        
+
         if response.status_code == 200:
             data = response.json()
-            
+
             if 'results' in data and len(data['results']) > 0:
                 # Find best match by comparing title and artist similarity
                 best_match = None
                 best_score = 0
-                
+
                 for idx, result in enumerate(data['results'][:10]):  # Check top 10 results
                     result_title = result.get('title', '').lower()
                     result_subtitle = result.get('subtitle', '').lower()
-                    
+
                     # Clean strings for comparison (remove track numbers, special chars, extra spaces)
                     # Remove leading numbers like "01 ", "02. ", "1-", etc.
                     clean_title = re.sub(r'^\d+[\s\-\.]+', '', title.lower())
                     clean_title = re.sub(r'[^\w\s]', '', clean_title).strip()
-                    
+
                     clean_result_title = re.sub(r'^\d+[\s\-\.]+', '', result_title)
                     clean_result_title = re.sub(r'[^\w\s]', '', clean_result_title).strip()
-                    
+
                     clean_artist = re.sub(r'[^\w\s]', '', artist.lower()).strip() if artist else ''
                     clean_result_subtitle = re.sub(r'[^\w\s]', '', result_subtitle).strip()
-                    
+
                     result['_match_index'] = idx  # Track which result this is
-                    
+
                     # Calculate match score
                     score = 0
-                    
+
                     # Title exact match = 100 points
                     if clean_title == clean_result_title:
                         score += 100
@@ -175,7 +173,7 @@ def detect_language_from_jiosaavn(title, artist, proxy=None):
                     # Title words overlap = 30 points
                     elif any(word in clean_result_title for word in clean_title.split() if len(word) > 3):
                         score += 30
-                    
+
                     # Artist match = 50 points (improved matching)
                     if artist and clean_artist:
                         # Check if all artist words appear in result subtitle
@@ -186,24 +184,24 @@ def detect_language_from_jiosaavn(title, artist, proxy=None):
                                 score += 50  # All artist words found
                             elif matches > 0:
                                 score += 25  # Partial artist match
-                    
+
                     # Prefer songs over other types (albums, playlists)
                     if result.get('type') == 'song':
                         score += 20
-                    
+
                     # Update best match
                     if score > best_score:
                         best_score = score
                         best_match = result
-                
+
 
                 # Only use result if match score is decent (at least 30 points for title match)
                 if best_match and best_score >= 30:
-                    
+
                     if 'language' in best_match:
                         lang_full = best_match['language'].lower()
                         chosen_index = best_match.get('_match_index', -1)
-                        
+
                         # Extract important metadata for FFmpeg usage
                         metadata = {
                             'jiosaavn_id': best_match.get('id', ''),
@@ -226,10 +224,10 @@ def detect_language_from_jiosaavn(title, artist, proxy=None):
                             'jiosaavn_full_response': json.dumps(data, ensure_ascii=False),  # Entire API response
                             'jiosaavn_matched_json': json.dumps(best_match, ensure_ascii=False)  # Just the matched song
                         }
-                        
+
                         # Map JioSaavn language names to Whisper codes
                         lang_map = {
-                            'english': 'en', 'hindi': 'hi', 'telugu': 'te', 
+                            'english': 'en', 'hindi': 'hi', 'telugu': 'te',
                             'kannada': 'kn', 'tamil': 'ta', 'marathi': 'mr',
                             'bengali': 'bn', 'gujarati': 'gu', 'punjabi': 'pa',
                             'urdu': 'ur', 'malayalam': 'ml', 'odia': 'or',
@@ -237,7 +235,7 @@ def detect_language_from_jiosaavn(title, artist, proxy=None):
                             'rajasthani': 'hi', 'haryanvi': 'hi',
                             'sadri': 'hi', 'ahirani': 'mr', 'gujarati': 'gu'  # Added more regional languages
                         }
-                        
+
                         if lang_full in lang_map:
                             # Confidence based on match score
                             # 100+ = 0.95, 80-99 = 0.85, 50-79 = 0.75, 30-49 = 0.70
@@ -249,11 +247,11 @@ def detect_language_from_jiosaavn(title, artist, proxy=None):
                                 confidence = 0.75
                             else:
                                 confidence = 0.70
-                            
+
                             return lang_map[lang_full], confidence, 'jiosaavn_api', metadata
-        
+
         return None, 0.0, 'api_no_match', {}
-        
+
     except requests.exceptions.Timeout:
         return None, 0.0, 'api_timeout', {}
     except requests.exceptions.ConnectionError:
@@ -267,15 +265,15 @@ def detect_language_from_metadata(file_path):
     try:
         # Try reading ID3 tags
         audio = ID3(file_path)
-        
+
         # Check filename/title for language hints
         title = audio.get('TIT2', [''])[0] if 'TIT2' in audio else ''
         artist = audio.get('TPE1', [''])[0] if 'TPE1' in audio else ''
         filename = os.path.basename(file_path)
-        
+
         # Combine all text
         text = f"{title} {artist} {filename}".lower()
-        
+
         # Pattern matching for language indicators
         patterns = {
             'hi': r'\b(hindi|हिन्दी|bollywood)\b',
@@ -289,13 +287,13 @@ def detect_language_from_metadata(file_path):
             'gu': r'\b(gujarati|ગુજરાતી)\b',
             'en': r'\b(english)\b'
         }
-        
+
         for lang, pattern in patterns.items():
             if re.search(pattern, text):
                 return lang, 0.9, 'metadata_pattern'
-        
+
         return None, 0.0, 'no_metadata'
-        
+
     except Exception:
         return None, 0.0, 'metadata_error'
 
@@ -304,13 +302,13 @@ def fetch_api_for_song(file_path):
     """Wrapper function for parallel API fetching"""
     try:
         title, artist, album = extract_metadata(file_path)
-        
+
         # Randomly select proxy for load balancing
         proxy = random.choice(PROXY_LIST) if len(PROXY_LIST) > 1 else None
-        
+
         lang_api, conf_api, method_api, jiosaavn_meta = detect_language_from_jiosaavn(title, artist, proxy)
         lang_meta, conf_meta, method_meta = detect_language_from_metadata(file_path)
-        
+
         return file_path, {
             'title': title,
             'artist': artist,
@@ -323,7 +321,7 @@ def fetch_api_for_song(file_path):
             'conf_meta': conf_meta,
             'method_meta': method_meta
         }
-    except Exception as e:
+    except Exception:
         return file_path, None
 
 # ---------- Improved vocal detection (check multiple sections) ----------
@@ -333,54 +331,54 @@ def find_vocal_sections(audio_path, num_sections=3):
         # Get audio duration first (fast)
         audio_info = MP3(audio_path)
         duration = audio_info.info.length
-        
+
         # Sample sections: early (30s), middle, and 3/4 point
         sample_points = [
             min(30, duration * 0.15),  # ~30s or 15% in
             duration * 0.5,             # Middle
             duration * 0.75             # 3/4 through
         ]
-        
+
         vocal_sections = []
-        
+
         for sample_sec in sample_points:
             if sample_sec >= duration - 15:
                 continue
-                
+
             # Load 20-second chunk around this point
             start = max(0, sample_sec - 5)
             try:
-                wav, sr = librosa.load(audio_path, sr=16000, mono=True, 
+                wav, sr = librosa.load(audio_path, sr=16000, mono=True,
                                       offset=start, duration=20)
                 wav_tensor = torch.from_numpy(wav)
-                
+
                 # Detect speech in this chunk
                 speech_timestamps = get_speech_timestamps(
-                    wav_tensor, 
+                    wav_tensor,
                     vad_model,
                     threshold=0.4,  # Slightly less sensitive for cleaner detection
                     sampling_rate=16000,
                     min_speech_duration_ms=500,
                     min_silence_duration_ms=300
                 )
-                
+
                 # If vocals found, add to list
                 if speech_timestamps and len(speech_timestamps) > 0:
                     relative_start = speech_timestamps[0]['start'] / 16000
                     absolute_start = start + relative_start
                     vocal_sections.append(round(absolute_start, 1))
-                    
+
             except Exception:
                 continue
-        
+
         # Return sections or defaults
         if vocal_sections:
             return vocal_sections
         else:
             # No vocals found, return common fallback points
             return [30.0, duration * 0.5, duration * 0.75]
-        
-    except Exception as e:
+
+    except Exception:
         # Ultimate fallback
         return [30.0, 60.0, 90.0]
 
@@ -407,27 +405,27 @@ def detect_language_from_sections(audio_path, vocal_sections):
     best_lang = None
     best_conf = 0.0
     segments_checked = 0
-    
+
     # Try each vocal section
     for start_sec in vocal_sections[:3]:  # Max 3 sections
         end_sec = start_sec + SEGMENT_DURATION
-        
+
         try:
             lang, conf = detect_language_segment(audio_path, start_sec, end_sec)
             segments_checked += 1
-            
+
             # Update best result
             if conf > best_conf:
                 best_lang = lang
                 best_conf = conf
-            
+
             # If high confidence found, stop early
             if conf >= CONFIDENCE_THRESHOLD:
                 return lang, conf, segments_checked
-                
+
         except Exception:
             continue
-    
+
     return best_lang, best_conf, segments_checked
 
 # ---------- Main processing loop (Two-Pass Approach) ----------
@@ -453,22 +451,22 @@ api_results = {}
 
 with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
     # Submit all fetch tasks
-    future_to_file = {executor.submit(fetch_api_for_song, path): (file, path) 
+    future_to_file = {executor.submit(fetch_api_for_song, path): (file, path)
                       for file, path in pending_files}
-    
+
     # Process results as they complete
     for future in tqdm(as_completed(future_to_file), total=len(future_to_file), desc="API Fetch"):
         file, path = future_to_file[future]
-        
+
         try:
             result_path, api_data = future.result()
-            
+
             if api_data:
                 # ---- Decide which source to use ----
                 lang = api_data['lang_api'] if api_data['conf_api'] >= 0.70 else api_data['lang_meta'] if api_data['conf_meta'] >= 0.9 else None
                 conf = max(api_data['conf_api'], api_data['conf_meta'])
                 method = api_data['method_api'] if api_data['conf_api'] > api_data['conf_meta'] else api_data['method_meta']
-                
+
                 if lang and conf >= 0.70:  # High confidence from metadata/API
                     result_row = {
                         "file_name": file,
@@ -484,10 +482,10 @@ with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
                         "status": f"confident_{method}",
                         "needs_ai": False
                     }
-                    
+
                     if api_data['jiosaavn_meta']:
                         result_row.update(api_data['jiosaavn_meta'])
-                    
+
                     results.append(result_row)
                 else:
                     # Low confidence - mark for AI processing
@@ -505,10 +503,10 @@ with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
                         "status": "needs_ai_detection",
                         "needs_ai": True
                     }
-                    
+
                     if api_data['jiosaavn_meta']:
                         result_row.update(api_data['jiosaavn_meta'])
-                    
+
                     results.append(result_row)
             else:
                 # API fetch failed
@@ -528,8 +526,8 @@ with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
                     "needs_ai": True
                 }
                 results.append(result_row)
-                
-        except Exception as e:
+
+        except Exception:
             # Error processing this song
             title, artist, album = extract_metadata(path)
             result_row = {
@@ -556,7 +554,7 @@ df_temp = pd.DataFrame(results)
 needs_ai_count = df_temp['needs_ai'].sum() if 'needs_ai' in df_temp.columns else 0
 confident_count = len(results) - needs_ai_count
 
-print(f"\n✅ Pass 1 Complete:")
+print("\n✅ Pass 1 Complete:")
 print(f"   - {confident_count} songs detected with high confidence")
 print(f"   - {needs_ai_count} songs need AI detection")
 
@@ -566,7 +564,7 @@ print(f"   - {needs_ai_count} songs need AI detection")
 #     print("="*60)
 #     print(f"\n⚠️  {needs_ai_count} songs need AI processing (takes ~30-60s per song)")
 #     print(f"Total estimated time: {needs_ai_count * 45 // 60} minutes\n")
-    
+
 #     # Show first 10 songs that need AI
 #     ai_needed = [r for r in results if r.get('needs_ai', False)]
 #     print("First 10 songs needing AI detection:")
@@ -574,7 +572,7 @@ print(f"   - {needs_ai_count} songs need AI detection")
 #         print(f"  {i}. {r['file_name']} (API status: {r['status']})")
 #     if len(ai_needed) > 10:
 #         print(f"  ... and {len(ai_needed) - 10} more\n")
-    
+
 #     response = input("\nProceed with AI detection? (y/n): ").strip().lower()
 #     if response != 'y':
 #         print("\n⏸️  AI detection skipped. Songs marked as 'pending_ai' in CSV.")
@@ -585,18 +583,18 @@ print(f"   - {needs_ai_count} songs need AI detection")
 #         for idx, result in enumerate(tqdm(results, desc="AI Detection")):
 #             if not result.get('needs_ai', False):
 #                 continue  # Skip already confident songs
-            
+
 #             path = result['file_path']
-            
+
 #             try:
 #                 # ---- Run AI detection ----
 #                 # Find multiple vocal sections
 #                 vocal_sections = find_vocal_sections(path)
 #                 vocal_start = vocal_sections[0] if vocal_sections else 30.0
-                
+
 #                 # Detect language from these sections
 #                 lang, conf, segments_analyzed = detect_language_from_sections(path, vocal_sections)
-                
+
 #                 # Final decision
 #                 if conf >= CONFIDENCE_THRESHOLD:
 #                     status = "confident_ai"
@@ -604,7 +602,7 @@ print(f"   - {needs_ai_count} songs need AI detection")
 #                 else:
 #                     final_lang = "unknown"
 #                     status = "low_confidence_ai"
-                
+
 #                 # Update result
 #                 results[idx].update({
 #                     "vocal_start_sec": vocal_start,
@@ -615,7 +613,7 @@ print(f"   - {needs_ai_count} songs need AI detection")
 #                     "status": status,
 #                     "needs_ai": False
 #                 })
-                
+
 #             except Exception as e:
 #                 # AI failed
 #                 results[idx].update({
@@ -623,11 +621,11 @@ print(f"   - {needs_ai_count} songs need AI detection")
 #                     "status": "ai_failed",
 #                     "needs_ai": False
 #                 })
-            
+
 #             # Save after each AI detection (progress tracking)
 #             pd.DataFrame(results).to_csv(CSV_FILE, index=False)
 
-print(f"\n✅ Language detection completed / resumed successfully.")
+print("\n✅ Language detection completed / resumed successfully.")
 print(f"📄 Report saved in: {CSV_FILE}")
 
 # Remove internal tracking column

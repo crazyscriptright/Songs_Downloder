@@ -1,10 +1,11 @@
-import re
-import requests
 import json
-import time
 import os
+import re
+import time
 from datetime import datetime, timedelta
 from urllib.parse import quote_plus
+
+import requests
 
 # Use /tmp on Heroku for writable storage
 if os.getenv('DYNO'):
@@ -22,18 +23,18 @@ def load_cache():
     try:
         with open(CACHE_FILE, "r", encoding="utf-8") as f:
             cache_data = json.load(f)
-        
+
         # Get SoundCloud tokens from unified cache
         if 'soundcloud' not in cache_data:
             return {}
-        
+
         sc_data = cache_data['soundcloud']
-        
+
         # Check if cache is still valid
         if 'timestamp' in sc_data:
             cached_time = datetime.fromisoformat(sc_data['timestamp'])
             expiry_time = cached_time + timedelta(hours=2)
-            
+
             if datetime.now() < expiry_time:
                 time_left = expiry_time - datetime.now()
                 hours, remainder = divmod(time_left.seconds, 3600)
@@ -84,33 +85,33 @@ def get_valid_client_id(force_refresh=False):
         return cache["client_id"]
 
     print("[Fetch] Extracting new client_id from SoundCloud...")
-    
+
     # Use the proven method first (most reliable)
     try:
         print("Using discover page method (most reliable)...")
         page = requests.get("https://soundcloud.com/discover", timeout=15).text
         js_links = re.findall(r'https://a-v2\.sndcdn\.com/assets/[^"]+\.js', page)
         print(f"Found {len(js_links)} JS files to check")
-        
+
         for i, js_url in enumerate(js_links[:12]):  # Check up to 12 files
             try:
                 print(f"   Checking JS {i+1}/{min(12, len(js_links))}: ...{js_url[-30:]}")
                 js_response = requests.get(js_url, timeout=10)
                 js_code = js_response.text
-                
+
                 # Try multiple patterns
                 patterns = [
                     r'client_id:"([a-zA-Z0-9]{32})"',      # Most common
                     r'"client_id":"([a-zA-Z0-9]{32})"',    # Quoted version
                     r'client_id:"([a-zA-Z0-9_-]{32})"',   # With hyphens/underscores
                 ]
-                
+
                 for pattern in patterns:
                     match = re.search(pattern, js_code)
                     if match:
                         client_id = match.group(1)
                         print(f"Found potential client_id: {client_id}")
-                        
+
                         # Test the client_id immediately
                         test_url = f"https://api-v2.soundcloud.com/search?q=test&client_id={client_id}&limit=1"
                         test_response = requests.get(test_url, timeout=8)
@@ -120,23 +121,23 @@ def get_valid_client_id(force_refresh=False):
                             return client_id
                         else:
                             print(f"   Client_id test failed: {test_response.status_code}")
-                        
+
             except Exception as e:
                 print(f"   JS {i+1} error: {str(e)[:40]}")
                 continue
-        
+
         print("No working client_id found in any JS files")
         raise RuntimeError("No valid client_id found in discover page JS files")
-        
+
     except Exception as e:
         print(f"Discover page method failed: {e}")
-        
+
         # Last resort: Try main page
         try:
             print("Trying main page as last resort...")
             page = requests.get("https://soundcloud.com/", timeout=15).text
             js_links = re.findall(r'https://a-v2\.sndcdn\.com/[^"]+\.js', page)
-            
+
             for js_url in js_links[:5]:  # Only check first 5 from main page
                 try:
                     js_code = requests.get(js_url, timeout=8).text
@@ -152,9 +153,9 @@ def get_valid_client_id(force_refresh=False):
                             return client_id
                 except Exception:
                     continue
-                    
+
             raise RuntimeError("All SoundCloud client_id extraction methods failed")
-            
+
         except Exception as final_e:
             print(f"All methods failed: {final_e}")
             raise RuntimeError("SoundCloud client_id extraction completely failed")

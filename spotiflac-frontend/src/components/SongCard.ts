@@ -9,11 +9,7 @@ export type DownloadCallback = (
   button: HTMLButtonElement,
   useAdvanced?: boolean,
 ) => void;
-export type AdvancedCallback = (
-  url: string,
-  title: string,
-  button: HTMLButtonElement,
-) => void;
+export type AdvancedCallback = (url: string, title: string, button: HTMLButtonElement) => void;
 
 const ICON = {
   clock:
@@ -37,14 +33,10 @@ const PLACEHOLDER_IMG =
 function buildSoundCloudMeta(song: Song): string {
   const parts: string[] = [];
   if (song.duration) parts.push(`<span>${ICON.clock}${song.duration}</span>`);
-  if (song.plays)
-    parts.push(`<span>${ICON.play}${song.plays.toLocaleString()}</span>`);
-  if (song.likes)
-    parts.push(`<span>${ICON.heart}${song.likes.toLocaleString()}</span>`);
+  if (song.plays) parts.push(`<span>${ICON.play}${song.plays.toLocaleString()}</span>`);
+  if (song.likes) parts.push(`<span>${ICON.heart}${song.likes.toLocaleString()}</span>`);
   if (song.genre) parts.push(`<span>${ICON.music}${song.genre}</span>`);
-  return parts.length
-    ? `<div class="song-metadata">${parts.join("")}</div>`
-    : "";
+  return parts.length ? `<div class="song-metadata">${parts.join("")}</div>` : "";
 }
 
 function buildJioSaavnMeta(song: Song): string {
@@ -52,9 +44,7 @@ function buildJioSaavnMeta(song: Song): string {
   if (song.year) parts.push(`<span>${ICON.calendar}${song.year}</span>`);
   if (song.language) parts.push(`<span>${ICON.globe}${song.language}</span>`);
   if (song.subtitle) parts.push(`<span>${ICON.disc}${song.subtitle}</span>`);
-  return parts.length
-    ? `<div class="song-metadata">${parts.join("")}</div>`
-    : "";
+  return parts.length ? `<div class="song-metadata">${parts.join("")}</div>` : "";
 }
 
 /**
@@ -80,9 +70,7 @@ export function createSourceSection(
   grid.className = "songs-grid";
 
   songs.forEach((song, index) => {
-    grid.appendChild(
-      createSongCard(song, sourceId, index, searchType, onDownload, onAdvanced),
-    );
+    grid.appendChild(createSongCard(song, sourceId, index, searchType, onDownload, onAdvanced));
   });
 
   section.appendChild(header);
@@ -126,9 +114,7 @@ export function createSongCard(
   const advancedBtnId = `advanced-btn-${sourceId}-${index}`;
   const previewBtnId = `preview-btn-${sourceId}-${index}`;
   const thumbnailClass =
-    searchType === "video"
-      ? "song-thumbnail video-thumbnail"
-      : "song-thumbnail";
+    searchType === "video" ? "song-thumbnail video-thumbnail" : "song-thumbnail";
 
   // Preview button: SoundCloud + JioSaavn (audio proxy) + YouTube Music (iframe)
   const previewBtnHTML =
@@ -167,17 +153,13 @@ export function createSongCard(
         onDownload(song.url, song.title, dlBtn);
       });
     }
-    const previewBtn = document.getElementById(
-      previewBtnId,
-    ) as HTMLButtonElement | null;
+    const previewBtn = document.getElementById(previewBtnId) as HTMLButtonElement | null;
     if (previewBtn) {
       previewBtn.addEventListener("click", () => {
         PreviewService.play(song.url, song.title, card, previewBtn);
       });
     }
-    const advBtn = document.getElementById(
-      advancedBtnId,
-    ) as HTMLButtonElement | null;
+    const advBtn = document.getElementById(advancedBtnId) as HTMLButtonElement | null;
     if (advBtn) {
       advBtn.addEventListener("click", () => {
         onAdvanced(song.url, song.title, advBtn);

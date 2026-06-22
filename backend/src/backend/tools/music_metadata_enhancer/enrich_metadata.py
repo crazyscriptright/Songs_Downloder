@@ -30,16 +30,14 @@ Usage:
     python enrich_metadata.py "B:\music\All" --skip 200 -y
 """
 
-import sys
-import os
-from pathlib import Path
-from typing import Optional, Dict, Any
-import logging
 import json
-from datetime import datetime
-import subprocess
+import logging
 import re
+import subprocess
+import sys
 import time
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 # Handle --help early before attempting heavy imports that might fail
 if '-h' in sys.argv or '--help' in sys.argv:
@@ -54,10 +52,10 @@ if '-h' in sys.argv or '--help' in sys.argv:
     sys.exit(0)
 
 try:
-    from langdetect import detect, detect_langs, LangDetectException
+    from langdetect import LangDetectException, detect, detect_langs
 except ImportError:
     detect = None
-    
+
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -77,54 +75,82 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(BACKEND_DIR))
 
 try:
-    from mutagen.mp3 import MP3
     from mutagen.flac import FLAC
-    from mutagen.mp4 import MP4
     from mutagen.id3 import ID3
-except ImportError as e:
-    print(f"Error: mutagen library not installed. Install with: uv pip install mutagen", file=sys.stderr)
+    from mutagen.mp3 import MP3
+    from mutagen.mp4 import MP4
+except ImportError:
+    print("Error: mutagen library not installed. Install with: uv pip install mutagen", file=sys.stderr)
     sys.exit(1)
 
 try:
-    from spoflac_core.modules.platform_metadata import (
-        _fetch_lyrics_with_fallbacks,
-        _extract_featured_artists,
-        _detect_version_type,
-        _extract_tags_from_text,
-    )
     from spoflac_core.modules.metadata import embed_metadata, has_timestamps
-    from spoflac_core.modules.url_resolver import _romanize_lrc_lyrics, _detect_script
+    from spoflac_core.modules.platform_metadata import (
+        _detect_version_type,
+        _extract_featured_artists,
+        _extract_tags_from_text,
+        _fetch_lyrics_with_fallbacks,
+    )
+    from spoflac_core.modules.url_resolver import _detect_script, _romanize_lrc_lyrics
 except Exception:
     try:
         from music_metadata_enhancer.standalone_compat import (
-            fetch_lyrics_with_fallbacks as _fetch_lyrics_with_fallbacks,
-            extract_featured_artists as _extract_featured_artists,
+            detect_script as _detect_script,
+        )
+        from music_metadata_enhancer.standalone_compat import (
             detect_version_type as _detect_version_type,
-            extract_tags_from_text as _extract_tags_from_text,
+        )
+        from music_metadata_enhancer.standalone_compat import (
             embed_metadata,
             has_timestamps,
+        )
+        from music_metadata_enhancer.standalone_compat import (
+            extract_featured_artists as _extract_featured_artists,
+        )
+        from music_metadata_enhancer.standalone_compat import (
+            extract_tags_from_text as _extract_tags_from_text,
+        )
+        from music_metadata_enhancer.standalone_compat import (
+            fetch_lyrics_with_fallbacks as _fetch_lyrics_with_fallbacks,
+        )
+        from music_metadata_enhancer.standalone_compat import (
             romanize_lrc_lyrics as _romanize_lrc_lyrics,
-            detect_script as _detect_script,
         )
     except Exception:
         from standalone_compat import (
-            fetch_lyrics_with_fallbacks as _fetch_lyrics_with_fallbacks,
-            extract_featured_artists as _extract_featured_artists,
+            detect_script as _detect_script,
+        )
+        from standalone_compat import (
             detect_version_type as _detect_version_type,
-            extract_tags_from_text as _extract_tags_from_text,
+        )
+        from standalone_compat import (
             embed_metadata,
             has_timestamps,
+        )
+        from standalone_compat import (
+            extract_featured_artists as _extract_featured_artists,
+        )
+        from standalone_compat import (
+            extract_tags_from_text as _extract_tags_from_text,
+        )
+        from standalone_compat import (
+            fetch_lyrics_with_fallbacks as _fetch_lyrics_with_fallbacks,
+        )
+        from standalone_compat import (
             romanize_lrc_lyrics as _romanize_lrc_lyrics,
-            detect_script as _detect_script,
         )
 
 # Import Picard fallback enricher (optional)
 try:
-    from music_metadata_enhancer.picard_fallback_enricher import run_picard_fallback_enrichment, install_requirements as check_picard_requirements
+    from music_metadata_enhancer.picard_fallback_enricher import (
+        install_requirements as check_picard_requirements,
+    )
+    from music_metadata_enhancer.picard_fallback_enricher import run_picard_fallback_enrichment
     PICARD_AVAILABLE = check_picard_requirements()
 except ImportError:
     try:
-        from picard_fallback_enricher import run_picard_fallback_enrichment, install_requirements as check_picard_requirements
+        from picard_fallback_enricher import install_requirements as check_picard_requirements
+        from picard_fallback_enricher import run_picard_fallback_enrichment
         PICARD_AVAILABLE = check_picard_requirements()
     except ImportError:
         PICARD_AVAILABLE = False
@@ -162,7 +188,7 @@ def detect_language(text: str) -> Dict[str, Any]:
             'all_languages': ['English'],
             'language_distribution': {'English': 100}
         }
-    
+
     # Map scripts to languages
     script_to_language = {
         'Devanagari': 'Hindi',
@@ -184,7 +210,7 @@ def detect_language(text: str) -> Dict[str, Any]:
         'Arabic': 'Arabic',
         'Hebrew': 'Hebrew',
     }
-    
+
     # =================================================================
     # STEP 1: CHECK FOR NON-LATIN SCRIPTS (Most reliable!)
     # =================================================================
@@ -196,7 +222,7 @@ def detect_language(text: str) -> Dict[str, Any]:
             script = _detect_script(clean_line)
             if script and script != 'Unknown':
                 script_counts[script] = script_counts.get(script, 0) + 1
-    
+
     # If we found a strong script signal (appears in lyrics), use it!
     if script_counts:
         # Most common script
@@ -209,7 +235,7 @@ def detect_language(text: str) -> Dict[str, Any]:
                 'language_distribution': {lang: 100},
                 'detection_method': 'script'
             }
-    
+
     # =================================================================
     # STEP 2: FALLBACK TO LANGDETECT + KEYWORDS (for Latin-based text)
     # =================================================================
@@ -220,7 +246,7 @@ def detect_language(text: str) -> Dict[str, Any]:
         clean_line = re.sub(r'\[\d{1,2}:\d{2}(?:\.\d+)?\]', '', line).strip()
         if clean_line and len(clean_line) > 2:  # Skip very short lines
             lines.append(clean_line)
-    
+
     if not lines:
         return {
             'primary_language': 'English',
@@ -228,15 +254,15 @@ def detect_language(text: str) -> Dict[str, Any]:
             'language_distribution': {'English': 100},
             'detection_method': 'default'
         }
-    
+
     # Detect language for each line
     detected_langs = {}
-    
+
     for line in lines:
         try:
             # Try langdetect first (most reliable for non-Latin scripts)
             detected_probs = detect_langs(line)
-            
+
             # Take the language with highest probability if >= 0.7 (70% confidence)
             if detected_probs and detected_probs[0].prob >= 0.7:
                 lang_code = detected_probs[0].lang
@@ -251,7 +277,7 @@ def detect_language(text: str) -> Dict[str, Any]:
                 else:
                     # Default to English for low-confidence cases
                     detected_langs['English'] = detected_langs.get('English', 0) + 1
-        
+
         except LangDetectException:
             # If langdetect fails completely, try keywords
             keyword_lang = detect_language_from_keywords(line)
@@ -259,18 +285,18 @@ def detect_language(text: str) -> Dict[str, Any]:
                 detected_langs[keyword_lang] = detected_langs.get(keyword_lang, 0) + 1
             else:
                 detected_langs['English'] = detected_langs.get('English', 0) + 1
-    
+
     # Calculate distribution percentages
     total_lines = sum(detected_langs.values())
     language_distribution = {
         lang: int((count / total_lines) * 100)
         for lang, count in sorted(detected_langs.items(), key=lambda x: x[1], reverse=True)
     }
-    
+
     # Primary language is the most common
     primary_language = max(detected_langs, key=detected_langs.get)
     all_languages = list(language_distribution.keys())
-    
+
     return {
         'primary_language': primary_language,
         'all_languages': all_languages,
@@ -319,9 +345,9 @@ def detect_language_from_keywords(text: str) -> Optional[str]:
     """
     if not text:
         return None
-    
+
     text_lower = text.lower()
-    
+
     # Hindi keywords (common Hindustani words in transliteration)
     hindi_keywords = {
         'ho', 'hai', 'hao', 'mere', 'tum', 'jo', 'aur', 'ka', 'ke', 'kya', 'nahi', 'naan',
@@ -345,7 +371,7 @@ def detect_language_from_keywords(text: str) -> Optional[str]:
         'yeh', 'yeha', 'yehi', 'yahan', 'yahaan', 'yahi', 'yad', 'yada', 'yadi', 'yadi',
         'zara', 'zari', 'zarai', 'zarif', 'zarre', 'zastha', 'zau', 'zauga', 'zaua'
     }
-    
+
     # Bengali keywords
     bengali_keywords = {
         'ami', 'amar', 'amra', 'aapni', 'aap', 'tumi', 'tumra', 'sei', 'tar', 'taar',
@@ -355,7 +381,7 @@ def detect_language_from_keywords(text: str) -> Optional[str]:
         'mon', 'mone', 'dil', 'hridoy', 'praan', 'pran', 'shakti', 'bal', 'bol',
         'naam', 'namer', 'rupso', 'gunsidhanto', 'guno', 'dosha', 'tomar', 'tomara'
     }
-    
+
     # Tamil keywords
     tamil_keywords = {
         'naan', 'nai', 'niir', 'nila', 'nilaa', 'un', 'unai', 'ini', 'ini', 'ithu',
@@ -363,21 +389,21 @@ def detect_language_from_keywords(text: str) -> Optional[str]:
         'vaa', 'vaai', 'poi', 'paar', 'paarum', 'kathai', 'kathala', 'kalai', 'kalaiye',
         'ceit', 'ceiyai', 'ceiyon', 'tamilai', 'tamil', 'tamizhaga', 'tamizh'
     }
-    
+
     # Telugu keywords
     telugu_keywords = {
         'nenu', 'meeru', 'adi', 'ade', 'aite', 'ayana', 'aama', 'yem', 'yemi', 'yela',
         'eppudi', 'epudu', 'enduku', 'emiti', 'enka', 'emuka', 'ani', 'anedi',
         'premam', 'pream', 'premalanni', 'premata', 'parama', 'paramanatham'
     }
-    
+
     # Punjabi keywords
     punjabi_keywords = {
         'main', 'mera', 'meri', 'mere', 'tusi', 'tera', 'teri', 'tere', 'tussi',
         'eh', 'oh', 'ohi', 'uu', 've', 'vei', 'ki', 'kia', 'kardi', 'kardia',
         'haan', 'hai', 'ho', 'ae', 'si', 'si', 'hoya', 'hoye', 'hove', 'hovea'
     }
-    
+
     # Count keyword matches
     keywords_found = {
         'Hindi': sum(1 for kw in hindi_keywords if kw in text_lower),
@@ -386,13 +412,13 @@ def detect_language_from_keywords(text: str) -> Optional[str]:
         'Telugu': sum(1 for kw in telugu_keywords if kw in text_lower),
         'Punjabi': sum(1 for kw in punjabi_keywords if kw in text_lower),
     }
-    
+
     # Return language with most keyword matches (if any found)
     if any(keywords_found.values()):
         best_match = max(keywords_found, key=keywords_found.get)
         if keywords_found[best_match] > 0:
             return best_match
-    
+
     return None
 
 
@@ -407,7 +433,7 @@ def _detect_language_jiosaavn(title: str, artist: str) -> Dict[str, Any]:
     """
     if not requests or not title:
         return {'language': None, 'confidence': 0.0, 'method': 'jiosaavn_failed'}
-    
+
     try:
         url = "https://www.jiosaavn.com/api.php"
         params = {
@@ -420,14 +446,14 @@ def _detect_language_jiosaavn(title: str, artist: str) -> Dict[str, Any]:
             'n': 5,
             '__call': 'search.getResults'
         }
-        
+
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept-Language': 'en-IN,en;q=0.9,hi;q=0.8'
         }
-        
+
         response = requests.get(url, params=params, headers=headers, timeout=5)
-        
+
         if response.status_code == 200:
             data = response.json()
             if 'results' in data and len(data['results']) > 0:
@@ -448,7 +474,7 @@ def _detect_language_jiosaavn(title: str, artist: str) -> Dict[str, Any]:
                         'method': 'jiosaavn_api',
                         'title': first_result.get('title', '')
                     }
-        
+
         return {'language': None, 'confidence': 0.0, 'method': 'jiosaavn_no_results'}
     except Exception as e:
         logger.debug(f"JioSaavn API failed: {e}")
@@ -461,7 +487,7 @@ def _detect_language_jiosaavn_album(album: str, artist: str) -> Dict[str, Any]:
     """
     if not requests or not album:
         return {'language': None, 'confidence': 0.0, 'method': 'jiosaavn_album_failed'}
-    
+
     try:
         url = "https://www.jiosaavn.com/api.php"
         params = {
@@ -474,14 +500,14 @@ def _detect_language_jiosaavn_album(album: str, artist: str) -> Dict[str, Any]:
             'n': 3,
             '__call': 'search.getAlbumResults'
         }
-        
+
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept-Language': 'en-IN,en;q=0.9,hi;q=0.8'
         }
-        
+
         response = requests.get(url, params=params, headers=headers, timeout=5)
-        
+
         if response.status_code == 200:
             data = response.json()
             if 'results' in data and len(data['results']) > 0:
@@ -501,11 +527,11 @@ def _detect_language_jiosaavn_album(album: str, artist: str) -> Dict[str, Any]:
                         'method': 'jiosaavn_album',
                         'album': first_result.get('title', '')
                     }
-        
+
         return {'language': None, 'confidence': 0.0, 'method': 'jiosaavn_album_no_results'}
     except Exception as e:
         logger.debug(f"JioSaavn album search failed: {e}")
-        return {'language': None, 'confidence': 0.0, 'method': f'jiosaavn_album_error'}
+        return {'language': None, 'confidence': 0.0, 'method': 'jiosaavn_album_error'}
 
 
 def _detect_language_musicbrainz(title: str, artist: str) -> Dict[str, Any]:
@@ -515,22 +541,22 @@ def _detect_language_musicbrainz(title: str, artist: str) -> Dict[str, Any]:
     """
     if not requests or not title:
         return {'language': None, 'confidence': 0.0, 'method': 'musicbrainz_failed'}
-    
+
     try:
         headers = {
             'User-Agent': 'LanguageDetectionApp/1.0 (contact@example.com)'
         }
-        
+
         url = "https://musicbrainz.org/ws/2/recording/"
         params = {
             'query': f'recording:"{title}"' + (f' AND artist:"{artist}"' if artist else ''),
             'fmt': 'json',
             'limit': 3
         }
-        
+
         response = requests.get(url, params=params, headers=headers, timeout=8)
         time.sleep(0.3)  # MusicBrainz rate limit
-        
+
         if response.status_code == 200:
             data = response.json()
             if 'recordings' in data and len(data['recordings']) > 0:
@@ -552,7 +578,7 @@ def _detect_language_musicbrainz(title: str, artist: str) -> Dict[str, Any]:
                                     'confidence': 0.85,
                                     'method': 'musicbrainz'
                                 }
-        
+
         return {'language': None, 'confidence': 0.0, 'method': 'musicbrainz_no_match'}
     except Exception as e:
         logger.debug(f"MusicBrainz API failed: {e}")
@@ -569,7 +595,7 @@ def _detect_language_from_metadata_patterns(title: str, artist: str, filename: s
     Industry indicators: bollywood, tollywood, kollywood, etc.
     """
     text = f"{filename} {title} {artist}".lower()
-    
+
     # Industry + language patterns
     patterns = {
         'Hindi': [r'\b(bollywood|hindi\s+song|hindustani)\b'],
@@ -581,7 +607,7 @@ def _detect_language_from_metadata_patterns(title: str, artist: str, filename: s
         'Bengali': [r'\b(bengali|tolly|bangla)\b'],
         'Malayalam': [r'\b(malayalam|mollywood)\b'],
     }
-    
+
     for lang, pattern_list in patterns.items():
         for pattern in pattern_list:
             if re.search(pattern, text):
@@ -590,7 +616,7 @@ def _detect_language_from_metadata_patterns(title: str, artist: str, filename: s
                     'confidence': 0.65,
                     'method': 'metadata_patterns'
                 }
-    
+
     # Artist-based heuristics (famous Indian artists)
     artist_map = {
         'hindi': ['sonu nigam', 'arijit singh', 'shreya ghoshal', 'kumar sanu', 'udit narayan'],
@@ -600,7 +626,7 @@ def _detect_language_from_metadata_patterns(title: str, artist: str, filename: s
         'punjabi': ['diljit dosanjh', 'gurdas maan', 'sidhu moose wala'],
         'marathi': ['asha bhosle', 'suresh wadkar']
     }
-    
+
     artist_lower = artist.lower()
     for lang, artists in artist_map.items():
         if any(famous_artist in artist_lower for famous_artist in artists):
@@ -609,7 +635,7 @@ def _detect_language_from_metadata_patterns(title: str, artist: str, filename: s
                 'confidence': 0.72,
                 'method': 'artist_heuristic'
             }
-    
+
     return {'language': None, 'confidence': 0.0, 'method': 'metadata_no_match'}
 
 
@@ -624,7 +650,7 @@ def _fetch_genre_from_jiosaavn(title: str, artist: str, album: str = '') -> Dict
     """
     if not requests or not title:
         return {'genre': None, 'confidence': 0.0, 'method': 'jiosaavn_genre_failed'}
-    
+
     try:
         url = "https://www.jiosaavn.com/api.php"
         query = f"{title} {artist}" if artist else title
@@ -638,22 +664,22 @@ def _fetch_genre_from_jiosaavn(title: str, artist: str, album: str = '') -> Dict
             'n': 5,
             '__call': 'search.getResults'
         }
-        
+
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept-Language': 'en-IN,en;q=0.9,hi;q=0.8'
         }
-        
+
         response = requests.get(url, params=params, headers=headers, timeout=5)
-        
+
         if response.status_code == 200:
             data = response.json()
             if 'results' in data and len(data['results']) > 0:
                 first_result = data['results'][0]
-                
+
                 # Try to get category/genre
                 genres = []
-                
+
                 # JioSaavn has 'category' field
                 if 'category' in first_result:
                     category = first_result['category'].lower()
@@ -674,7 +700,7 @@ def _fetch_genre_from_jiosaavn(title: str, artist: str, album: str = '') -> Dict
                     }
                     if category in category_map:
                         genres.append(category_map[category])
-                
+
                 # Film-oriented categories should be treated as a valid genre label
                 if 'category' in first_result:
                     category = str(first_result.get('category', '')).lower().strip()
@@ -693,19 +719,19 @@ def _fetch_genre_from_jiosaavn(title: str, artist: str, album: str = '') -> Dict
                     }
                     if language in regional_soundtrack:
                         genres.append(regional_soundtrack[language])
-                
+
                 if genres:
                     return {
                         'genre': ', '.join(genres),  # Combine genres
                         'confidence': 0.85,
                         'method': 'jiosaavn_api'
                     }
-        
+
         return {'genre': None, 'confidence': 0.0, 'method': 'jiosaavn_genre_no_results'}
-    
+
     except Exception as e:
         logger.debug(f"JioSaavn genre fetch failed: {e}")
-        return {'genre': None, 'confidence': 0.0, 'method': f'jiosaavn_genre_error'}
+        return {'genre': None, 'confidence': 0.0, 'method': 'jiosaavn_genre_error'}
 
 
 def _fetch_genre_from_musicbrainz(title: str, artist: str) -> Dict[str, Any]:
@@ -715,34 +741,34 @@ def _fetch_genre_from_musicbrainz(title: str, artist: str) -> Dict[str, Any]:
     """
     if not requests or not title:
         return {'genre': None, 'confidence': 0.0, 'method': 'musicbrainz_genre_failed'}
-    
+
     try:
         headers = {
             'User-Agent': 'LanguageDetectionApp/1.0 (contact@example.com)'
         }
-        
+
         url = "https://musicbrainz.org/ws/2/recording/"
         params = {
             'query': f'recording:"{title}"' + (f' AND artist:"{artist}"' if artist else ''),
             'fmt': 'json',
             'limit': 3
         }
-        
+
         response = requests.get(url, params=params, headers=headers, timeout=8)
         time.sleep(0.3)  # MusicBrainz rate limit
-        
+
         if response.status_code == 200:
             data = response.json()
             if 'recordings' in data and len(data['recordings']) > 0:
                 for recording in data['recordings'][:2]:
                     # Check for genre/tag-list
                     genres = []
-                    
+
                     if 'tag-list' in recording:
                         for tag in recording['tag-list'][:3]:  # Top 3 tags
                             if 'name' in tag:
                                 genres.append(tag['name'])
-                    
+
                     if 'work-relation-list' in recording:
                         for relation in recording['work-relation-list']:
                             work = relation.get('work', {})
@@ -750,7 +776,7 @@ def _fetch_genre_from_musicbrainz(title: str, artist: str) -> Dict[str, Any]:
                                 for tag in work['tag-list'][:2]:
                                     if 'name' in tag:
                                         genres.append(tag['name'])
-                    
+
                     if genres:
                         # Deduplicate
                         genres = list(dict.fromkeys(genres))
@@ -759,9 +785,9 @@ def _fetch_genre_from_musicbrainz(title: str, artist: str) -> Dict[str, Any]:
                             'confidence': 0.8,
                             'method': 'musicbrainz_api'
                         }
-        
+
         return {'genre': None, 'confidence': 0.0, 'method': 'musicbrainz_genre_no_results'}
-    
+
     except Exception as e:
         logger.debug(f"MusicBrainz genre fetch failed: {e}")
         return {'genre': None, 'confidence': 0.0, 'method': 'musicbrainz_genre_error'}
@@ -797,7 +823,7 @@ def detect_language_with_phases(
     """
     best_result = None
     best_confidence = 0.0
-    
+
     # PHASE 1: Try JioSaavn API (most accurate for Indian music)
     if title and artist:
         logger.debug("   [PHASE 1] Querying JioSaavn API...")
@@ -813,7 +839,7 @@ def detect_language_with_phases(
                     'detection_method': result['method'],
                     'confidence': result['confidence']
                 }
-    
+
     # PHASE 1B: Try JioSaavn Album Search (alternate query)
     if album and artist and best_confidence < 0.85:
         logger.debug("   [PHASE 1] Trying JioSaavn album search...")
@@ -821,7 +847,7 @@ def detect_language_with_phases(
         if result['language'] and result['confidence'] > best_confidence:
             best_result = result
             best_confidence = result['confidence']
-    
+
     # PHASE 1C: Try MusicBrainz
     if title and best_confidence < 0.85:
         logger.debug("   [PHASE 1] Querying MusicBrainz API...")
@@ -829,7 +855,7 @@ def detect_language_with_phases(
         if result['language'] and result['confidence'] > best_confidence:
             best_result = result
             best_confidence = result['confidence']
-    
+
     # PHASE 2: Lyrics-based detection (fallback)
     if lyrics and best_confidence < 0.75:
         logger.debug("   [PHASE 2] Analyzing lyrics...")
@@ -838,7 +864,7 @@ def detect_language_with_phases(
         if lang_confidence > best_confidence:
             best_result = result
             best_confidence = lang_confidence
-    
+
     # PHASE 4: Metadata-based detection (final fallback)
     if best_confidence < 0.65:
         logger.debug("   [PHASE 4] Checking metadata patterns...")
@@ -846,7 +872,7 @@ def detect_language_with_phases(
         if result['language'] and result['confidence'] > best_confidence:
             best_result = result
             best_confidence = result['confidence']
-    
+
     # If we found something, return it
     if best_result and best_confidence > 0:
         # Ensure all required fields
@@ -858,9 +884,9 @@ def detect_language_with_phases(
             best_result['language_distribution'] = {best_result['primary_language']: 100}
         if 'confidence' not in best_result:
             best_result['confidence'] = best_confidence
-        
+
         return best_result
-    
+
     # Fallback to English if nothing detected
     return {
         'primary_language': 'English',
@@ -878,22 +904,22 @@ def _fetch_track_number_from_musicbrainz(title: str, artist: str, album: str = '
     """
     if not requests or not title:
         return {'track_number': None, 'confidence': 0.0, 'method': 'musicbrainz_track_failed'}
-    
+
     try:
         headers = {
             'User-Agent': 'LanguageDetectionApp/1.0 (contact@example.com)'
         }
-        
+
         url = "https://musicbrainz.org/ws/2/recording/"
         params = {
             'query': f'recording:"{title}"' + (f' AND artist:"{artist}"' if artist else '') + (f' AND release:"{album}"' if album else ''),
             'fmt': 'json',
             'limit': 5
         }
-        
+
         response = requests.get(url, params=params, headers=headers, timeout=8)
         time.sleep(0.3)  # MusicBrainz rate limit
-        
+
         if response.status_code == 200:
             data = response.json()
             if 'recordings' in data and len(data['recordings']) > 0:
@@ -939,7 +965,7 @@ def _fetch_track_number_from_musicbrainz(title: str, artist: str, album: str = '
                                         continue
                     except Exception:
                         continue
-        
+
         return {'track_number': None, 'confidence': 0.0, 'method': 'musicbrainz_track_no_match'}
     except Exception as e:
         logger.debug(f"MusicBrainz track fetch failed: {e}")
@@ -1046,19 +1072,19 @@ def is_suspicious_genre(genre: str) -> bool:
     """
     if not genre or not genre.strip():
         return False
-    
+
     genre_lower = genre.lower().strip()
-    
+
     # List of languages that should NOT be genres
     suspicious_values = {
-        'english', 'hindi', 'tamil', 'telugu', 'kannada', 'marathi', 'bengali', 
+        'english', 'hindi', 'tamil', 'telugu', 'kannada', 'marathi', 'bengali',
         'gujarati', 'punjabi', 'malayalam', 'odia', 'assamese', 'urdu', 'arabic',
-        'spanish', 'french', 'german', 'italian', 'portuguese', 'russian', 
+        'spanish', 'french', 'german', 'italian', 'portuguese', 'russian',
         'chinese', 'japanese', 'korean', 'thai', 'vietnamese',
         'unknown', 'n/a', 'language', 'none', 'various', 'uncategorized',
         'mixed', 'other', 'all'
     }
-    
+
     return genre_lower in suspicious_values
 
 
@@ -1068,9 +1094,9 @@ def is_suspicious_year(year: str) -> bool:
     """
     if not year or not year.strip():
         return True
-    
+
     year_str = year.strip().split('-')[0]  # Handle YYYY-MM-DD format
-    
+
     try:
         year_int = int(year_str)
         # Year should be between 1900 and 2026
@@ -1102,7 +1128,7 @@ def detect_track_number_with_phases(
     # Check if existing track number is suspicious
     # User rule: any track number above 10 should be treated as suspicious and corrected.
     is_suspicious = existing_track_number > 10 or existing_track_number == 47
-    
+
     if not is_suspicious and existing_track_number > 0:
         # Existing track number looks good
         return {
@@ -1111,10 +1137,10 @@ def detect_track_number_with_phases(
             'confidence': 1.0,
             'replaced': False
         }
-    
+
     best_result = None
     best_confidence = 0.0
-    
+
     # PHASE 1: Try MusicBrainz API (has accurate track positions)
     if title and artist:
         logger.debug("      [PHASE 1] Querying MusicBrainz for track number...")
@@ -1137,7 +1163,7 @@ def detect_track_number_with_phases(
         if result['track_number'] and result['confidence'] > best_confidence:
             best_result = result
             best_confidence = result['confidence']
-    
+
     # Return best result if found
     if best_result and best_confidence > 0:
         return {
@@ -1146,7 +1172,7 @@ def detect_track_number_with_phases(
             'confidence': best_confidence,
             'replaced': is_suspicious
         }
-    
+
     # Fallback - use existing or don't set
     if existing_track_number > 0:
         return {
@@ -1155,7 +1181,7 @@ def detect_track_number_with_phases(
             'confidence': 0.0 if is_suspicious else 1.0,
             'replaced': False
         }
-    
+
     return {
         'track_number': 0,
         'detection_method': 'no_track_found',
@@ -1186,7 +1212,7 @@ def detect_genre_and_validate(
     """
     # Check if existing genre is suspicious
     is_suspicious = is_suspicious_genre(existing_genre)
-    
+
     if not is_suspicious and existing_genre:
         # Existing genre looks good
         return {
@@ -1195,10 +1221,10 @@ def detect_genre_and_validate(
             'confidence': 1.0,
             'replaced': False
         }
-    
+
     best_result = None
     best_confidence = 0.0
-    
+
     # PHASE 1: Try JioSaavn API
     if title and artist:
         result = detect_genre_with_phases(
@@ -1217,7 +1243,7 @@ def detect_genre_and_validate(
                     'confidence': result['confidence'],
                     'replaced': is_suspicious
                 }
-    
+
     # Return best result if found
     if best_result and best_confidence > 0:
         return {
@@ -1226,7 +1252,7 @@ def detect_genre_and_validate(
             'confidence': best_confidence,
             'replaced': is_suspicious
         }
-    
+
     # Fallback - use existing or don't set
     if existing_genre and not is_suspicious:
         return {
@@ -1235,7 +1261,7 @@ def detect_genre_and_validate(
             'confidence': 1.0,
             'replaced': False
         }
-    
+
     return {
         'genre': None,
         'detection_method': 'no_genre_found',
@@ -1266,7 +1292,7 @@ def detect_year_and_validate(
     """
     # Check if existing year is suspicious
     is_suspicious = is_suspicious_year(existing_year)
-    
+
     if not is_suspicious and existing_year:
         # Existing year looks good
         return {
@@ -1275,10 +1301,10 @@ def detect_year_and_validate(
             'confidence': 1.0,
             'replaced': False
         }
-    
+
     best_result = None
     best_confidence = 0.0
-    
+
     # PHASE 1: Try MusicBrainz API
     if title and artist:
         result = detect_date_with_phases(
@@ -1296,7 +1322,7 @@ def detect_year_and_validate(
                     'confidence': result['confidence'],
                     'replaced': is_suspicious
                 }
-    
+
     # Return best result if found
     if best_result and best_confidence > 0:
         return {
@@ -1305,7 +1331,7 @@ def detect_year_and_validate(
             'confidence': best_confidence,
             'replaced': is_suspicious
         }
-    
+
     # Fallback - use existing or don't set
     if existing_year and not is_suspicious:
         return {
@@ -1314,7 +1340,7 @@ def detect_year_and_validate(
             'confidence': 1.0,
             'replaced': False
         }
-    
+
     return {
         'date': None,
         'detection_method': 'no_year_found',
@@ -1330,22 +1356,22 @@ def _fetch_release_date_from_musicbrainz(title: str, artist: str) -> Dict[str, A
     """
     if not requests or not title:
         return {'date': None, 'confidence': 0.0, 'method': 'musicbrainz_date_failed'}
-    
+
     try:
         headers = {
             'User-Agent': 'LanguageDetectionApp/1.0 (contact@example.com)'
         }
-        
+
         url = "https://musicbrainz.org/ws/2/recording/"
         params = {
             'query': f'recording:"{title}"' + (f' AND artist:"{artist}"' if artist else ''),
             'fmt': 'json',
             'limit': 3
         }
-        
+
         response = requests.get(url, params=params, headers=headers, timeout=8)
         time.sleep(0.3)  # MusicBrainz rate limit
-        
+
         if response.status_code == 200:
             data = response.json()
             if 'recordings' in data and len(data['recordings']) > 0:
@@ -1370,7 +1396,7 @@ def _fetch_release_date_from_musicbrainz(title: str, artist: str) -> Dict[str, A
                                     'confidence': 0.85,
                                     'method': 'musicbrainz_date'
                                 }
-        
+
         return {'date': None, 'confidence': 0.0, 'method': 'musicbrainz_date_no_match'}
     except Exception as e:
         logger.debug(f"MusicBrainz date fetch failed: {e}")
@@ -1452,7 +1478,7 @@ def detect_genre_with_phases(
     """
     best_result = None
     best_confidence = 0.0
-    
+
     # PHASE 1: Try JioSaavn API (most accurate for Indian music with categories)
     if title and artist:
         logger.debug("      [PHASE 1] Querying JioSaavn for genre...")
@@ -1466,7 +1492,7 @@ def detect_genre_with_phases(
                     'detection_method': result['method'],
                     'confidence': result['confidence']
                 }
-    
+
     # PHASE 1B: Try MusicBrainz (good for western music)
     if title and best_confidence < 0.8:
         logger.debug("      [PHASE 1] Querying MusicBrainz for genre...")
@@ -1474,7 +1500,7 @@ def detect_genre_with_phases(
         if result['genre'] and result['confidence'] > best_confidence:
             best_result = result
             best_confidence = result['confidence']
-    
+
     # Return best result if found
     if best_result and best_confidence > 0:
         return {
@@ -1482,7 +1508,7 @@ def detect_genre_with_phases(
             'detection_method': best_result['method'],
             'confidence': best_confidence
         }
-    
+
     # Fallback - no genre found
     return {
         'genre': None,
@@ -1510,7 +1536,7 @@ def detect_date_with_phases(
     """
     best_result = None
     best_confidence = 0.0
-    
+
     # PHASE 1: Try MusicBrainz API (has release dates)
     if title and artist:
         logger.debug("      [PHASE 1] Querying MusicBrainz for release date...")
@@ -1532,7 +1558,7 @@ def detect_date_with_phases(
         if result['date'] and result['confidence'] > best_confidence:
             best_result = result
             best_confidence = result['confidence']
-    
+
     # Return best result if found
     if best_result and best_confidence > 0:
         return {
@@ -1540,7 +1566,7 @@ def detect_date_with_phases(
             'detection_method': best_result['method'],
             'confidence': best_confidence
         }
-    
+
     # Fallback - no date found
     return {
         'date': None,
@@ -1557,13 +1583,13 @@ def read_metadata_with_ffprobe(file_path: Path) -> Optional[Dict[str, Any]]:
             capture_output=True,
             timeout=5
         )
-        
+
         if result.returncode == 0:
             stdout_text = (result.stdout or b'').decode('utf-8', errors='ignore')
             data = json.loads(stdout_text)
             tags = data.get('format', {}).get('tags', {})
             duration_ms = int(float(data.get('format', {}).get('duration', 0)) * 1000)
-            
+
             # Extract track number (handle "47" or "47/12" format)
             track_number = 0
             track_str = tags.get('track', '').strip()
@@ -1572,14 +1598,14 @@ def read_metadata_with_ffprobe(file_path: Path) -> Optional[Dict[str, Any]]:
                     track_number = int(track_str.split('/')[0])
                 except (ValueError, IndexError):
                     pass
-            
+
             # Extract year/date (try multiple fields: date, year, album_date, release_date)
             date_str = ''
             for date_field in ['date', 'year', 'album_date', 'release_date', 'creation_time']:
                 if tags.get(date_field, '').strip():
                     date_str = tags.get(date_field, '').strip()
                     break
-            
+
             return {
                 'title': tags.get('title', '').strip(),
                 'artist': tags.get('artist', '').strip(),
@@ -1594,7 +1620,7 @@ def read_metadata_with_ffprobe(file_path: Path) -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.debug(f"ffprobe read failed: {e}")
         return None
-    
+
     return None
 
 
@@ -1610,30 +1636,30 @@ def read_existing_metadata(file_path: Path) -> Dict[str, Any]:
         'track_number': 0,
         'album_artist': '',
     }
-    
+
     try:
         # PRIMARY: Try ffprobe first (most reliable for all audio formats)
-        logger.debug(f"Reading metadata with ffprobe...")
+        logger.debug("Reading metadata with ffprobe...")
         ffprobe_meta = read_metadata_with_ffprobe(file_path)
-        
+
         if ffprobe_meta:
             metadata.update(ffprobe_meta)
-            logger.info(f"✅ Read metadata from file (ffprobe)")
+            logger.info("✅ Read metadata from file (ffprobe)")
             return metadata
-        
+
         # FALLBACK: Use mutagen if ffprobe not available
-        logger.debug(f"ffprobe not available, falling back to mutagen...")
-        
+        logger.debug("ffprobe not available, falling back to mutagen...")
+
         if file_path.suffix.lower() == '.mp3':
             from mutagen.id3 import ID3
             try:
                 tags = ID3(str(file_path))
             except:
                 tags = None
-            
+
             audio = MP3(file_path)
             metadata['duration_ms'] = int(audio.info.length * 1000)
-            
+
             if tags:
                 # Get title (TIT2)
                 if 'TIT2' in tags:
@@ -1659,7 +1685,7 @@ def read_existing_metadata(file_path: Path) -> Dict[str, Any]:
                         metadata['track_number'] = int(str(tags['TRCK']).split('/')[0])
                     except:
                         pass
-        
+
         elif file_path.suffix.lower() == '.flac':
             audio = FLAC(file_path)
             metadata['title'] = (audio.get('title') or [''])[0].strip()
@@ -1670,7 +1696,7 @@ def read_existing_metadata(file_path: Path) -> Dict[str, Any]:
             metadata['date'] = (audio.get('date') or [''])[0].strip()
             metadata['track_number'] = int((audio.get('tracknumber') or ['0'])[0].split('/')[0]) if audio.get('tracknumber') else 0
             metadata['duration_ms'] = int(audio.info.length * 1000)
-        
+
         elif file_path.suffix.lower() in {'.m4a', '.mp4'}:
             audio = MP4(file_path)
             metadata['title'] = str((audio.get('\xa9nam') or [''])[0]).strip()
@@ -1680,10 +1706,10 @@ def read_existing_metadata(file_path: Path) -> Dict[str, Any]:
             metadata['genre'] = str((audio.get('\xa9gen') or [''])[0]).strip()
             metadata['date'] = str((audio.get('\xa9day') or [''])[0]).strip()
             metadata['duration_ms'] = int(audio.info.length * 1000)
-        
-        logger.info(f"✅ Read metadata from file (mutagen)")
+
+        logger.info("✅ Read metadata from file (mutagen)")
         return metadata
-    
+
     except Exception as e:
         logger.error(f"❌ Error reading metadata: {e}")
         return metadata
@@ -1699,7 +1725,7 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
     artist = existing_metadata.get('artist', '').strip()
     album = existing_metadata.get('album', '').strip()
     duration_ms = existing_metadata.get('duration_ms', 0)
-    
+
     enriched = {
         **existing_metadata,
         'featured_artists': [],
@@ -1709,7 +1735,7 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
         'language': 'English',
         'lyrics-eng': None,
     }
-    
+
     logger.info("\n" + "="*70)
     logger.info("METADATA ENRICHMENT")
     logger.info("="*70)
@@ -1717,10 +1743,10 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
     logger.info(f"👤 Artist: {artist or '(empty)'}")
     logger.info(f"💿 Album:  {album or '(empty)'}")
     logger.info(f"🎸 Genre:  {enriched['genre'] or '(missing - will fetch)'}")
-    
+
     # Check if we have basic metadata to work with
     has_good_data = bool(title and artist)
-    
+
     if not has_good_data:
         logger.warning("\n⚠️  WARNING: Missing title or artist - skipping enrichment")
         logger.warning("   (File needs at least title + artist to fetch lyrics and metadata)")
@@ -1733,7 +1759,7 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
         if primary_artist:
             enriched['album_artist'] = primary_artist
             logger.info(f"   🛡️  Auto-filled album artist: {primary_artist}")
-    
+
     # 1. Extract featured artists from title
     logger.info("\n[1/6] Extracting featured artists...")
     clean_title, featured_artists = _extract_featured_artists(title)
@@ -1742,14 +1768,14 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
         enriched['featured_artists'] = featured_artists
         logger.info(f"   ✅ Found featured artists: {', '.join(featured_artists)}")
     else:
-        logger.info(f"   ℹ️  No featured artists detected")
-    
+        logger.info("   ℹ️  No featured artists detected")
+
     # 2. Detect version type
     logger.info("\n[2/6] Detecting version type...")
     version_type = _detect_version_type(title, album)
     enriched['version_type'] = version_type
     logger.info(f"   ✅ Version type: {version_type}")
-    
+
     # 3. Extract tags from title and album
     logger.info("\n[3/6] Extracting genre/mood tags from metadata...")
     tags = _extract_tags_from_text(f"{title} {album}")
@@ -1757,8 +1783,8 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
         enriched['tags'] = list(dict.fromkeys(tags))  # Deduplicate while preserving order
         logger.info(f"   ✅ Found tags: {', '.join(tags)}")
     else:
-        logger.info(f"   ℹ️  No tags extracted from text")
-    
+        logger.info("   ℹ️  No tags extracted from text")
+
     # 4. Fetch genre from external APIs (if missing or suspicious)
     logger.info("\n[4/6] Fetching genre (multi-phase API lookup with validation)...")
     genre_result = detect_genre_and_validate(
@@ -1767,7 +1793,7 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
         album=album,
         existing_genre=enriched['genre']
     )
-    
+
     if genre_result['replaced']:
         logger.warning(f"   ⚠️  Suspicious genre found: '{enriched['genre']}' (language instead of genre)")
         enriched['genre'] = genre_result['genre'] or enriched['genre']
@@ -1780,8 +1806,8 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
         detection_method = genre_result.get('detection_method', 'unknown')
         logger.info(f"   ✅ Genre: {genre_result['genre']} ({detection_method})")
     else:
-        logger.info(f"   ℹ️  Genre not found or not updated")
-    
+        logger.info("   ℹ️  Genre not found or not updated")
+
     # 4B. Fetch release date/year (if missing or suspicious)
     logger.info("\n[4B/6] Fetching release date (multi-phase API lookup with validation)...")
     date_result = detect_year_and_validate(
@@ -1790,7 +1816,7 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
         album=album,
         existing_year=enriched['date']
     )
-    
+
     if date_result['replaced']:
         logger.warning(f"   ⚠️  Suspicious year found: '{enriched['date']}' (invalid format or missing)")
         enriched['date'] = date_result['date'] or enriched['date']
@@ -1803,8 +1829,8 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
         detection_method = date_result.get('detection_method', 'unknown')
         logger.info(f"   ✅ Year: {date_result['date']} ({detection_method})")
     else:
-        logger.info(f"   ℹ️  Year not found or not updated")
-    
+        logger.info("   ℹ️  Year not found or not updated")
+
     # 4C. Check and correct track number (if suspicious like JioSaavn's 47)
     logger.info("\n[4C/6] Validating track number...")
     existing_track = enriched.get('track_number', 0)
@@ -1814,7 +1840,7 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
         album=album,
         existing_track_number=existing_track
     )
-    
+
     if track_result['replaced']:
         logger.warning(f"   ⚠️  Suspicious track number found: {existing_track} (>10 or known bad default)")
         if track_result['track_number']:
@@ -1823,13 +1849,13 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
             confidence = track_result.get('confidence', 0.0)
             logger.info(f"   ✅ Corrected track number: {track_result['track_number']} ({detection_method}, {confidence*100:.0f}% confidence)")
         else:
-            logger.info(f"   ℹ️  Could not fetch correct track number from APIs")
+            logger.info("   ℹ️  Could not fetch correct track number from APIs")
     elif track_result['track_number'] > 0:
         enriched['track_number'] = track_result['track_number']
         logger.info(f"   ✅ Track number is valid: {track_result['track_number']} ({track_result['detection_method']})")
     else:
-        logger.info(f"   ℹ️  No track number available")
-    
+        logger.info("   ℹ️  No track number available")
+
     # 5. Fetch lyrics
     logger.info("\n[5/6] Fetching lyrics...")
     lyrics = _fetch_lyrics_with_fallbacks(
@@ -1839,7 +1865,7 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
         duration_ms=duration_ms,
         platform='local'
     )
-    
+
     # DETECT LANGUAGE using multi-phase approach
     logger.info("   🔍 Detecting language (multi-phase)...")
     filename = file_path.name
@@ -1850,27 +1876,27 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
         filename=filename,
         lyrics=lyrics or ''
     )
-    
+
     enriched['language'] = lang_result['primary_language']
     enriched['language_detected_from'] = lang_result.get('detection_method', 'unknown')
     enriched['all_detected_languages'] = lang_result['all_languages']
     enriched['language_distribution'] = lang_result['language_distribution']
     enriched['detection_method'] = lang_result.get('detection_method', 'unknown')
     enriched['language_confidence'] = lang_result.get('confidence', 0.0)
-    
+
     if lyrics:
         # Convert non-Latin scripts to Latin (Hindi, Telugu, etc. → Roman characters)
         logger.info("   🔤 Converting non-Latin scripts to Latin...")
         lyrics = _romanize_lrc_lyrics(lyrics)
         enriched['lyrics-eng'] = lyrics
-        
+
         # Show lyrics type (synced or plain)
         is_synced = has_timestamps(lyrics)
         lyrics_type = "synced/LRC" if is_synced else "plain text"
         logger.info(f"   ✅ Found lyrics ({len(lyrics)} characters) - {lyrics_type}")
     else:
-        logger.info(f"   ℹ️  No lyrics found (language detected from metadata)")
-    
+        logger.info("   ℹ️  No lyrics found (language detected from metadata)")
+
     # 6. Display summary
     logger.info("\n[6/6] Summary...")
     logger.info(f"   ✅ Featured artists: {len(enriched['featured_artists'])}")
@@ -1880,13 +1906,13 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
     logger.info(f"   ✅ Release date: {enriched['date'] or '(not found)'}")
     logger.info(f"   ✅ Track #: {enriched.get('track_number', 'N/A')}")
     logger.info(f"   ✅ Lyrics: {'Yes' if enriched['lyrics-eng'] else 'No'}")
-    
+
     # Show language detection results with distribution
     primary = enriched['language']
     detection_method = enriched.get('detection_method', 'unknown')
     confidence = enriched.get('language_confidence', 0.0)
     all_langs = enriched.get('all_detected_languages', [primary])
-    
+
     # Map detection method to phase
     phase_map = {
         'jiosaavn_api': 'PHASE 1 (JioSaavn API)',
@@ -1897,9 +1923,9 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
         'artist_heuristic': 'PHASE 4 (Artist)',
         'default_english': 'Default'
     }
-    
+
     phase = phase_map.get(detection_method, detection_method)
-    
+
     if confidence > 0:
         other_langs = ', '.join(all_langs[1:]) if len(all_langs) > 1 else 'none'
         logger.info(f"   🌐 Language: {primary} ({phase}, {confidence*100:.0f}% confidence)")
@@ -1907,29 +1933,29 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
             logger.info(f"      Additional detected: {other_langs}")
     else:
         logger.info(f"   🌐 Language: {primary} ({phase})")
-    
+
     # ===================================================================
     # PHASE 6: PICARD FALLBACK - Fill remaining gaps (OPTIONAL)
     # ===================================================================
     if PICARD_AVAILABLE:
         logger.info("\n[PHASE 6] Running Picard fallback enrichment...")
         picard_result = run_picard_fallback_enrichment(file_path, enriched)
-        
+
         if picard_result['metadata_enriched']:
             logger.info(f"   ✅ Picard filled {len(picard_result['filled_fields'])} fields: {', '.join(picard_result['filled_fields'])}")
             enriched['picard_enriched'] = True
             enriched['picard_method'] = picard_result.get('method', 'unknown')
         elif picard_result['ran']:
-            logger.info(f"   ℹ️  Picard ran but no new fields to fill")
+            logger.info("   ℹ️  Picard ran but no new fields to fill")
     else:
         logger.debug("Picard enricher not available - install with: uv pip install musicbrainzngs acoustid")
-    
+
     # ===================================================================
     # FALLBACK CHAIN FOR MISSING GENRE (if still missing after all attempts)
     # ===================================================================
     if not enriched['genre'] or is_suspicious_genre(enriched['genre']):
         logger.info("\n[FALLBACK] Attempting genre fallback detection...")
-        
+
         # Try common patterns from language/artist
         fallback_genres = {
             'Hindi': 'Bollywood',
@@ -1938,11 +1964,11 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
             'Kannada': 'Kannada Cinema',
             'English': 'Pop',  # Default for English
         }
-        
+
         if enriched['language'] in fallback_genres:
             enriched['genre'] = fallback_genres[enriched['language']]
             logger.info(f"   ✅ Assigned genre based on language: {enriched['genre']}")
-    
+
     # ===================================================================
     # FALLBACK FOR MISSING YEAR (if still missing after all attempts)
     # ===================================================================
@@ -1950,8 +1976,8 @@ def enrich_metadata(file_path: Path, existing_metadata: Dict[str, Any]) -> Dict[
         logger.info("\n[FALLBACK] Attempting year/date fallback...")
         # Try common release years for popular songs
         # This is a placeholder - could be enhanced with Discogs API
-        logger.info(f"   ℹ️  Year not found in APIs")
-    
+        logger.info("   ℹ️  Year not found in APIs")
+
     return enriched
 
 
@@ -1961,13 +1987,13 @@ def update_file_metadata(file_path: Path, enriched_metadata: Dict[str, Any]):
         logger.info("\n" + "="*70)
         logger.info("UPDATING FILE")
         logger.info("="*70)
-        
+
         # Use the existing embed_metadata function
         embed_metadata(str(file_path), enriched_metadata)
-        
+
         logger.info(f"✅ Successfully updated: {file_path.name}")
         return True
-    
+
     except Exception as e:
         logger.error(f"❌ Error updating file: {e}")
         return False
@@ -1978,22 +2004,22 @@ def show_metadata_diff(before: Dict[str, Any], after: Dict[str, Any]):
     logger.info("\n" + "="*70)
     logger.info("METADATA CHANGES")
     logger.info("="*70)
-    
+
     changes = []
-    
+
     # Check new fields added
     if after.get('featured_artists') and not before.get('featured_artists'):
         changes.append(f"✨ Added featured artists: {', '.join(after['featured_artists'])}")
-    
+
     if after.get('version_type', 'original') != 'original' and after.get('version_type') != before.get('version_type'):
         changes.append(f"✨ Set version type: {after['version_type']}")
-    
+
     if after.get('tags') and not before.get('tags'):
         changes.append(f"✨ Added tags: {', '.join(after['tags'])}")
-    
+
     if after.get('lyrics-eng') and not before.get('lyrics-eng'):
         changes.append(f"✨ Added lyrics: {len(after['lyrics-eng'])} characters")
-    
+
     if after.get('language') and after.get('language') != before.get('language'):
         distribution = after.get('language_distribution', {})
         detection_method = after.get('detection_method', 'unknown')
@@ -2006,7 +2032,7 @@ def show_metadata_diff(before: Dict[str, Any], after: Dict[str, Any]):
                 changes.append(f"🌐 Language: {after.get('language')} ({dist_str})")
         else:
             changes.append(f"🌐 Language: {after.get('language')}")
-    
+
     # Show preserved metadata
     preserved = []
     if before.get('title'):
@@ -2015,11 +2041,11 @@ def show_metadata_diff(before: Dict[str, Any], after: Dict[str, Any]):
         preserved.append(f"👤 Artist: {before['artist']} (preserved)")
     if before.get('album'):
         preserved.append(f"💿 Album: {before['album']} (preserved)")
-    
+
     if preserved:
         for item in preserved:
             logger.info(item)
-    
+
     if not changes:
         logger.info("ℹ️  No new metadata to add (existing data is good)")
     else:
@@ -2038,12 +2064,12 @@ def main():
         print('  python enrich_metadata.py "B:\\music\\All" --limit 10  # Test with 10 files')
         print('  python enrich_metadata.py "B:\\music\\All" --skip 200 -y  # Resume from file 201')
         sys.exit(1)
-    
+
     path = Path(sys.argv[1])
     auto_yes = '-y' in sys.argv
     limit = None
     skip = None
-    
+
     # Parse --limit if provided
     if '--limit' in sys.argv:
         try:
@@ -2052,7 +2078,7 @@ def main():
         except (IndexError, ValueError):
             logger.error("Invalid limit value")
             sys.exit(1)
-    
+
     # Parse --skip if provided
     if '--skip' in sys.argv:
         try:
@@ -2061,12 +2087,12 @@ def main():
         except (IndexError, ValueError):
             logger.error("Invalid skip value")
             sys.exit(1)
-    
+
     # Validate path exists
     if not path.exists():
         logger.error(f"❌ Path not found: {path}")
         sys.exit(1)
-    
+
     # Handle folder
     if path.is_dir():
         process_folder(path, auto_yes=auto_yes, limit=limit, skip=skip)
@@ -2097,15 +2123,15 @@ def process_folder(folder_path: Path, auto_yes: bool = False, limit: Optional[in
         print(f"🔢 Limit: {limit} files")
     print(f"✅ Auto-update: {auto_yes}")
     print()
-    
+
     # Get audio files
     audio_files = get_audio_files(folder_path)
     if not audio_files:
         logger.error("❌ No audio files found!")
         return
-    
+
     logger.info(f"📁 Found {len(audio_files)} audio files total")
-    
+
     # Apply skip if specified
     if skip:
         if skip >= len(audio_files):
@@ -2113,12 +2139,12 @@ def process_folder(folder_path: Path, auto_yes: bool = False, limit: Optional[in
             return
         audio_files = audio_files[skip:]
         logger.info(f"⏭️  Skipped first {skip} files, {len(audio_files)} files remaining")
-    
+
     # Apply limit if specified
     if limit:
         audio_files = audio_files[:limit]
         logger.info(f"Processing {limit} files...")
-    
+
     # Ask for confirmation if not auto_yes
     if not auto_yes:
         print("\n" + "="*70)
@@ -2131,41 +2157,41 @@ def process_folder(folder_path: Path, auto_yes: bool = False, limit: Optional[in
             for idx, f in enumerate(audio_files[:5], 1):
                 print(f"  {idx}. {f.name}")
             print(f"  ... and {len(audio_files) - 5} more files")
-        
+
         response = input("\n❓ Continue with enrichment? (yes/no): ").strip().lower()
         if response not in {'yes', 'y'}:
             logger.info("❌ Cancelled by user")
             return
-    
+
     # Process each file
     success_count = 0
     skip_count = 0
     fail_count = 0
     start_number = (skip or 0) + 1  # Actual file number for display
-    
+
     for idx, file_path in enumerate(audio_files, 1):
         actual_file_number = start_number + idx - 1
         logger.info(f"\n[{actual_file_number}/{len(audio_files) + (skip or 0)}] 🎵 {file_path.name}")
-        
+
         try:
             # Read existing metadata
             existing_metadata = read_existing_metadata(file_path)
-            
+
             # Enrich metadata
             enriched_metadata = enrich_metadata(file_path, existing_metadata)
-            
+
             # Update file silently in batch mode
             if update_file_metadata(file_path, enriched_metadata):
-                logger.info(f"   ✅ Enriched successfully!")
+                logger.info("   ✅ Enriched successfully!")
                 success_count += 1
             else:
-                logger.warning(f"   ❌ Failed to update")
+                logger.warning("   ❌ Failed to update")
                 fail_count += 1
-        
+
         except Exception as e:
             logger.error(f"   ❌ Error: {e}")
             fail_count += 1
-    
+
     # Summary
     print("\n" + "="*70)
     print("SUMMARY")
@@ -2178,39 +2204,39 @@ def process_folder(folder_path: Path, auto_yes: bool = False, limit: Optional[in
 
 def process_file(file_path: Path, auto_yes: bool = False):
     """Process a single audio file."""
-    
+
     if file_path.suffix.lower() not in {'.mp3', '.flac', '.m4a', '.mp4', '.aac'}:
         logger.error(f"❌ Unsupported format: {file_path.suffix}")
         sys.exit(1)
-    
+
     logger.info(f"\n📂 File: {file_path}")
     logger.info(f"📊 Size: {file_path.stat().st_size / (1024*1024):.2f} MB")
-    
+
     # 1. Read existing metadata
     logger.info("\n[STEP 1] Reading existing metadata...")
     existing_metadata = read_existing_metadata(file_path)
-    
+
     # 2. Enrich metadata
     logger.info("\n[STEP 2] Enriching metadata...")
     enriched_metadata = enrich_metadata(file_path, existing_metadata)
-    
+
     # 3. Show what will change
     show_metadata_diff(existing_metadata, enriched_metadata)
-    
+
     # 4. Ask for confirmation (skip if auto_yes)
     if not auto_yes:
         logger.info("\n" + "="*70)
         response = input("\n❓ Update file with enriched metadata? (yes/no): ").strip().lower()
-        
+
         if response not in {'yes', 'y'}:
             logger.info("❌ Cancelled by user")
             return
     else:
         logger.info("\n✅ Auto-update enabled (-y), proceeding without confirmation")
-    
+
     # 5. Update file
     success = update_file_metadata(file_path, enriched_metadata)
-    
+
     if success:
         logger.info("\n" + "="*70)
         logger.info("✅ ENRICHMENT COMPLETE!")

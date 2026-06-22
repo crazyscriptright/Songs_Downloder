@@ -113,10 +113,7 @@ export class PreviewCard {
 
   /** Builds a single recommendation track card (download + optional preview button). */
   static buildRecommendationCard(track: RecommendationTrack): string {
-    const hasThumb =
-      track.thumbnail &&
-      track.thumbnail.trim() !== "" &&
-      track.thumbnail !== "null";
+    const hasThumb = track.thumbnail && track.thumbnail.trim() !== "" && track.thumbnail !== "null";
 
     const thumbHTML = hasThumb
       ? `<img src="${track.thumbnail}" alt="${track.title}" loading="lazy"
@@ -164,24 +161,17 @@ export class PreviewCard {
    */
   static wireRecommendationPreviews(
     container: HTMLElement,
-    playFn: (
-      url: string,
-      title: string,
-      card: HTMLElement,
-      btn: HTMLButtonElement,
-    ) => void,
+    playFn: (url: string, title: string, card: HTMLElement, btn: HTMLButtonElement) => void,
   ): void {
-    container
-      .querySelectorAll<HTMLButtonElement>(".rec-preview")
-      .forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const url = btn.dataset.url!;
-          const title = btn.dataset.title!;
-          const cardEl =
-            (btn.closest(".recommended-track-card") as HTMLElement) ??
-            (btn.parentElement as HTMLElement);
-          playFn(url, title, cardEl, btn);
-        });
+    container.querySelectorAll<HTMLButtonElement>(".rec-preview").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const url = btn.dataset.url!;
+        const title = btn.dataset.title!;
+        const cardEl =
+          (btn.closest(".recommended-track-card") as HTMLElement) ??
+          (btn.parentElement as HTMLElement);
+        playFn(url, title, cardEl, btn);
       });
+    });
   }
 }

@@ -12,12 +12,10 @@ import urllib.parse
 from datetime import datetime
 
 import requests
-from flask import Blueprint, render_template, request
-
-from backend.utils.response import error, success
-
 from backend.core import state
+from backend.utils.response import error, success
 from backend.utils.url_utils import is_url, validate_url_simple
+from flask import Blueprint, render_template, request
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +27,10 @@ _jiosaavn_api = None
 
 def get_apis():
     global _ytmusic_api, _ytvideo_api, _jiosaavn_api
+    from core import config
+    from integrations.jiosaavn_search import JioSaavnAPI
     from integrations.ytmusic_dynamic_tokens import YouTubeMusicAPI
     from integrations.ytmusic_dynamic_video_tokens import YouTubeMusicVideoAPI
-    from integrations.jiosaavn_search import JioSaavnAPI
-    from core import config
 
     if not _ytmusic_api:
         _ytmusic_api = YouTubeMusicAPI(

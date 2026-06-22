@@ -1,14 +1,20 @@
 """Spotify metadata fetcher using TOTP authentication"""
-import os
-import requests
-import pyotp
 import base64
 import json
+import os
 import re
 from datetime import datetime, timedelta
+
+import pyotp
+import requests
 from backend.core.config import (
-    SPOTIFY_TOKEN_URL, SPOTIFY_HOME_URL, SPOTIFY_CLIENT_TOKEN_URL,
-    SPOTIFY_GRAPHQL_URL, SPOTIFY_LYRICS_URL, TOTP_SECRET_V61, USER_AGENT
+    SPOTIFY_CLIENT_TOKEN_URL,
+    SPOTIFY_GRAPHQL_URL,
+    SPOTIFY_HOME_URL,
+    SPOTIFY_LYRICS_URL,
+    SPOTIFY_TOKEN_URL,
+    TOTP_SECRET_V61,
+    USER_AGENT,
 )
 
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -55,7 +61,7 @@ class SpotifyClient:
                 print(f" Using cached Spotify tokens (expires in {mins_left}m)")
                 return True
             else:
-                print(f" Spotify cache expired — refreshing tokens")
+                print(" Spotify cache expired — refreshing tokens")
                 return False
         except Exception as e:
             print(f" Error loading Spotify cache: {e}")
@@ -150,7 +156,7 @@ class SpotifyClient:
         if 'sp_t' in self.session.cookies:
             self.device_id = self.session.cookies['sp_t']
 
-        print(f" Access token acquired")
+        print(" Access token acquired")
         return data
 
     def get_client_version(self):
@@ -220,7 +226,7 @@ class SpotifyClient:
         if not self.client_token:
             raise Exception(f"No client token in response. Response: {json.dumps(data, indent=2)}")
 
-        print(f" Client token acquired")
+        print(" Client token acquired")
         self.save_cache()
 
     def get_track_metadata(self, track_id):
@@ -301,7 +307,7 @@ class SpotifyClient:
             explicit = track.get('explicit', False)
             genres = album_data.get('genres', []) if album_data.get('genres') else []
             genre_str = ', '.join(genres) if genres else ''
-            
+
             # Spotify track URL
             track_id = track.get('id', '')
             spotify_url = f'https://open.spotify.com/track/{track_id}' if track_id else ''
@@ -365,7 +371,7 @@ class SpotifyClient:
 
         print(f" [lyrics/spotify] HTTP {response.status_code}")
         if response.status_code == 404:
-            print(f" [lyrics/spotify] Track has no lyrics on Spotify (404)")
+            print(" [lyrics/spotify] Track has no lyrics on Spotify (404)")
             return None
         if response.status_code != 200:
             # Log a snippet of the response body to help diagnose auth errors
@@ -380,7 +386,7 @@ class SpotifyClient:
 
         lines = data.get('lyrics', {}).get('lines', [])
         if not lines:
-            print(f" [lyrics/spotify] Empty lines list — no lyrics in response")
+            print(" [lyrics/spotify] Empty lines list — no lyrics in response")
             return None
 
         text_lines = []
@@ -390,7 +396,7 @@ class SpotifyClient:
                 text_lines.append(words)
 
         if not text_lines:
-            print(f" [lyrics/spotify] All lines were empty/instrumental markers")
+            print(" [lyrics/spotify] All lines were empty/instrumental markers")
             return None
 
         lyrics_text = '\n'.join(text_lines)

@@ -186,6 +186,25 @@ Avoid creating files for trivial logic.
 
 Backend follows standard Python conventions: snake_case for files, functions, variables; PascalCase for classes.
 
+### TypeScript Coding Rules
+
+**Variable declarations:**
+- Use `const` by default. Use `let` only when reassignment is required. Never use `var`.
+- Use meaningful variable names; avoid abbreviations.
+
+**Type safety:**
+- Never use `any`. Prefer `unknown` when the type is not known.
+- Avoid type assertions (`as`) unless absolutely necessary.
+- Use strict TypeScript mode (`"strict": true`).
+- Explicitly type function parameters and return values for public APIs.
+- Prefer `interface` for object contracts and `type` aliases for unions/intersections.
+
+**Functions:**
+- Keep functions small and focused on a single responsibility.
+- Prefer pure functions when possible.
+- Use descriptive function names — avoid abbreviations.
+- Do not mutate function parameters.
+
 ### Import Rules (Frontend)
 
 Always use `@` alias imports — never relative imports that traverse up directories.

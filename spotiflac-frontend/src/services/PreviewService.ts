@@ -131,8 +131,7 @@ export function play(
     iframeEl.src = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&modestbranding=1&rel=0&showinfo=0`;
     iframeEl.allow = "autoplay; encrypted-media";
     iframeEl.setAttribute("allowfullscreen", "");
-    iframeEl.style.cssText =
-      "width:100%;height:80px;border:none;border-radius:8px;display:block;";
+    iframeEl.style.cssText = "width:100%;height:80px;border:none;border-radius:8px;display:block;";
     iframeEl.title = `Preview: ${songTitle}`;
 
     const wrapperEl = document.createElement("div");

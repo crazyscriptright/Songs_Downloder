@@ -16,21 +16,20 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from flask import Blueprint, request, send_file
-
-from backend.core import config
-from backend.core import state
+from backend.core import config, state
 from backend.services import api_metadata_enricher
-from backend.utils.response import error, success
 from backend.services.post_download_enricher import run_post_download_enrichment
-
-from backend.spoflac_core.modules import amazon
-from backend.spoflac_core.modules import metadata
-from backend.spoflac_core.modules import qobuz
-from backend.spoflac_core.modules import soundcloud
-from backend.spoflac_core.modules import tidal
-from backend.spoflac_core.modules import url_resolver
-from backend.spoflac_core.modules import utils
+from backend.spoflac_core.modules import (
+    amazon,
+    metadata,
+    qobuz,
+    soundcloud,
+    tidal,
+    url_resolver,
+    utils,
+)
+from backend.utils.response import error, success
+from flask import Blueprint, request, send_file
 
 logger = logging.getLogger(__name__)
 

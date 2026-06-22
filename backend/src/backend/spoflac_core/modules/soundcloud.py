@@ -4,9 +4,10 @@ Searches YouTube Music via ytsearch1: query — no Spotify API calls, no rate
 limits.  When a SoundCloud URL hits a geo-restriction, automatically retries
 with free proxies sourced from the `free-proxy` library.
 """
+import glob
 import os
 import subprocess
-import glob
+
 
 def _get_free_proxies(count: int = 5) -> list[str]:
     """Return up to `count` free HTTPS proxy URLs via the free-proxy library."""
@@ -149,7 +150,7 @@ class SoundCloudDownloader:
                 return max(all_files, key=os.path.getctime)
             return None
 
-        print(f"Downloading with yt-dlp...")
+        print("Downloading with yt-dlp...")
         returncode, output_lines = _run(base_cmd)
 
         if returncode == 0:

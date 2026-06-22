@@ -1,9 +1,11 @@
 """SpotiFLAC Python - Download music in FLAC from multiple platforms"""
 import os
 import sys
+
 import click
-from modules import tidal, qobuz, amazon, soundcloud, metadata, utils, url_resolver
-from backend.core.config import DEFAULT_OUTPUT_DIR, DEFAULT_SERVICE, DEFAULT_QUALITY
+from backend.core.config import DEFAULT_OUTPUT_DIR, DEFAULT_QUALITY, DEFAULT_SERVICE
+from modules import amazon, metadata, qobuz, soundcloud, tidal, url_resolver, utils
+
 
 @click.command()
 @click.argument('music_url')
@@ -54,7 +56,7 @@ def download(music_url, service, quality, output, template, fallback):
                 print(f"Auto-selected service: {service}")
             else:
                 service = 'tidal'
-                print(f"Auto-selected service: tidal (fallback: qobuz → amazon → soundcloud)")
+                print("Auto-selected service: tidal (fallback: qobuz → amazon → soundcloud)")
 
         print(f"\n[2/3] Preparing download via {service.capitalize()}...")
 
@@ -142,7 +144,7 @@ def download(music_url, service, quality, output, template, fallback):
         metadata.embed_metadata(output_path, track_metadata)
 
         print("\n" + "=" * 60)
-        print(f" Download complete!")
+        print(" Download complete!")
         print(f"  File: {output_path}")
         print(f"  Size: {os.path.getsize(output_path) / (1024*1024):.2f} MB")
         print("=" * 60)
@@ -198,14 +200,14 @@ def download_direct(url, platform, track_id, output_dir, template, quality):
             downloader = amazon.AmazonDownloader()
             downloader.download(url, output_path)
 
-        print(f"\n[3/3] Embedding metadata...")
+        print("\n[3/3] Embedding metadata...")
         if track_metadata:
             metadata.embed_metadata(output_path, track_metadata)
         else:
             print("  (No Spotify metadata available - using platform metadata)")
 
         print("\n" + "=" * 60)
-        print(f" Download complete!")
+        print(" Download complete!")
         print(f"  File: {output_path}")
         if os.path.exists(output_path):
             print(f"  Size: {os.path.getsize(output_path) / (1024*1024):.2f} MB")

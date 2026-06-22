@@ -26,20 +26,12 @@ from __future__ import annotations
 
 import re
 import unicodedata
-import urllib.parse
 from typing import Optional
 
 import requests
-
 from backend.spoflac_core.modules.songlink import SongLinkClient
 from backend.spoflac_core.modules.spotify import SpotifyClient
 from backend.spoflac_core.modules.url_detector import URLDetector
-from backend.spoflac_core.modules.platform_metadata import (
-    extract_youtube_metadata,
-    extract_jiosaavn_metadata,
-    extract_soundcloud_metadata,
-    normalize_metadata_dict,
-)
 
 _LRCLIB_API = "https://lrclib.net/api/get"
 
@@ -64,7 +56,7 @@ def _fetch_lyrics_lrclib(title: str, artist: str, album: str = '', duration_ms: 
                             headers={'User-Agent': 'spotiflac/1.0 (github.com/spotiflac)'})
         print(f" [lyrics/lrclib] HTTP {resp.status_code}")
         if resp.status_code == 404:
-            print(f" [lyrics/lrclib] No lyrics found (404)")
+            print(" [lyrics/lrclib] No lyrics found (404)")
             return None
         if resp.status_code != 200:
             print(f" [lyrics/lrclib] Failed — {resp.text[:200]}")
@@ -88,7 +80,7 @@ def _fetch_lyrics_lrclib(title: str, artist: str, album: str = '', duration_ms: 
         print(f" [lyrics/lrclib] ✅ Got plain lyrics ({len(plain)} chars) — no synced version")
         return plain
 
-    print(f" [lyrics/lrclib] Response had no usable lyrics text")
+    print(" [lyrics/lrclib] Response had no usable lyrics text")
     return None
 
 
@@ -215,9 +207,9 @@ def _romanize_lrc_lyrics(lrc_text: str) -> str:
             any_romanized = True
 
     if any_romanized:
-        print(f" [romanize] ✅ Interleaved romanized lines added")
+        print(" [romanize] ✅ Interleaved romanized lines added")
     else:
-        print(f" [romanize] No non-Latin lines found — romanization skipped")
+        print(" [romanize] No non-Latin lines found — romanization skipped")
 
     return '\n'.join(result)
 
@@ -314,7 +306,7 @@ class URLResolver:
                     lyrics = spy.get_lyrics(spotify_id)
                     if not lyrics:
                         # Spotify API failed/unavailable — try lrclib.net
-                        print(f" [resolver] Spotify lyrics unavailable, trying lrclib.net...")
+                        print(" [resolver] Spotify lyrics unavailable, trying lrclib.net...")
                         lyrics = _fetch_lyrics_lrclib(
                             title=metadata['title'],
                             artist=metadata['artist'],
@@ -326,7 +318,7 @@ class URLResolver:
                         metadata['lyrics-eng'] = lyrics
                         print(f" [resolver] ✅ Lyrics ready ({len(lyrics)} chars)")
                     else:
-                        print(f" [resolver] ❌ Lyrics not available from any source")
+                        print(" [resolver] ❌ Lyrics not available from any source")
                 except Exception as lyr_exc:
                     print(f" [resolver] Lyrics fetch failed ({lyr_exc}) — skipping lyrics")
 
@@ -372,11 +364,11 @@ class URLResolver:
         Fallback when Spotify metadata is unavailable.
         """
         from spoflac_core.modules.platform_metadata import (
-            extract_youtube_metadata,
             extract_jiosaavn_metadata,
             extract_soundcloud_metadata,
+            extract_youtube_metadata,
         )
-        
+
         try:
             if platform == 'youtube':
                 # Extract metadata from YouTube using yt-dlp
@@ -397,13 +389,13 @@ class URLResolver:
                             return metadata
                 except Exception as e:
                     print(f" [platform/youtube] Extraction failed: {e}")
-            
+
             elif platform == 'jiosaavn':
                 # Extract metadata from JioSaavn
                 try:
                     from integrations.jiosaavn_search import JioSaavnAPI
                     api = JioSaavnAPI()
-                    
+
                     # Extract song ID from URL (e.g., /song/{id}/)
                     match = re.search(r'/song/([^/?]+)', url)
                     if match:
@@ -411,7 +403,7 @@ class URLResolver:
                         # Query JioSaavn API for track details
                         # The API typically returns track data with the song ID
                         print(f" [platform/jiosaavn] Fetching details for song ID: {song_id}")
-                        
+
                         # Attempt to use JioSaavn API to get detailed track info
                         # This would need the jiosaavn_search module to support detailed fetch
                         # For now, try using any available method in the API
@@ -426,12 +418,12 @@ class URLResolver:
                                 return metadata
                         except AttributeError:
                             # Fallback: try search if get_track_details doesn't exist
-                            print(f" [platform/jiosaavn] API method not available, trying search...")
+                            print(" [platform/jiosaavn] API method not available, trying search...")
                             # Search by ID might not work well, skip for now
                             pass
                 except Exception as e:
                     print(f" [platform/jiosaavn] Extraction failed: {e}")
-            
+
             elif platform == 'soundcloud':
                 # Extract metadata from SoundCloud
                 try:
@@ -465,10 +457,10 @@ class URLResolver:
                             return metadata
                 except Exception as e:
                     print(f" [platform/soundcloud] Extraction failed: {e}")
-        
+
         except Exception as e:
             print(f" [platform] Platform metadata extraction error: {e}")
-        
+
         return None
 
     def resolve_metadata_only(self, url: str) -> dict:

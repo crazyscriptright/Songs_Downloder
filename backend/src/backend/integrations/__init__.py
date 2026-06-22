@@ -8,10 +8,10 @@ or the explicit form:
     from integrations.ytmusic_dynamic_tokens import YouTubeMusicAPI
 """
 
+from backend.integrations import soundcloud
+from backend.integrations.jiosaavn_search import JioSaavnAPI
 from backend.integrations.ytmusic_dynamic_tokens import YouTubeMusicAPI
 from backend.integrations.ytmusic_dynamic_video_tokens import YouTubeMusicVideoAPI
-from backend.integrations.jiosaavn_search import JioSaavnAPI
-from backend.integrations import soundcloud
 
 __all__ = [
     "YouTubeMusicAPI",

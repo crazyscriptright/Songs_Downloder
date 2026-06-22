@@ -10,9 +10,19 @@ except Exception:
     requests = None
 
 from mutagen.flac import FLAC
+from mutagen.id3 import (
+    TALB,
+    TCON,
+    TDRC,
+    TIT2,
+    TPE1,
+    TPE2,
+    TRCK,
+    TYER,
+    USLT,
+)
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4
-from mutagen.id3 import ID3, APIC, TALB, TCON, TDRC, TIT2, TPE1, TPE2, TRCK, TYER, USLT, ID3NoHeaderError
 
 
 def fetch_lyrics_with_fallbacks(

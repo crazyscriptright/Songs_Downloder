@@ -13,13 +13,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from flask import Flask
-from flask_cors import CORS
-
-from backend.core import config
-from backend.core import state
+from backend.core import config, state
 from backend.routes import register_blueprints
 from backend.utils.response import error as error_response
+from flask import Flask
+from flask_cors import CORS
 
 
 def create_app() -> Flask:

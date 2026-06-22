@@ -6,25 +6,22 @@ Routes: /preview, /preview_url, /jiosaavn_suggestions/<pid>,
 
 import json
 import logging
+import mimetypes
 import os
 import re
 import subprocess
 import time
 
 import requests
-from bs4 import BeautifulSoup
-import mimetypes
-
-from flask import Blueprint, Response, request, send_file
-
-from backend.core import config
-from backend.core import state
+from backend.core import config, state
 from backend.services.preview import (
     download_preview_audio,
     get_jiosaavn_stream_fast,
     get_soundcloud_stream_fast,
 )
 from backend.utils.response import error, success
+from bs4 import BeautifulSoup
+from flask import Blueprint, Response, request, send_file
 
 logger = logging.getLogger(__name__)
 

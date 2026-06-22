@@ -1,8 +1,9 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-import requests
 import os
+
+import requests
 from dotenv import load_dotenv
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 
 # Load environment variables
 load_dotenv()
@@ -19,7 +20,7 @@ def proxy_download():
     try:
         if not API_KEY:
             return jsonify({'error': 'API key not configured on server'}), 500
-            
+
         # Get all query parameters from frontend
         params = {
             'format': request.args.get('format'),
@@ -27,7 +28,7 @@ def proxy_download():
             'apikey': API_KEY,  # Use backend API key
             'add_info': request.args.get('add_info', '1'),
         }
-        
+
         # Optional parameters
         if request.args.get('audio_quality'):
             params['audio_quality'] = request.args.get('audio_quality')
@@ -41,16 +42,16 @@ def proxy_download():
             params['start_time'] = request.args.get('start_time')
         if request.args.get('end_time'):
             params['end_time'] = request.args.get('end_time')
-        
+
         # Build URL with parameters
         api_url = 'https://p.savenow.to/ajax/download.php'
         response = requests.get(api_url, params=params)
-        
+
         # Get response data and filter out message field
         response_data = response.json()
         if 'message' in response_data:
             del response_data['message']
-        
+
         return jsonify(response_data), response.status_code
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -60,16 +61,16 @@ def proxy_progress():
     """Proxy for progress check to avoid CORS"""
     try:
         job_id = request.args.get('id')
-        
+
         # Make request to actual API
         api_url = f"https://p.savenow.to/api/progress?id={job_id}"
         response = requests.get(api_url)
-        
+
         # Get response data and filter out message field
         response_data = response.json()
         if 'message' in response_data:
             del response_data['message']
-        
+
         return jsonify(response_data), response.status_code
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -79,22 +80,22 @@ def proxy_file():
     """Proxy for actual file download to avoid CORS and hide original headers"""
     try:
         download_url = request.args.get('url')
-        
+
         # Stream the file from the download URL with minimal headers
         response = requests.get(download_url, stream=True, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
-        
+
         # Get filename from Content-Disposition or use default
         filename = 'download.mp3'
         if 'Content-Disposition' in response.headers:
             content_disposition = response.headers['Content-Disposition']
             if 'filename=' in content_disposition:
                 filename = content_disposition.split('filename=')[1].strip('"')
-        
+
         # Determine content type
         content_type = response.headers.get('Content-Type', 'application/octet-stream')
-        
+
         # Create response with only necessary headers (hiding original source)
         return app.response_class(
             response.iter_content(chunk_size=8192),

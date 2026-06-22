@@ -33,9 +33,7 @@ export class DownloadManager {
   constructor() {
     this.manager = document.getElementById("downloadManager") as HTMLElement;
     this.downloadList = document.getElementById("downloadList") as HTMLElement;
-    this.filterSelect = document.getElementById(
-      "downloadFilter",
-    ) as HTMLSelectElement;
+    this.filterSelect = document.getElementById("downloadFilter") as HTMLSelectElement;
     this.badge = document.getElementById("downloadBadge") as HTMLElement;
     this.toggleBtn = document.getElementById("downloadToggle") as HTMLElement;
 
@@ -50,9 +48,7 @@ export class DownloadManager {
     closeBtn?.addEventListener("click", () => this.toggle());
 
     const clearBtn = document.getElementById("clearFinished");
-    clearBtn?.addEventListener("click", () =>
-      this.downloadService.clearFinished(),
-    );
+    clearBtn?.addEventListener("click", () => this.downloadService.clearFinished());
 
     // Listen for bulk download updates
     window.addEventListener("downloadsChanged", () => {
@@ -102,27 +98,25 @@ export class DownloadManager {
 
     const downloads = Object.entries(this.downloadService.allDownloads);
 
-    const queuedItems: [string, DownloadItem][] =
-      this.downloadService.downloadQueue.map(
-        (item: QueueItem, index: number) => [
-          `queue_${index}`,
-          {
-            id: `queue_${index}`,
-            title: item.title,
-            url: item.url,
-            status: "queued" as const,
-            progress: 0,
-            timestamp: item.timestamp || Date.now(),
-          },
-        ],
-      );
+    const queuedItems: [string, DownloadItem][] = this.downloadService.downloadQueue.map(
+      (item: QueueItem, index: number) => [
+        `queue_${index}`,
+        {
+          id: `queue_${index}`,
+          title: item.title,
+          url: item.url,
+          status: "queued" as const,
+          progress: 0,
+          timestamp: item.timestamp || Date.now(),
+        },
+      ],
+    );
 
     const allItems: [string, DownloadItem][] = [...downloads, ...queuedItems];
 
     const counts = {
       all: allItems.length,
-      downloading: allItems.filter(([, d]) => d.status === "downloading")
-        .length,
+      downloading: allItems.filter(([, d]) => d.status === "downloading").length,
       queued: allItems.filter(([, d]) => d.status === "queued").length,
       complete: allItems.filter(([, d]) => d.status === "complete").length,
       error: allItems.filter(([, d]) => d.status === "error").length,
@@ -146,9 +140,7 @@ export class DownloadManager {
 
     if (filtered.length === 0) {
       const msg =
-        this.currentFilter === "all"
-          ? "No downloads yet"
-          : `No ${this.currentFilter} downloads`;
+        this.currentFilter === "all" ? "No downloads yet" : `No ${this.currentFilter} downloads`;
       this.downloadList.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-secondary);">${msg}</div>`;
       return;
     }
@@ -166,9 +158,7 @@ export class DownloadManager {
 
         let actions = "";
         if (dl.status === "queued") {
-          const qIdx = downloadId.startsWith("queue_")
-            ? downloadId.split("_")[1]
-            : "-1";
+          const qIdx = downloadId.startsWith("queue_") ? downloadId.split("_")[1] : "-1";
           actions = `<button class="cancel" data-action="cancelQueue" data-index="${qIdx}">Remove</button>`;
         } else if (dl.status === "complete" && dl.download_url) {
           const fullUrl = dl.download_url.startsWith("http")
@@ -179,9 +169,10 @@ export class DownloadManager {
 
         let timeInfo: string;
         if (dl.status === "downloading") {
-          timeInfo =
-            (dl as any).statusText ||
-            `${(dl as any).speed || "0 KB/s"} \u2022 ETA: ${(dl as any).eta || "Unknown"}`;
+          const statusText = dl.statusText || "";
+          const speed = dl.speed || "0 KB/s";
+          const eta = dl.eta || "Unknown";
+          timeInfo = statusText || `${speed} \u2022 ETA: ${eta}`;
         } else if (dl.status === "queued") {
           const pos = downloadId.startsWith("queue_")
             ? parseInt(downloadId.split("_")[1]) + 1
@@ -217,20 +208,16 @@ export class DownloadManager {
       })
       .join("");
 
-    this.downloadList
-      .querySelectorAll<HTMLButtonElement>("[data-action]")
-      .forEach((btn) => {
-        const action = btn.dataset.action;
-        if (action === "cancelQueue") {
-          btn.addEventListener("click", () => {
-            const idx = parseInt(btn.dataset.index || "-1");
-            if (idx >= 0) this.downloadService.cancelQueuedDownload(idx);
-          });
-        } else if (action === "redownload") {
-          btn.addEventListener("click", () =>
-            window.open(btn.dataset.url, "_blank"),
-          );
-        }
-      });
+    this.downloadList.querySelectorAll<HTMLButtonElement>("[data-action]").forEach((btn) => {
+      const action = btn.dataset.action;
+      if (action === "cancelQueue") {
+        btn.addEventListener("click", () => {
+          const idx = parseInt(btn.dataset.index || "-1");
+          if (idx >= 0) this.downloadService.cancelQueuedDownload(idx);
+        });
+      } else if (action === "redownload") {
+        btn.addEventListener("click", () => window.open(btn.dataset.url, "_blank"));
+      }
+    });
   }
 }

@@ -11,12 +11,10 @@ import re
 import threading
 from datetime import datetime
 
-from flask import Blueprint, current_app, request, send_file
-
-from backend.core import config
-from backend.core import state
+from backend.core import config, state
 from backend.services.downloader import download_song
 from backend.utils.response import error, success
+from flask import Blueprint, request, send_file
 
 logger = logging.getLogger(__name__)
 

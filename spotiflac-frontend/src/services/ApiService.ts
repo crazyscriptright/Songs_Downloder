@@ -1,9 +1,9 @@
-import { getApiBaseUrl } from '@/config';
-import type { ApiResponse } from '@/types';
+import { getApiBaseUrl } from "@/config";
+import type { ApiResponse } from "@/types";
 
 function isJsonContentType(headers: Headers): boolean {
-  const ct = headers.get('content-type') || '';
-  return ct.includes('application/json');
+  const ct = headers.get("content-type") || "";
+  return ct.includes("application/json");
 }
 
 /**
@@ -15,20 +15,20 @@ function isJsonContentType(headers: Headers): boolean {
  */
 export class ApiService {
   /** Make a GET request and return the unwrapped data payload. */
-  static async get<T = any>(endpoint: string): Promise<T> {
+  static async get<T = unknown>(endpoint: string): Promise<T> {
     const url = `${getApiBaseUrl()}${endpoint}`;
     const response = await fetch(url, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     });
     return ApiService.unwrap<T>(response);
   }
 
   /** Make a POST request with a JSON body and return the unwrapped data payload. */
-  static async post<T = any>(endpoint: string, body: unknown): Promise<T> {
+  static async post<T = unknown>(endpoint: string, body: unknown): Promise<T> {
     const url = `${getApiBaseUrl()}${endpoint}`;
     const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     return ApiService.unwrap<T>(response);
@@ -59,8 +59,8 @@ export class ApiService {
   static async postRaw(endpoint: string, body: unknown): Promise<Response> {
     const url = `${getApiBaseUrl()}${endpoint}`;
     return fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
   }
@@ -74,7 +74,7 @@ export class ApiService {
   /** Fetch a file as a Blob via GET. */
   static async fetchBlob(url: string): Promise<Blob> {
     const response = await fetch(url);
-    if (!response.ok) throw new Error('File download failed');
+    if (!response.ok) throw new Error("File download failed");
     return response.blob();
   }
 }

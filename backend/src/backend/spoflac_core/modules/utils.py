@@ -1,6 +1,6 @@
 """Utility functions for filename sanitization and formatting"""
-import re
 import os
+import re
 
 
 def sanitize_filename(filename):
@@ -9,24 +9,24 @@ def sanitize_filename(filename):
     invalid_chars = '<>:"|?*'
     for char in invalid_chars:
         filename = filename.replace(char, '')
-        
+
     # Replace forward slash with space
     filename = filename.replace('/', ' ')
     filename = filename.replace('\\', ' ')
-    
+
     # Remove control characters
     filename = ''.join(char for char in filename if ord(char) >= 32)
-    
+
     # Collapse multiple spaces
     filename = re.sub(r'\s+', ' ', filename)
-    
+
     # Trim dots and spaces
     filename = filename.strip('. ')
-    
+
     # Default if empty
     if not filename:
         filename = 'Unknown'
-        
+
     return filename
 
 
@@ -37,14 +37,14 @@ def build_filename(metadata, template='{artist} - {title}', ext='.flac'):
     artist = sanitize_filename(metadata.get('artist', 'Unknown'))
     album = sanitize_filename(metadata.get('album', 'Unknown'))
     album_artist = sanitize_filename(metadata.get('album_artist', artist))
-    
+
     # Extract year
     year = metadata.get('release_date', '')[:4] if metadata.get('release_date') else ''
-    
+
     # Track/Disc numbers
     track = metadata.get('track_number', 0)
     disc = metadata.get('disc_number', 0)
-    
+
     # Replace placeholders
     filename = template
     filename = filename.replace('{title}', title)
@@ -52,23 +52,23 @@ def build_filename(metadata, template='{artist} - {title}', ext='.flac'):
     filename = filename.replace('{album}', album)
     filename = filename.replace('{album_artist}', album_artist)
     filename = filename.replace('{year}', year)
-    
+
     if track:
         filename = filename.replace('{track}', f'{track:02d}')
     else:
         # Remove track placeholder if not available
         filename = re.sub(r'\{track\}\.\s*', '', filename)
         filename = re.sub(r'\{track\}\s*[-\s]*', '', filename)
-        
+
     if disc:
         filename = filename.replace('{disc}', str(disc))
     else:
         filename = re.sub(r'\{disc\}\s*', '', filename)
-        
+
     # Add extension
     if not filename.endswith(ext):
         filename += ext
-        
+
     return filename
 
 

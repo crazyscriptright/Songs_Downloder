@@ -14,10 +14,10 @@ import os
 import subprocess
 import tempfile
 import time
+from typing import Optional
+from urllib.parse import quote_plus
 
 import requests
-from urllib.parse import quote_plus
-from typing import Optional
 
 _PREVIEW_TMP_DIR = os.path.join(
     os.environ.get("TMPDIR", tempfile.gettempdir()),

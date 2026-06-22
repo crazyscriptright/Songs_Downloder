@@ -1,29 +1,21 @@
-import {
-  IoHome,
-  IoMusicalNotes,
-  IoMusicalNotesOutline,
-} from "react-icons/io5";
+import { IoHome, IoMusicalNotes, IoMusicalNotesOutline } from "react-icons/io5";
 import { Link } from "react-router-dom";
 import "@/styles/not-found.css";
 
 const FLOATING_NOTES = [
-  { left: "8%",  size: 22, dur: 9,  delay: 0 },
+  { left: "8%", size: 22, dur: 9, delay: 0 },
   { left: "18%", size: 14, dur: 13, delay: 2 },
   { left: "30%", size: 28, dur: 10, delay: 5 },
   { left: "44%", size: 16, dur: 14, delay: 1 },
   { left: "56%", size: 24, dur: 11, delay: 3.5 },
   { left: "67%", size: 18, dur: 12, delay: 6 },
-  { left: "78%", size: 20, dur: 8,  delay: 0.5 },
+  { left: "78%", size: 20, dur: 8, delay: 0.5 },
   { left: "89%", size: 14, dur: 15, delay: 4 },
 ];
 
 function VinylRecord() {
   return (
-    <svg
-      className="nf-vinyl"
-      viewBox="0 0 200 200"
-      xmlns="http://www.w3.org/2000/svg"
-    >
+    <svg className="nf-vinyl" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
       {/* Outer disc */}
       <circle cx="100" cy="100" r="98" fill="var(--nf-vinyl-outer)" />
       {/* Grooves */}
@@ -50,30 +42,35 @@ function VinylRecord() {
         strokeWidth="1.5"
       />
       {/* Label text arc lines */}
-      <line x1="78" y1="95" x2="122" y2="95" stroke="var(--nf-vinyl-label-border)" strokeWidth="1" opacity="0.5" />
-      <line x1="78" y1="103" x2="122" y2="103" stroke="var(--nf-vinyl-label-border)" strokeWidth="0.7" opacity="0.35" />
+      <line
+        x1="78"
+        y1="95"
+        x2="122"
+        y2="95"
+        stroke="var(--nf-vinyl-label-border)"
+        strokeWidth="1"
+        opacity="0.5"
+      />
+      <line
+        x1="78"
+        y1="103"
+        x2="122"
+        y2="103"
+        stroke="var(--nf-vinyl-label-border)"
+        strokeWidth="0.7"
+        opacity="0.35"
+      />
       {/* Center hole */}
       <circle cx="100" cy="100" r="5" fill="var(--nf-vinyl-hole)" />
       {/* Outer rim */}
-      <circle
-        cx="100"
-        cy="100"
-        r="97"
-        fill="none"
-        stroke="var(--nf-vinyl-rim)"
-        strokeWidth="2"
-      />
+      <circle cx="100" cy="100" r="97" fill="none" stroke="var(--nf-vinyl-rim)" strokeWidth="2" />
     </svg>
   );
 }
 
 function NeedleArm() {
   return (
-    <svg
-      className="nf-needle"
-      viewBox="0 0 60 100"
-      xmlns="http://www.w3.org/2000/svg"
-    >
+    <svg className="nf-needle" viewBox="0 0 60 100" xmlns="http://www.w3.org/2000/svg">
       {/* Pivot */}
       <circle cx="52" cy="8" r="6" fill="var(--nf-needle-color)" />
       <circle cx="52" cy="8" r="3" fill="var(--nf-needle-cap)" />
@@ -88,14 +85,7 @@ function NeedleArm() {
         strokeLinecap="round"
       />
       {/* Cartridge */}
-      <rect
-        x="4"
-        y="84"
-        width="14"
-        height="8"
-        rx="2"
-        fill="var(--nf-needle-color)"
-      />
+      <rect x="4" y="84" width="14" height="8" rx="2" fill="var(--nf-needle-color)" />
       {/* Stylus */}
       <line
         x1="11"

@@ -31,9 +31,7 @@ export class SearchBox {
     this.input = document.getElementById("searchInput") as HTMLInputElement;
     this.button = document.getElementById("searchBtn") as HTMLButtonElement;
     this.queryHint = document.getElementById("queryHint") as HTMLElement;
-    this.suggestionsEl = document.getElementById(
-      "searchSuggestions",
-    ) as HTMLElement;
+    this.suggestionsEl = document.getElementById("searchSuggestions") as HTMLElement;
 
     this.bindEvents();
   }
@@ -46,10 +44,7 @@ export class SearchBox {
   }
 
   private bindEvents(): void {
-    const debouncedFetch = debounce(
-      (q: string) => this.fetchSuggestions(q),
-      SUGGESTION_DEBOUNCE,
-    );
+    const debouncedFetch = debounce((q: string) => this.fetchSuggestions(q), SUGGESTION_DEBOUNCE);
 
     this.input.addEventListener("input", () => {
       const q = this.query;
@@ -171,14 +166,12 @@ export class SearchBox {
       )
       .join("");
 
-    this.suggestionsEl
-      .querySelectorAll<HTMLElement>(".suggestion-item")
-      .forEach((el) => {
-        el.addEventListener("click", () => {
-          const idx = parseInt(el.dataset.index || "0", 10);
-          this.selectSuggestion(this.currentSuggestions[idx]);
-        });
+    this.suggestionsEl.querySelectorAll<HTMLElement>(".suggestion-item").forEach((el) => {
+      el.addEventListener("click", () => {
+        const idx = parseInt(el.dataset.index || "0", 10);
+        this.selectSuggestion(this.currentSuggestions[idx]);
       });
+    });
 
     this.suggestionsEl.classList.add("show");
     this.suggestionsVisible = true;
@@ -207,27 +200,19 @@ export class SearchBox {
   }
 
   private navigateSuggestions(direction: "up" | "down"): void {
-    if (!this.suggestionsVisible || this.currentSuggestions.length === 0)
-      return;
+    if (!this.suggestionsVisible || this.currentSuggestions.length === 0) return;
 
-    const prev = this.suggestionsEl.querySelector(
-      ".suggestion-item.highlighted",
-    );
+    const prev = this.suggestionsEl.querySelector(".suggestion-item.highlighted");
     if (prev) prev.classList.remove("highlighted");
 
     if (direction === "down") {
-      this.highlightedIndex =
-        (this.highlightedIndex + 1) % this.currentSuggestions.length;
+      this.highlightedIndex = (this.highlightedIndex + 1) % this.currentSuggestions.length;
     } else {
       this.highlightedIndex =
-        this.highlightedIndex <= 0
-          ? this.currentSuggestions.length - 1
-          : this.highlightedIndex - 1;
+        this.highlightedIndex <= 0 ? this.currentSuggestions.length - 1 : this.highlightedIndex - 1;
     }
 
-    const next = this.suggestionsEl.querySelector(
-      `[data-index="${this.highlightedIndex}"]`,
-    );
+    const next = this.suggestionsEl.querySelector(`[data-index="${this.highlightedIndex}"]`);
     if (next) {
       next.classList.add("highlighted");
       this.input.value = this.currentSuggestions[this.highlightedIndex];

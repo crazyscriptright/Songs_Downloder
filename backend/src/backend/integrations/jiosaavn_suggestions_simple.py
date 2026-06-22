@@ -2,9 +2,9 @@
 Simplified JioSaavn Suggestions Scraper
 """
 
+
 import requests
-import json
-import time
+
 
 class JioSaavnSuggestions:
     def __init__(self):
@@ -184,7 +184,7 @@ def test_suggestions(pid, language='hindi'):
     results = scraper.get_suggestions(pid, language, max_results=10)
 
     print(f"\n{'='*60}")
-    print(f" FINAL RESULTS")
+    print(" FINAL RESULTS")
     print(f"{'='*60}")
     print(f"Total suggestions: {len(results)}\n")
 

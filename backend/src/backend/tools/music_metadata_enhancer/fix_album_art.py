@@ -31,15 +31,12 @@ Features:
     ✅ Error recovery (continues on failures)
 """
 
-import sys
-import os
-from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
-import logging
-from datetime import datetime
-from io import BytesIO
 import io
+import logging
+import sys
 import traceback
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
 
 # Handle --help early before attempting heavy imports that might fail
 if '-h' in sys.argv or '--help' in sys.argv:
@@ -69,8 +66,8 @@ except ImportError:
 
 try:
     from mutagen.flac import FLAC, Picture
+    from mutagen.id3 import APIC, ID3, TIT2, TPE1
     from mutagen.mp3 import MP3
-    from mutagen.id3 import ID3, APIC, TIT2, TPE1
     from mutagen.mp4 import MP4, MP4Cover
     HAS_MUTAGEN = True
 except ImportError:
@@ -101,22 +98,22 @@ def get_artwork_from_file(file_path: Path) -> Tuple[Optional[bytes], Optional[st
                         return frame.data, frame.mime
             except:
                 return None, None
-        
+
         elif file_path.suffix.lower() == '.flac':
             audio = FLAC(file_path)
             if audio.pictures:
                 pic = audio.pictures[0]
                 return pic.data, pic.mime
-        
+
         elif file_path.suffix.lower() in {'.m4a', '.mp4'}:
             audio = MP4(file_path)
             if 'covr' in audio:
                 cover_data = audio['covr'][0]
                 return bytes(cover_data), 'image/jpeg'
-    
+
     except Exception as e:
         logger.debug(f"Error extracting artwork from {file_path.name}: {e}")
-    
+
     return None, None
 
 
@@ -149,7 +146,7 @@ def is_square_artwork(artwork_bytes: bytes, tolerance: float = 0.05) -> bool:
     aspect_ratio, _ = check_artwork_aspect_ratio(artwork_bytes)
     if aspect_ratio is None:
         return False
-    
+
     # 1.0 ± 0.05 = acceptable square
     return abs(aspect_ratio - 1.0) <= tolerance
 
@@ -162,7 +159,7 @@ def _fetch_artwork_spotify(title: str, artist: str) -> Optional[bytes]:
     """Fetch artwork from Spotify API (highest quality)."""
     if not HAS_REQUESTS:
         return None
-    
+
     try:
         # Search for track on Spotify
         url = "https://api.spotify.com/v1/search"
@@ -170,15 +167,15 @@ def _fetch_artwork_spotify(title: str, artist: str) -> Optional[bytes]:
             'User-Agent': 'Mozilla/5.0',
             'Accept': 'application/json',
         }
-        
+
         params = {
             'q': f"track:{title} artist:{artist}",
             'type': 'track',
             'limit': 3,
         }
-        
+
         response = requests.get(url, params=params, headers=headers, timeout=5)
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get('tracks', {}).get('items'):
@@ -190,7 +187,7 @@ def _fetch_artwork_spotify(title: str, artist: str) -> Optional[bytes]:
                             img_response = requests.get(img['url'], timeout=10)
                             if img_response.status_code == 200:
                                 return img_response.content
-        
+
         return None
     except Exception as e:
         logger.debug(f"Spotify fetch failed: {e}")
@@ -201,7 +198,7 @@ def _fetch_artwork_jiosaavn(title: str, artist: str) -> Optional[bytes]:
     """Fetch artwork from JioSaavn (great for Indian music)."""
     if not HAS_REQUESTS:
         return None
-    
+
     try:
         url = "https://www.jiosaavn.com/api.php"
         params = {
@@ -213,30 +210,30 @@ def _fetch_artwork_jiosaavn(title: str, artist: str) -> Optional[bytes]:
             'n': 1,
             '__call': 'search.getResults'
         }
-        
+
         headers = {
             'User-Agent': 'Mozilla/5.0',
             'Accept-Language': 'en-IN,en;q=0.9'
         }
-        
+
         response = requests.get(url, params=params, headers=headers, timeout=5)
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get('results'):
                 result = data['results'][0]
                 image_url = result.get('image', '')
-                
+
                 # JioSaavn images end with URL params - replace size with largest
                 if image_url:
                     # Remove size params and request 500x500 minimum
                     image_url = image_url.split('?')[0]
                     image_url += '?quality=500x500'
-                    
+
                     img_response = requests.get(image_url, timeout=10)
                     if img_response.status_code == 200:
                         return img_response.content
-        
+
         return None
     except Exception as e:
         logger.debug(f"JioSaavn fetch failed: {e}")
@@ -247,28 +244,28 @@ def _fetch_artwork_deezer(title: str, artist: str) -> Optional[bytes]:
     """Fetch artwork from Deezer API."""
     if not HAS_REQUESTS:
         return None
-    
+
     try:
         url = "https://api.deezer.com/search"
         params = {
             'q': f"track:{title} artist:{artist}",
             'limit': 3,
         }
-        
+
         response = requests.get(url, params=params, timeout=5)
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get('data'):
                 for track in data['data']:
                     album = track.get('album', {})
                     image_url = album.get('cover_xl', '')
-                    
+
                     if image_url:
                         img_response = requests.get(image_url, timeout=10)
                         if img_response.status_code == 200:
                             return img_response.content
-        
+
         return None
     except Exception as e:
         logger.debug(f"Deezer fetch failed: {e}")
@@ -279,7 +276,7 @@ def _fetch_artwork_itunes(title: str, artist: str) -> Optional[bytes]:
     """Fetch artwork from iTunes API (general fallback)."""
     if not HAS_REQUESTS:
         return None
-    
+
     try:
         url = "https://itunes.apple.com/search"
         params = {
@@ -288,24 +285,24 @@ def _fetch_artwork_itunes(title: str, artist: str) -> Optional[bytes]:
             'limit': 3,
             'country': 'US'
         }
-        
+
         response = requests.get(url, params=params, timeout=5)
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get('results'):
                 for result in data['results']:
                     image_url = result.get('artworkUrl100', '') or result.get('artworkUrl60', '')
-                    
+
                     if image_url:
                         # iTunes URLs have size in them - replace with larger size
                         image_url = image_url.replace('100x100', '1024x1024')
                         image_url = image_url.replace('60x60', '1024x1024')
-                        
+
                         img_response = requests.get(image_url, timeout=10)
                         if img_response.status_code == 200:
                             return img_response.content
-        
+
         return None
     except Exception as e:
         logger.debug(f"iTunes fetch failed: {e}")
@@ -324,14 +321,14 @@ def fetch_artwork_from_apis(title: str, artist: str, album: str = '') -> Optiona
     """
     if not title or not artist:
         return None
-    
+
     sources = [
         ("Spotify", lambda: _fetch_artwork_spotify(title, artist)),
         ("JioSaavn", lambda: _fetch_artwork_jiosaavn(title, artist)),
         ("Deezer", lambda: _fetch_artwork_deezer(title, artist)),
         ("iTunes", lambda: _fetch_artwork_itunes(title, artist)),
     ]
-    
+
     for source_name, fetch_func in sources:
         try:
             artwork = fetch_func()
@@ -340,7 +337,7 @@ def fetch_artwork_from_apis(title: str, artist: str, album: str = '') -> Optiona
                 return artwork
         except Exception as e:
             logger.debug(f"   ✗ {source_name} failed: {e}")
-    
+
     logger.debug(f"   ✗ All sources failed for '{title}'")
     return None
 
@@ -359,27 +356,27 @@ def resize_artwork_to_square(artwork_bytes: bytes, target_size: int = 1080) -> O
     """
     try:
         img = Image.open(io.BytesIO(artwork_bytes))
-        
+
         # Get original dimensions
         width, height = img.size
-        
+
         # Crop to square (take middle portion)
         min_dim = min(width, height)
         left = (width - min_dim) // 2
         top = (height - min_dim) // 2
         right = left + min_dim
         bottom = top + min_dim
-        
+
         img = img.crop((left, top, right, bottom))
-        
+
         # Resize to target
         img = img.resize((target_size, target_size), Image.Resampling.LANCZOS)
-        
+
         # Save to bytes with good quality
         output = io.BytesIO()
         img.save(output, format='PNG', quality=95, optimize=True)
         return output.getvalue()
-    
+
     except Exception as e:
         logger.debug(f"Error resizing artwork: {e}")
         return None
@@ -398,10 +395,10 @@ def embed_artwork_to_file(file_path: Path, artwork_bytes: bytes) -> bool:
             return _embed_artwork_flac(file_path, artwork_bytes)
         elif file_path.suffix.lower() in {'.m4a', '.mp4'}:
             return _embed_artwork_m4a(file_path, artwork_bytes)
-    
+
     except Exception as e:
         logger.error(f"Error embedding artwork: {e}")
-    
+
     return False
 
 
@@ -418,10 +415,10 @@ def remove_artwork_from_file(file_path: Path) -> bool:
             return _remove_artwork_flac(file_path)
         elif file_path.suffix.lower() in {'.m4a', '.mp4'}:
             return _remove_artwork_m4a(file_path)
-    
+
     except Exception as e:
         logger.error(f"Error removing artwork: {e}")
-    
+
     return False
 
 
@@ -429,12 +426,12 @@ def _remove_artwork_mp3(file_path: Path) -> bool:
     """Remove artwork from MP3 file."""
     try:
         from mutagen.id3 import ID3, ID3NoHeaderError
-        
+
         try:
             tags = ID3(str(file_path))
         except ID3NoHeaderError:
             return True  # No tags to remove
-        
+
         # Remove artwork
         tags.delall('APIC')
         tags.save(str(file_path), v2_version=4, padding=lambda x: 2048)
@@ -448,7 +445,7 @@ def _remove_artwork_flac(file_path: Path) -> bool:
     """Remove artwork from FLAC file."""
     try:
         from mutagen.flac import FLAC
-        
+
         audio = FLAC(file_path)
         audio.clear_pictures()
         audio.save()
@@ -462,7 +459,7 @@ def _remove_artwork_m4a(file_path: Path) -> bool:
     """Remove artwork from M4A/MP4 file."""
     try:
         from mutagen.mp4 import MP4
-        
+
         audio = MP4(file_path)
         if 'covr' in audio:
             del audio['covr']
@@ -476,20 +473,20 @@ def _remove_artwork_m4a(file_path: Path) -> bool:
 def _embed_artwork_mp3(file_path: Path, artwork_bytes: bytes) -> bool:
     """Embed artwork into MP3 file."""
     try:
-        from mutagen.id3 import ID3, ID3NoHeaderError, APIC
+        from mutagen.id3 import APIC
         from mutagen.mp3 import MP3
-        
+
         # Use MP3 object to properly handle tag creation
         audio = MP3(str(file_path))
-        
+
         # Get or create ID3 tags
         if audio.tags is None:
-            logger.debug(f"   Creating new ID3v2.4 header")
+            logger.debug("   Creating new ID3v2.4 header")
             audio.add_tags()
-        
+
         # Remove existing artwork frames
         audio.tags.delall('APIC')
-        
+
         # Add new artwork frame
         apic = APIC(
             encoding=3,  # UTF-8
@@ -499,11 +496,11 @@ def _embed_artwork_mp3(file_path: Path, artwork_bytes: bytes) -> bool:
             data=artwork_bytes
         )
         audio.tags['APIC'] = apic
-        
+
         # Save with v2_version=3 for better compatibility (vs 4)
         # and explicit easy-write flag
         audio.save(v2_version=3, padding=lambda x: 2048)
-        
+
         logger.debug(f"✅ MP3 embedded: {file_path.name}")
         return True
     except Exception as e:
@@ -516,19 +513,19 @@ def _embed_artwork_flac(file_path: Path, artwork_bytes: bytes) -> bool:
     """Embed artwork into FLAC file."""
     try:
         from mutagen.flac import FLAC, Picture
-        
+
         audio = FLAC(file_path)
-        
+
         # Remove existing artwork
         audio.clear_pictures()
-        
+
         # Create new picture
         pic = Picture()
         pic.data = artwork_bytes
         pic.type = 3  # Cover front
         pic.mime = 'image/png'
         pic.desc = 'Cover'
-        
+
         audio.add_picture(pic)
         audio.save()
         logger.debug(f"✅ FLAC embedded: {file_path.name}")
@@ -544,9 +541,9 @@ def _embed_artwork_m4a(file_path: Path, artwork_bytes: bytes) -> bool:
     """Embed artwork into M4A/MP4 file."""
     try:
         from mutagen.mp4 import MP4, MP4Cover
-        
+
         audio = MP4(file_path)
-        
+
         # MP4 covers - convert PNG to JPEG (MP4 prefers JPEG)
         try:
             img = Image.open(io.BytesIO(artwork_bytes))
@@ -561,11 +558,11 @@ def _embed_artwork_m4a(file_path: Path, artwork_bytes: bytes) -> bool:
             logger.debug(f"   Converted PNG to JPEG ({len(artwork_bytes)} bytes)")
         except Exception as conv_err:
             logger.warning(f"   Could not convert to JPEG, using as-is: {conv_err}")
-        
+
         # Remove existing artwork first
         if 'covr' in audio:
             del audio['covr']
-        
+
         audio['covr'] = [MP4Cover(artwork_bytes, imageformat=MP4Cover.FORMAT_JPEG)]
         audio.save()
         logger.debug(f"✅ M4A embedded: {file_path.name}")
@@ -682,7 +679,7 @@ def scan_missing_artwork(folder_path: Path, dry_run: bool = False, limit: Option
         }
     """
     audio_files = get_audio_files(folder_path)
-    
+
     if not audio_files:
         logger.warning(f"No audio files found in {folder_path}")
         return {
@@ -691,7 +688,7 @@ def scan_missing_artwork(folder_path: Path, dry_run: bool = False, limit: Option
             'files_without_artwork': 0,
             'files_list': []
         }
-    
+
     logger.info(f"\n{'='*70}")
     logger.info(f"SCANNING FOR MISSING ARTWORK: {folder_path}")
     logger.info(f"{'='*70}")
@@ -699,27 +696,27 @@ def scan_missing_artwork(folder_path: Path, dry_run: bool = False, limit: Option
     if limit:
         logger.info(f"Processing first {limit} files")
     logger.info("")
-    
+
     missing_artwork_files = []
     files_with_art = 0
-    
+
     for idx, file_path in enumerate(audio_files, 1):
         # Respect limit
         if limit and idx > limit:
             break
-        
+
         logger.info(f"[{idx}/{len(audio_files) if not limit else limit}] 🎵 {file_path.name}")
-        
+
         # Check for artwork
         artwork_bytes, _ = get_artwork_from_file(file_path)
-        
+
         if artwork_bytes:
-            logger.info(f"   ✅ Has artwork")
+            logger.info("   ✅ Has artwork")
             files_with_art += 1
             continue
-        
+
         # No artwork found
-        logger.warning(f"   ❌ NO ARTWORK FOUND!")
+        logger.warning("   ❌ NO ARTWORK FOUND!")
         missing_artwork_files.append({
             'path': file_path,
             'title': _get_tag(file_path, 'title'),
@@ -727,74 +724,74 @@ def scan_missing_artwork(folder_path: Path, dry_run: bool = False, limit: Option
             'album': _get_tag(file_path, 'album'),
             'status': 'pending'
         })
-    
+
     logger.info(f"\n{'='*70}")
-    logger.info(f"SCAN RESULTS")
+    logger.info("SCAN RESULTS")
     logger.info(f"{'='*70}")
     logger.info(f"Total files scanned: {len(audio_files)}")
     logger.info(f"Files with artwork: {files_with_art}")
     logger.info(f"Files WITHOUT artwork: {len(missing_artwork_files)}")
-    
+
     if not dry_run and missing_artwork_files:
         logger.info(f"\n{'='*70}")
         logger.info(f"ADDING ARTWORK ({len(missing_artwork_files)} files)...")
         logger.info(f"{'='*70}\n")
-        
+
         added_count = 0
         failed_count = 0
-        
+
         for idx, file_info in enumerate(missing_artwork_files, 1):
             file_path = file_info['path']
             title = file_info['title']
             artist = file_info['artist']
             album = file_info['album']
-            
+
             logger.info(f"[{idx}/{len(missing_artwork_files)}] 🎨 {file_path.name}")
             logger.info(f"   Title: {title or '(unknown)'}")
             logger.info(f"   Artist: {artist or '(unknown)'}")
             logger.info(f"   Album: {album or '(unknown)'}")
-            
+
             # Fetch artwork from APIs
-            logger.info(f"   🌐 Fetching artwork from APIs...")
+            logger.info("   🌐 Fetching artwork from APIs...")
             artwork = fetch_artwork_from_apis(
                 title=title or file_path.stem,
                 artist=artist or '',
                 album=album or ''
             )
-            
+
             if not artwork:
-                logger.warning(f"   ✗ Failed to fetch artwork")
+                logger.warning("   ✗ Failed to fetch artwork")
                 failed_count += 1
                 file_info['status'] = 'failed'
                 continue
-            
+
             # Resize to square
-            logger.info(f"   📐 Resizing to square (1080x1080)...")
+            logger.info("   📐 Resizing to square (1080x1080)...")
             square_artwork = resize_artwork_to_square(artwork, target_size=1080)
-            
+
             if not square_artwork:
-                logger.warning(f"   ✗ Failed to resize artwork")
+                logger.warning("   ✗ Failed to resize artwork")
                 failed_count += 1
                 file_info['status'] = 'failed'
                 continue
-            
+
             # Embed into file
-            logger.info(f"   💾 Embedding artwork...")
+            logger.info("   💾 Embedding artwork...")
             if embed_artwork_to_file(file_path, square_artwork):
-                logger.info(f"   ✅ Added! (1080x1080)")
+                logger.info("   ✅ Added! (1080x1080)")
                 added_count += 1
                 file_info['status'] = 'added'
             else:
-                logger.error(f"   ✗ Failed to embed artwork")
+                logger.error("   ✗ Failed to embed artwork")
                 failed_count += 1
                 file_info['status'] = 'failed'
-        
+
         logger.info(f"\n{'='*70}")
-        logger.info(f"ADDITION COMPLETE")
+        logger.info("ADDITION COMPLETE")
         logger.info(f"{'='*70}")
         logger.info(f"Added: {added_count}/{len(missing_artwork_files)}")
         logger.info(f"Failed: {failed_count}/{len(missing_artwork_files)}")
-    
+
     return {
         'total_files': len(audio_files),
         'files_with_artwork': files_with_art,
@@ -825,7 +822,7 @@ def scan_and_report(folder_path: Path, dry_run: bool = False, remove_mode: bool 
         }
     """
     audio_files = get_audio_files(folder_path)
-    
+
     if not audio_files:
         logger.warning(f"No audio files found in {folder_path}")
         return {
@@ -834,36 +831,36 @@ def scan_and_report(folder_path: Path, dry_run: bool = False, remove_mode: bool 
             'files_with_bad_ratio': 0,
             'files_list': []
         }
-    
+
     logger.info(f"\n{'='*70}")
     logger.info(f"SCANNING FOLDER: {folder_path}")
     logger.info(f"{'='*70}")
     logger.info(f"Found {len(audio_files)} audio files\n")
-    
+
     bad_ratio_files = []
     files_with_art = 0
-    
+
     for idx, file_path in enumerate(audio_files, 1):
         logger.info(f"[{idx}/{len(audio_files)}] 🎵 {file_path.name}")
-        
+
         # Extract artwork
         artwork_bytes, _ = get_artwork_from_file(file_path)
-        
+
         if not artwork_bytes:
-            logger.info(f"   → No artwork found")
+            logger.info("   → No artwork found")
             continue
-        
+
         files_with_art += 1
-        
+
         # Check aspect ratio
         aspect_ratio, dimensions = check_artwork_aspect_ratio(artwork_bytes)
-        
+
         if aspect_ratio is None:
-            logger.warning(f"   → Could not read artwork")
+            logger.warning("   → Could not read artwork")
             continue
-        
+
         width, height = dimensions
-        
+
         # Check if square
         if is_square_artwork(artwork_bytes, tolerance=0.05):
             logger.info(f"   ✅ Square ({width}x{height} - {aspect_ratio:.2f}:1)")
@@ -877,88 +874,88 @@ def scan_and_report(folder_path: Path, dry_run: bool = False, remove_mode: bool 
                 'dimensions': dimensions,
                 'status': 'pending'
             })
-    
+
     logger.info(f"\n{'='*70}")
-    logger.info(f"SCAN RESULTS")
+    logger.info("SCAN RESULTS")
     logger.info(f"{'='*70}")
     logger.info(f"Total files scanned: {len(audio_files)}")
     logger.info(f"Files with artwork: {files_with_art}")
     logger.info(f"Files with BAD ratio (non-square): {len(bad_ratio_files)}")
-    
+
     if not dry_run and bad_ratio_files:
         action_label = "REMOVING" if remove_mode else "FIXING"
         logger.info(f"\n{'='*70}")
         logger.info(f"{action_label} ARTWORK ({len(bad_ratio_files)} files)...")
         logger.info(f"{'='*70}\n")
-        
+
         fixed_count = 0
         failed_count = 0
-        
+
         for idx, file_info in enumerate(bad_ratio_files, 1):
             file_path = file_info['path']
             title = file_info['title']
             artist = file_info['artist']
-            
+
             logger.info(f"[{idx}/{len(bad_ratio_files)}] 🔧 {file_path.name}")
             logger.info(f"   Title: {title or '(unknown)'}")
             logger.info(f"   Artist: {artist or '(unknown)'}")
             logger.info(f"   Current ratio: {file_info['aspect_ratio']:.2f}:1 ({file_info['dimensions'][0]}x{file_info['dimensions'][1]})")
-            
+
             if remove_mode:
                 # REMOVE MODE: Delete the bad artwork
-                logger.info(f"   🗑️  Removing artwork...")
+                logger.info("   🗑️  Removing artwork...")
                 if remove_artwork_from_file(file_path):
-                    logger.info(f"   ✅ Removed! (cleaned)")
+                    logger.info("   ✅ Removed! (cleaned)")
                     fixed_count += 1
                     file_info['status'] = 'removed'
                 else:
-                    logger.error(f"   ✗ Failed to remove artwork")
+                    logger.error("   ✗ Failed to remove artwork")
                     failed_count += 1
                     file_info['status'] = 'failed'
             else:
                 # REPLACE MODE: Fetch and embed new artwork
                 # Fetch new artwork
-                logger.info(f"   🌐 Fetching artwork from APIs...")
+                logger.info("   🌐 Fetching artwork from APIs...")
                 new_artwork = fetch_artwork_from_apis(
                     title=title or file_path.stem,
                     artist=artist or '',
                     album=_get_tag(file_path, 'album') or ''
                 )
-                
+
                 if not new_artwork:
-                    logger.warning(f"   ✗ Failed to fetch artwork")
+                    logger.warning("   ✗ Failed to fetch artwork")
                     failed_count += 1
                     file_info['status'] = 'failed'
                     continue
-                
+
                 # Resize to square
-                logger.info(f"   📐 Resizing to square (1080x1080)...")
+                logger.info("   📐 Resizing to square (1080x1080)...")
                 square_artwork = resize_artwork_to_square(new_artwork, target_size=1080)
-                
+
                 if not square_artwork:
-                    logger.warning(f"   ✗ Failed to resize artwork")
+                    logger.warning("   ✗ Failed to resize artwork")
                     failed_count += 1
                     file_info['status'] = 'failed'
                     continue
-                
+
                 # Embed into file
-                logger.info(f"   💾 Embedding artwork...")
+                logger.info("   💾 Embedding artwork...")
                 if embed_artwork_to_file(file_path, square_artwork):
-                    logger.info(f"   ✅ Updated! New: 1:1 (1080x1080)")
+                    logger.info("   ✅ Updated! New: 1:1 (1080x1080)")
                     fixed_count += 1
                     file_info['status'] = 'fixed'
                 else:
-                    logger.error(f"   ✗ Failed to embed artwork")
+                    logger.error("   ✗ Failed to embed artwork")
                     failed_count += 1
                     file_info['status'] = 'failed'
-        
+
         logger.info(f"\n{'='*70}")
         action_complete = "REMOVAL COMPLETE" if remove_mode else "UPDATE COMPLETE"
         logger.info(f"{action_complete}")
         logger.info(f"{'='*70}")
         logger.info(f"Processed: {fixed_count}/{len(bad_ratio_files)}")
         logger.info(f"Failed: {failed_count}/{len(bad_ratio_files)}")
-    
+
     return {
         'total_files': len(audio_files),
         'files_with_artwork': files_with_art,
@@ -981,7 +978,7 @@ def _get_tag(file_path: Path, tag_name: str) -> Optional[str]:
                     return str(tags['TALB'])
             except:
                 pass
-        
+
         elif file_path.suffix.lower() == '.flac':
             audio = FLAC(file_path)
             if tag_name == 'title':
@@ -990,7 +987,7 @@ def _get_tag(file_path: Path, tag_name: str) -> Optional[str]:
                 return (audio.get('artist') or [''])[0]
             elif tag_name == 'album':
                 return (audio.get('album') or [''])[0]
-        
+
         elif file_path.suffix.lower() in {'.m4a', '.mp4'}:
             audio = MP4(file_path)
             if tag_name == 'title':
@@ -999,16 +996,16 @@ def _get_tag(file_path: Path, tag_name: str) -> Optional[str]:
                 return str((audio.get('\xa9ART') or [''])[0])
             elif tag_name == 'album':
                 return str((audio.get('\xa9alb') or [''])[0])
-    
+
     except Exception:
         pass
-    
+
     return None
 
 
 def main():
     import argparse
-    
+
     parser = argparse.ArgumentParser(
         description='Fix non-square album artwork in music library',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1029,7 +1026,7 @@ Examples:
         default=None,
         help='Optional single file or folder path (if omitted, uses --folder)'
     )
-    
+
     parser.add_argument(
         '--folder',
         type=str,
@@ -1056,15 +1053,15 @@ Examples:
         action='store_true',
         help='Find files WITHOUT artwork and add it (instead of fixing bad ratios)'
     )
-    
+
     args = parser.parse_args()
-    
+
     target_path = Path(args.target) if args.target else Path(args.folder)
-    
+
     if not target_path.exists():
         logger.error(f"❌ Path not found: {target_path}")
         sys.exit(1)
-    
+
     if args.dry_run:
         mode = "DRY RUN (no changes)"
     elif args.fill_missing:
@@ -1073,13 +1070,13 @@ Examples:
         mode = "REMOVE MODE (delete bad artwork)"
     else:
         mode = "REPLACE MODE (fetch & embed new artwork)"
-    
+
     logger.info(f"\n📁 Target: {target_path}")
     logger.info(f"🔧 Mode: {mode}")
     if args.limit:
         logger.info(f"📊 Limit: {args.limit} files")
     logger.info("")
-    
+
     # Single-file mode
     if target_path.is_file():
         process_single_file(target_path, dry_run=args.dry_run, remove_mode=args.remove)
@@ -1088,7 +1085,7 @@ Examples:
         result = scan_missing_artwork(target_path, dry_run=args.dry_run, limit=args.limit)
     else:
         result = scan_and_report(target_path, dry_run=args.dry_run, remove_mode=args.remove)
-    
+
     logger.info(f"\n{'='*70}")
     logger.info("✨ DONE!")
     logger.info(f"{'='*70}\n")

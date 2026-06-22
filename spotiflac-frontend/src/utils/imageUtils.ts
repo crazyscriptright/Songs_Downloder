@@ -58,9 +58,7 @@ export function createLazyImageHTML(
   const fallback = fallbackSrc || MUSIC_PLACEHOLDER_SVG;
 
   let actualSrc =
-    src && src.trim() && src !== "" && src !== "null" && src !== "undefined"
-      ? src
-      : fallback;
+    src && src.trim() && src !== "" && src !== "null" && src !== "undefined" ? src : fallback;
 
   if (actualSrc.startsWith("http://") && !actualSrc.includes("localhost")) {
     actualSrc = actualSrc.replace("http://", "https://");

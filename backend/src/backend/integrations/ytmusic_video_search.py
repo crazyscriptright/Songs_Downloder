@@ -8,38 +8,40 @@ Usage:
     python ytmusic_video_search.py
 """
 
-from .ytmusic_dynamic_video_tokens import YouTubeMusicVideoAPI
-import json
 import os
+
 from backend.utils.atomic_write import atomic_json_write
+
+from .ytmusic_dynamic_video_tokens import YouTubeMusicVideoAPI
+
 
 def main():
     print("="*70)
     print("YouTube Music VIDEO Search with Dynamic Token Extraction")
     print("="*70)
-    
+
     # Initialize the API
     api = YouTubeMusicVideoAPI()
-    
+
     # Get search query from user
     search_query = input("\n Enter video name to search: ").strip()
-    
+
     if not search_query:
         search_query = "follow follow song"  # Default
         print(f"Using default search: {search_query}")
-    
+
     # ===== AUTOMATIC MODE (with fallback) =====
     # Try static tokens first (faster), then fallback to fresh tokens if it fails
     print("\n" + "="*70)
     print(" Trying fast mode (static tokens)...")
     results = api.search_videos(search_query, use_fresh_tokens=False)
-    
+
     # If failed, automatically fallback to fresh tokens
     if not results or results.get("error"):
         print("  Static tokens failed or expired!")
         print(" Automatically switching to fresh tokens mode...")
         results = api.search_videos(search_query, use_fresh_tokens=True)
-    
+
     # ===== MANUAL MODE (commented out) =====
     # Uncomment below to manually choose mode each time
     """
@@ -55,16 +57,16 @@ def main():
     print("\n" + "="*70)
     results = api.search_videos(search_query, use_fresh_tokens=use_fresh)
     """
-    
+
     if results:
         # Parse and display results
         videos = api.parse_video_results(results)
-        
+
         if videos:
             print(f"\n{'='*70}")
             print(f" Found {len(videos)} videos")
             print(f"{'='*70}")
-            
+
             # Save results to file (use /tmp on Heroku)
             output_file = "/tmp/video_search_results.json" if os.getenv('DYNO') else "video_search_results.json"
             atomic_json_write(output_file, videos, ensure_ascii=False)
@@ -74,12 +76,12 @@ def main():
             full_response_file = "/tmp/ytmusic_video_response.json" if os.getenv('DYNO') else "ytmusic_video_response.json"
             atomic_json_write(full_response_file, results, ensure_ascii=False)
             print(f" Full response saved to {full_response_file}")
-            
+
             # Show first 3 videos
             print(f"\n{'='*70}")
             print("Top 3 Video Results:")
             print(f"{'='*70}\n")
-            
+
             for i, video in enumerate(videos[:3], 1):
                 print(f"{i}. {video['title']}")
                 print(f"   YT Music: {video['url']}")

@@ -104,11 +104,7 @@ export default function RootLayout() {
         {/* Download Toggle Button */}
         <button id="downloadToggle" className="download-manager-toggle">
           <IoDownloadOutline size={24} />
-          <span
-            id="downloadBadge"
-            className="badge"
-            style={{ display: "none" }}
-          >
+          <span id="downloadBadge" className="badge" style={{ display: "none" }}>
             0
           </span>
         </button>

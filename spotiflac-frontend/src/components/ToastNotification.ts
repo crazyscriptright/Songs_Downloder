@@ -13,8 +13,7 @@ export class ToastNotification {
   private container: HTMLElement;
 
   constructor() {
-    this.container =
-      document.getElementById("toastContainer") || this.createContainer();
+    this.container = document.getElementById("toastContainer") || this.createContainer();
   }
 
   private createContainer(): HTMLElement {

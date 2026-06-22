@@ -24,14 +24,13 @@ Usage:
 """
 
 import logging
-from flask import Blueprint, request
+import os
+import time
+from pathlib import Path
+from typing import Optional
 
 from backend.utils.response import error, success
-from pathlib import Path
-import os
-import sys
-import time
-from typing import Optional
+from flask import Blueprint, request
 
 # Initialize logger first (before any other code tries to use it)
 logger = logging.getLogger(__name__)
@@ -78,21 +77,21 @@ def get_working_proxy() -> Optional[str]:
         str: Working proxy URL or None
     """
     global CACHED_PROXY, CACHED_PROXY_TIME
-    
+
     if not HAS_FREE_PROXY:
         logger.warning("⚠️  free-proxy library not installed")
         return None
-    
+
     # Check cache
     if CACHED_PROXY and CACHED_PROXY_TIME:
         if time.time() - CACHED_PROXY_TIME < PROXY_CACHE_TTL:
             logger.info(f"🔄 Using cached proxy: {CACHED_PROXY}")
             return CACHED_PROXY
-    
+
     try:
         logger.info("🔍 Fetching free proxy...")
         proxy = FreeProxy().get()
-        
+
         if proxy:
             logger.info(f"✅ Got free proxy: {proxy}")
             CACHED_PROXY = proxy
@@ -101,7 +100,7 @@ def get_working_proxy() -> Optional[str]:
         else:
             logger.warning("⚠️  Could not get proxy")
             return None
-    
+
     except Exception as e:
         logger.warning(f"⚠️  Error fetching proxy: {e}")
         return None
@@ -126,7 +125,7 @@ def get_yt_dlp_info(url: str, proxy: str = None) -> dict:
             'success': False,
             'error': 'yt-dlp not installed - install with: uv pip install yt-dlp'
         }
-    
+
     # Auto-fetch proxy if not provided
     if not proxy:
         logger.info("🔄 Auto-fetching proxy...")
@@ -135,7 +134,7 @@ def get_yt_dlp_info(url: str, proxy: str = None) -> dict:
             logger.info(f"🌐 Using auto-fetched proxy: {proxy}")
         else:
             logger.warning("⚠️  Could not fetch proxy, trying direct connection")
-    
+
     try:
         # Configure yt-dlp options
         ydl_opts = {
@@ -151,17 +150,17 @@ def get_yt_dlp_info(url: str, proxy: str = None) -> dict:
                 }
             }
         }
-        
+
         # Add proxy if available
         if proxy:
             ydl_opts['proxy'] = proxy
-        
+
         logger.info(f"🔍 Fetching info from: {url}")
-        
+
         # Use yt-dlp Python library directly
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-        
+
         return {
             'success': True,
             'title': info.get('title', 'Unknown'),
@@ -174,7 +173,7 @@ def get_yt_dlp_info(url: str, proxy: str = None) -> dict:
             'ext': info.get('ext'),
             'proxy_used': proxy or 'none (direct)',
         }
-    
+
     except yt_dlp.utils.DownloadError as e:
         return {
             'success': False,
@@ -243,7 +242,7 @@ def download_yt_video(url: str, output_path: str, proxy: str = None) -> dict:
             'success': False,
             'error': 'yt-dlp not installed - install with: uv pip install yt-dlp'
         }
-    
+
     # Auto-fetch proxy if not provided
     if not proxy:
         logger.info("🔄 Auto-fetching proxy for download...")
@@ -252,11 +251,11 @@ def download_yt_video(url: str, output_path: str, proxy: str = None) -> dict:
             logger.info(f"🌐 Using auto-fetched proxy: {proxy}")
         else:
             logger.warning("⚠️  Could not fetch proxy, trying direct connection")
-    
+
     try:
         # Ensure output directory exists
         Path(output_path).mkdir(parents=True, exist_ok=True)
-        
+
         # Configure yt-dlp options for audio extraction
         ydl_opts = {
             'format': 'bestaudio/best',
@@ -277,18 +276,18 @@ def download_yt_video(url: str, output_path: str, proxy: str = None) -> dict:
                 }
             }
         }
-        
+
         # Add proxy if available
         if proxy:
             ydl_opts['proxy'] = proxy
-        
+
         logger.info(f"📥 Downloading: {url}")
         logger.info(f"🔍 With proxy: {proxy or 'direct connection'}")
-        
+
         # Use yt-dlp Python library directly
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.extract_info(url, download=True)
-        
+
         # Get list of files downloaded
         files = list(Path(output_path).glob('*'))
         return {
@@ -299,7 +298,7 @@ def download_yt_video(url: str, output_path: str, proxy: str = None) -> dict:
             'files': [f.name for f in files],
             'proxy_used': proxy or 'direct'
         }
-    
+
     except yt_dlp.utils.DownloadError as e:
         return {
             'success': False,
@@ -360,11 +359,11 @@ def get_video_info():
 
         proxy = request.args.get('proxy') or data.get('proxy')
         proxy_required = _is_true(request.args.get('proxy_required')) or _is_true(data.get('proxy_required'))
-        
+
         logger.info(
             f"🔍 Getting info for: {url} (proxy={'provided' if proxy else 'auto'}, proxy_required={proxy_required})"
         )
-        
+
         info = get_yt_dlp_info_with_policy(url, proxy=proxy, proxy_required=proxy_required)
 
         return success({"url": url, "proxy": proxy or None, "proxy_required": proxy_required, "result": info}, "Video info retrieved", status=200 if info['success'] else 400)
@@ -400,16 +399,16 @@ def download_video():
     """
     try:
         data = request.get_json() or {}
-        
+
         url = data.get('url') or request.args.get('url') or TEST_YOUTUBE_URL
         output_path = data.get('output_path', './downloads/ytdlp-test')
         proxy = data.get('proxy') or request.args.get('proxy')
         proxy_required = _is_true(data.get('proxy_required')) or _is_true(request.args.get('proxy_required'))
-        
+
         logger.info(
             f"📥 Download request - URL: {url} (proxy={'provided' if proxy else 'auto'}, proxy_required={proxy_required})"
         )
-        
+
         result = download_yt_video_with_policy(
             url,
             output_path,
@@ -435,7 +434,7 @@ def test_hardcoded():
     try:
         logger.info(f"🧪 Testing with hardcoded URL: {TEST_YOUTUBE_URL}")
         logger.info("🔄 Auto-fetching proxy...")
-        
+
         # Auto-fetches proxy internally
         info = get_yt_dlp_info(TEST_YOUTUBE_URL, proxy=None)
 

@@ -1,18 +1,19 @@
 """Amazon Music downloader"""
-import requests
-import re
 import os
+import re
 import subprocess
-from urllib.parse import urlparse, parse_qs
-from tqdm import tqdm
+from urllib.parse import parse_qs, urlparse
+
+import requests
 from backend.core.config import AMAZON_APIS, USER_AGENT
+from tqdm import tqdm
 
 
 class AmazonDownloader:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': USER_AGENT})
-        
+
     def extract_asin(self, amazon_url: str) -> str:
         """
         Extract TRACK ASIN from an Amazon Music URL.
@@ -39,7 +40,7 @@ class AmazonDownloader:
             raise Exception("Could not extract ASIN from Amazon URL")
         # If there are multiple, prefer the one in the path (first)
         return matches[0]
-        
+
     def get_stream_info(self, asin: str):
         """Get stream URL and decryption key, trying all AMAZON_APIS in order."""
         last_err = None
@@ -65,31 +66,31 @@ class AmazonDownloader:
                 last_err = e
                 continue
         raise Exception(f"All Amazon APIs failed. Last error: {last_err}")
-        
+
     def download_file(self, url, output_path):
         """Download file with progress bar"""
         print(f"Downloading to: {output_path}")
-        
+
         response = self.session.get(url, stream=True, timeout=120)
-        
+
         if response.status_code != 200:
             raise Exception(f"Download failed: HTTP {response.status_code}")
-            
+
         total_size = int(response.headers.get('content-length', 0))
-        
+
         with open(output_path, 'wb') as f:
             with tqdm(total=total_size, unit='B', unit_scale=True, desc='Downloading') as pbar:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
                         pbar.update(len(chunk))
-                        
+
         print(f" Download complete: {os.path.getsize(output_path) / (1024*1024):.2f} MB")
-        
+
     def decrypt_file(self, input_path, output_path, decryption_key):
         """Decrypt file using FFmpeg"""
         print("Decrypting file with FFmpeg...")
-        
+
         try:
             cmd = [
                 'ffmpeg',
@@ -99,24 +100,24 @@ class AmazonDownloader:
                 '-y',
                 output_path
             ]
-            
+
             result = subprocess.run(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 check=True
             )
-            
+
             print(" Decryption complete")
-            
+
             # Remove encrypted file
             os.remove(input_path)
-            
+
         except subprocess.CalledProcessError as e:
             raise Exception(f"FFmpeg decryption failed: {e.stderr.decode()}")
         except FileNotFoundError:
             raise Exception("FFmpeg not found. Please install FFmpeg and add it to PATH.")
-            
+
     def download(self, amazon_url: str, output_path: str, asin: str | None = None):
         """
         Main download method.
@@ -129,18 +130,18 @@ class AmazonDownloader:
             asin = self.extract_asin(amazon_url)
         print(f"Amazon ASIN: {asin}")
         stream_url, decryption_key = self.get_stream_info(asin)
-        
+
         if decryption_key:
             # Download encrypted file
             encrypted_path = output_path + '.encrypted'
             self.download_file(stream_url, encrypted_path)
-            
+
             # Decrypt
             self.decrypt_file(encrypted_path, output_path, decryption_key)
         else:
             # Direct download (no encryption)
             self.download_file(stream_url, output_path)
-            
+
         return output_path
 
 

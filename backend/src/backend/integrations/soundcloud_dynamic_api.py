@@ -1,11 +1,11 @@
-import re
-import requests
 import json
-import time
 import os
-from urllib.parse import quote_plus
-from backend.utils.atomic_write import atomic_json_write, atomic_json_read_modify_write
+import re
 from datetime import datetime, timedelta
+from urllib.parse import quote_plus
+
+import requests
+from backend.utils.atomic_write import atomic_json_read_modify_write
 
 # Use unified music_api_cache.json like ytmusic and spotify
 CACHE_FILE = "/tmp/music_api_cache.json" if os.getenv("DYNO") else "music_api_cache.json"
@@ -17,17 +17,17 @@ def load_cache():
     try:
         if not os.path.exists(CACHE_FILE):
             return {}
-        
+
         with open(CACHE_FILE, "r", encoding="utf-8") as f:
             cache_data = json.load(f)
-        
+
         if "soundcloud" not in cache_data:
             return {}
-        
+
         entry = cache_data["soundcloud"]
         cached_time = datetime.fromisoformat(entry["timestamp"])
         expiry_time = cached_time + timedelta(hours=CACHE_DURATION_HOURS)
-        
+
         if datetime.now() < expiry_time:
             return entry  # return the full entry with timestamp
         else:
@@ -44,12 +44,12 @@ def save_cache(client_id, app_version="1761662631", user_id=""):
         "user_id": user_id,
         "timestamp": datetime.now().isoformat(),
     }
-    
+
     try:
         def _updater(cache_data: dict) -> dict:
             cache_data["soundcloud"] = entry
             return cache_data
-        
+
         atomic_json_read_modify_write(CACHE_FILE, _updater, ensure_ascii=False)
         return entry
     except Exception as e:

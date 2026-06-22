@@ -1,13 +1,13 @@
 """Audio format converter using FFmpeg"""
 import os
-import subprocess
 import shutil
+import subprocess
 from typing import Optional
 
 
 class AudioConverter:
     """Convert audio files between formats with configurable quality"""
-    
+
     # Supported formats and their default parameters
     FORMATS = {
         'mp3': {
@@ -53,18 +53,18 @@ class AudioConverter:
             'vbr_quality': None
         }
     }
-    
+
     def __init__(self):
         """Initialize converter and check for FFmpeg"""
         self.ffmpeg_path = self._find_ffmpeg()
         if not self.ffmpeg_path:
             raise Exception("FFmpeg not found. Install FFmpeg and add to PATH")
-    
+
     @staticmethod
     def _find_ffmpeg() -> Optional[str]:
         """Find FFmpeg executable in PATH"""
         return shutil.which('ffmpeg')
-    
+
     def convert(
         self,
         input_file: str,
@@ -93,39 +93,39 @@ class AudioConverter:
         """
         if not os.path.exists(input_file):
             raise FileNotFoundError(f"Input file not found: {input_file}")
-        
+
         output_format = output_format.lower().lstrip('.')
-        
+
         if output_format not in self.FORMATS:
             raise ValueError(f"Unsupported format: {output_format}. Supported: {', '.join(self.FORMATS.keys())}")
-        
+
         # Check if output file exists
         if os.path.exists(output_file) and not overwrite:
             raise FileExistsError(f"Output file already exists: {output_file}")
-        
+
         # Build FFmpeg command
         cmd = [self.ffmpeg_path, '-i', input_file]
-        
+
         # Overwrite flag
         if overwrite:
             cmd.append('-y')
         else:
             cmd.append('-n')
-        
+
         # Set codec
         format_config = self.FORMATS[output_format]
         cmd.extend(['-c:a', format_config['codec']])
-        
+
         # Set quality parameters
         if output_format == 'flac':
             # FLAC compression level (0-12)
             compression = 8  # Default
             cmd.extend(['-compression_level', str(compression)])
-            
+
         elif output_format in ['wav']:
             # PCM - no additional quality settings needed
             pass
-            
+
         elif vbr_quality is not None:
             # Variable Bitrate
             if output_format == 'mp3':
@@ -134,37 +134,37 @@ class AudioConverter:
                 cmd.extend(['-vbr', str(vbr_quality)])  # 1-5
             elif output_format == 'ogg':
                 cmd.extend(['-q:a', str(vbr_quality)])  # 1-10 (10=best)
-                
+
         else:
             # Constant Bitrate
             if bitrate is None:
                 bitrate = format_config['default_bitrate']
-            
+
             if bitrate:
                 cmd.extend(['-b:a', bitrate])
-        
+
         # Set sample rate if specified
         if sample_rate:
             cmd.extend(['-ar', str(sample_rate)])
-        
+
         # Preserve metadata
         if preserve_metadata:
             cmd.extend(['-map_metadata', '0'])
             cmd.extend(['-id3v2_version', '3'])
-        
+
         # Set output format explicitly
         if output_format == 'm4a':
             cmd.extend(['-f', 'ipod'])
         elif output_format == 'ogg':
             cmd.extend(['-f', 'ogg'])
-        
+
         # Output file
         cmd.append(output_file)
-        
+
         # Execute FFmpeg
         try:
             print(f"Converting {os.path.basename(input_file)} → {output_format.upper()} ({bitrate or 'VBR'})")
-            
+
             result = subprocess.run(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -172,7 +172,7 @@ class AudioConverter:
                 text=True,
                 timeout=300  # 5 minute timeout
             )
-            
+
             if result.returncode != 0:
                 error_msg = result.stderr
                 # Check for common errors
@@ -180,19 +180,19 @@ class AudioConverter:
                     raise FileExistsError(f"Output file exists: {output_file}")
                 else:
                     raise Exception(f"FFmpeg error: {error_msg[-500:]}")
-            
+
             if os.path.exists(output_file):
                 file_size = os.path.getsize(output_file) / (1024 * 1024)
                 print(f" Conversion complete: {output_file} ({file_size:.2f} MB)")
                 return True
             else:
                 raise Exception("Conversion failed: Output file not created")
-                
+
         except subprocess.TimeoutExpired:
             raise Exception("Conversion timed out (>5 minutes)")
         except Exception as e:
             raise Exception(f"Conversion failed: {e}")
-    
+
     def convert_batch(
         self,
         input_files: list,
@@ -212,23 +212,23 @@ class AudioConverter:
             Dictionary with 'success' and 'failed' lists
         """
         os.makedirs(output_dir, exist_ok=True)
-        
+
         results = {'success': [], 'failed': []}
-        
+
         for input_file in input_files:
             try:
                 basename = os.path.splitext(os.path.basename(input_file))[0]
                 output_file = os.path.join(output_dir, f"{basename}.{output_format}")
-                
+
                 self.convert(input_file, output_file, output_format, **kwargs)
                 results['success'].append(input_file)
-                
+
             except Exception as e:
                 print(f" Failed to convert {input_file}: {e}")
                 results['failed'].append((input_file, str(e)))
-        
+
         return results
-    
+
     def get_audio_info(self, file_path: str) -> dict:
         """Get audio file information using FFprobe
         
@@ -238,7 +238,7 @@ class AudioConverter:
         ffprobe_path = shutil.which('ffprobe')
         if not ffprobe_path:
             raise Exception("FFprobe not found")
-        
+
         cmd = [
             ffprobe_path,
             '-v', 'quiet',
@@ -247,28 +247,28 @@ class AudioConverter:
             '-show_streams',
             file_path
         ]
-        
+
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            
+
             if result.returncode != 0:
                 raise Exception("FFprobe failed")
-            
+
             import json
             data = json.loads(result.stdout)
-            
+
             # Extract audio stream info
             audio_stream = None
             for stream in data.get('streams', []):
                 if stream.get('codec_type') == 'audio':
                     audio_stream = stream
                     break
-            
+
             if not audio_stream:
                 raise Exception("No audio stream found")
-            
+
             format_info = data.get('format', {})
-            
+
             return {
                 'codec': audio_stream.get('codec_name'),
                 'bitrate': int(audio_stream.get('bit_rate', 0)) // 1000,  # kbps
@@ -278,7 +278,7 @@ class AudioConverter:
                 'format': format_info.get('format_name'),
                 'size': int(format_info.get('size', 0))
             }
-            
+
         except Exception as e:
             raise Exception(f"Failed to get audio info: {e}")
 
@@ -298,16 +298,16 @@ def convert_to_format(input_file: str, output_file: str, format: str, **kwargs):
 if __name__ == '__main__':
     # Test/Example usage
     converter = AudioConverter()
-    
+
     # Example conversions
     # converter.convert('input.flac', 'output.mp3', 'mp3', bitrate='320k')
     # converter.convert('input.flac', 'output.aac', 'aac', bitrate='256k')
     # converter.convert('input.mp3', 'output.flac', 'flac')  # Lossy to lossless
     # converter.convert('input.flac', 'output.mp3', 'mp3', vbr_quality=0)  # VBR V0
-    
+
     # Get file info
     # info = converter.get_audio_info('input.flac')
     # print(f"Codec: {info['codec']}, Bitrate: {info['bitrate']}kbps")
-    
+
     print("AudioConverter module ready")
     print(f"Supported formats: {', '.join(AudioConverter.FORMATS.keys())}")

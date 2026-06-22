@@ -19,7 +19,7 @@ Features:
 
 import logging
 import time
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 try:
     import requests
@@ -75,7 +75,7 @@ def query_jiosaavn_track(title: str, artist: str = '') -> Optional[Dict[str, Any
     """
     if not HAS_REQUESTS or not title:
         return None
-    
+
     try:
         url = "https://www.jiosaavn.com/api.php"
         params = {
@@ -88,22 +88,22 @@ def query_jiosaavn_track(title: str, artist: str = '') -> Optional[Dict[str, Any
             'n': 5,
             '__call': 'search.getResults'
         }
-        
+
         response = requests.get(
             url,
             params=params,
             headers=JIOSAAVN_HEADERS,
             timeout=5
         )
-        
+
         if response.status_code == 200:
             data = response.json()
             if 'results' in data and len(data['results']) > 0:
                 result = data['results'][0]
-                
+
                 lang_name = result.get('language', '').lower()
                 detected_lang = map_jiosaavn_language(lang_name)
-                
+
                 if detected_lang:
                     return {
                         'language': detected_lang,
@@ -113,9 +113,9 @@ def query_jiosaavn_track(title: str, artist: str = '') -> Optional[Dict[str, Any
                         'confidence': 0.95,
                         'method': 'jiosaavn_track'
                     }
-        
+
         return None
-    
+
     except Exception as e:
         logger.debug(f"JioSaavn track query failed: {e}")
         return None
@@ -134,7 +134,7 @@ def query_jiosaavn_album(album: str, artist: str = '') -> Optional[Dict[str, Any
     """
     if not HAS_REQUESTS or not album:
         return None
-    
+
     try:
         url = "https://www.jiosaavn.com/api.php"
         params = {
@@ -147,22 +147,22 @@ def query_jiosaavn_album(album: str, artist: str = '') -> Optional[Dict[str, Any
             'n': 3,
             '__call': 'search.getAlbumResults'
         }
-        
+
         response = requests.get(
             url,
             params=params,
             headers=JIOSAAVN_HEADERS,
             timeout=5
         )
-        
+
         if response.status_code == 200:
             data = response.json()
             if 'results' in data and len(data['results']) > 0:
                 result = data['results'][0]
-                
+
                 lang_name = result.get('language', '').lower()
                 detected_lang = map_jiosaavn_language(lang_name)
-                
+
                 if detected_lang:
                     return {
                         'language': detected_lang,
@@ -171,9 +171,9 @@ def query_jiosaavn_album(album: str, artist: str = '') -> Optional[Dict[str, Any
                         'confidence': 0.90,
                         'method': 'jiosaavn_album'
                     }
-        
+
         return None
-    
+
     except Exception as e:
         logger.debug(f"JioSaavn album query failed: {e}")
         return None
@@ -196,21 +196,21 @@ def query_musicbrainz_by_id(mbid: str) -> Optional[Dict[str, Any]]:
     """
     if not HAS_MUSICBRAINZ:
         return None
-    
+
     try:
         mb.set_useragent('SpotiFLAC', '1.0')
-        
+
         logger.debug(f"Querying MusicBrainz for MBID: {mbid}...")
-        
+
         # Get recording with relationships and releases
         recording = mb.get_recording_by_id(
             mbid,
             includes=['artists', 'releases', 'tags', 'work-rels', 'artist-rels']
         )
-        
+
         if recording and 'recording' in recording:
             rec = recording['recording']
-            
+
             metadata = {
                 'mbid': mbid,
                 'title': rec.get('title'),
@@ -223,7 +223,7 @@ def query_musicbrainz_by_id(mbid: str) -> Optional[Dict[str, Any]]:
                 'method': 'musicbrainz_by_id',
                 'confidence': 0.90
             }
-            
+
             # Extract genre from tags (Picard uses folksonomy tags)
             if 'tag-list' in rec:
                 genres = []
@@ -234,21 +234,21 @@ def query_musicbrainz_by_id(mbid: str) -> Optional[Dict[str, Any]]:
                         skip_tags = {'seen live', 'live', 'compilations', 'covers', 're-issue', 'reissue'}
                         if tag_name not in skip_tags and len(tag_name) > 3:
                             genres.append(tag['name'])
-                
+
                 if genres:
                     metadata['genre'] = ', '.join(genres[:3])
-            
+
             # Extract release date and album from first release
             if 'release-list' in rec and rec['release-list']:
                 first_release = rec['release-list'][0]
                 metadata['album'] = first_release.get('title')
-                
+
                 # Try to get date
                 if first_release.get('date'):
                     metadata['release_date'] = first_release['date']
                 elif rec.get('first-release-date'):
                     metadata['release_date'] = rec['first-release-date']
-                
+
                 # Get track number from release media
                 release_id = first_release.get('id')
                 if release_id:
@@ -257,7 +257,7 @@ def query_musicbrainz_by_id(mbid: str) -> Optional[Dict[str, Any]]:
                             release_id,
                             includes=['recordings']
                         )
-                        
+
                         if 'release' in release_data and 'medium-list' in release_data['release']:
                             for medium in release_data['release']['medium-list']:
                                 track_list = medium.get('track-list', [])
@@ -272,12 +272,12 @@ def query_musicbrainz_by_id(mbid: str) -> Optional[Dict[str, Any]]:
                                         break
                     except Exception as e:
                         logger.debug(f"Could not get release details: {e}")
-            
-            logger.debug(f"✅ MusicBrainz lookup successful")
+
+            logger.debug("✅ MusicBrainz lookup successful")
             return metadata
-        
+
         return None
-    
+
     except Exception as e:
         logger.debug(f"MusicBrainz lookup failed: {e}")
         return None
@@ -297,19 +297,19 @@ def query_musicbrainz_fuzzy(title: str, artist: str = '') -> Optional[Dict[str, 
     """
     if not HAS_MUSICBRAINZ:
         return None
-    
+
     try:
         mb.set_useragent('SpotiFLAC', '1.0')
-        
+
         logger.debug(f"Fuzzy querying MusicBrainz for: {artist} - {title}")
-        
+
         # Search for recording
         result = mb.search_recordings(
             artist=artist,
             recording=title,
             limit=5
         )
-        
+
         if result and result.get('recording-list'):
             best_hit = None
             best_score = -1
@@ -327,10 +327,10 @@ def query_musicbrainz_fuzzy(title: str, artist: str = '') -> Optional[Dict[str, 
                 if metadata:
                     metadata['confidence'] = best_score / 100.0
                 return metadata
-        
+
         logger.debug("No fuzzy matches found")
         return None
-    
+
     except Exception as e:
         logger.debug(f"MusicBrainz fuzzy search failed: {e}")
         return None
@@ -349,17 +349,17 @@ def query_musicbrainz_recording_language(title: str, artist: str = '') -> Option
     """
     if not HAS_REQUESTS or not title:
         return None
-    
+
     try:
         headers = MUSICBRAINZ_HEADERS
-        
+
         url = "https://musicbrainz.org/ws/2/recording/"
         params = {
             'query': f'recording:"{title}"' + (f' AND artist:"{artist}"' if artist else ''),
             'fmt': 'json',
             'limit': 3
         }
-        
+
         response = requests.get(
             url,
             params=params,
@@ -367,7 +367,7 @@ def query_musicbrainz_recording_language(title: str, artist: str = '') -> Option
             timeout=8
         )
         time.sleep(0.3)  # MusicBrainz rate limit
-        
+
         if response.status_code == 200:
             data = response.json()
             if 'recordings' in data and len(data['recordings']) > 0:
@@ -380,9 +380,9 @@ def query_musicbrainz_recording_language(title: str, artist: str = '') -> Option
                                 detected_lang = map_musicbrainz_language(lang_code)
                                 if detected_lang:
                                     return detected_lang
-        
+
         return None
-    
+
     except Exception as e:
         logger.debug(f"MusicBrainz language query failed: {e}")
         return None

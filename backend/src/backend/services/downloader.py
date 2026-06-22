@@ -16,11 +16,10 @@ from datetime import datetime
 from pathlib import Path
 
 import requests
-
-from backend.core import config
-from backend.core import state
+from backend.core import config, state
 from backend.services import api_metadata_enricher
 from backend.services.post_download_enricher import run_post_download_enrichment
+
 
 def _safe_title(title: str) -> str:
     return re.sub(r'[<>:"/\\|?*]', "_", title)
@@ -101,8 +100,15 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
     and optionally converts to the requested format.
     """
     try:
-        from spoflac_core.modules import url_resolver, utils
-        from spoflac_core.modules import tidal, qobuz, amazon, soundcloud, metadata
+        from spoflac_core.modules import (
+            amazon,
+            metadata,
+            qobuz,
+            soundcloud,
+            tidal,
+            url_resolver,
+            utils,
+        )
 
         state.download_status[download_id].update(
             status="downloading",
@@ -282,10 +288,10 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
 
                 if req_format == 'mp3' and track_metadata.get('lyrics-eng'):
                     try:
-                        print(f" Re-embedding lyrics-eng into MP3...")
+                        print(" Re-embedding lyrics-eng into MP3...")
                         from spoflac_core.modules import metadata as meta_module
                         meta_module.embed_mp3_metadata(output_path, track_metadata, cover_path=None)
-                        print(f" ✓ Lyrics-eng re-embedded into MP3")
+                        print(" ✓ Lyrics-eng re-embedded into MP3")
                     except Exception as re_embed_exc:
                         print(f"  (Lyrics re-embed failed: {re_embed_exc})")
 
@@ -556,7 +562,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
     Progress is written into ``state.download_status[download_id]`` in
     real-time.
     """
-    from core.state import download_status, active_processes, save_download_status
+    from core.state import active_processes, download_status, save_download_status
 
     platform = _detect_spoflac_platform(url)
 
@@ -648,7 +654,6 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
 
         if os.name != "nt":
             try:
-                import resource
                 os.setpriority(os.PRIO_PROCESS, process.pid, 10)
             except Exception:
                 pass
@@ -946,8 +951,8 @@ def _embed_lyrics_for_file(filepath: str) -> None:
     """
     try:
         import mutagen
-        from spoflac_core.modules.url_resolver import URLResolver
         from spoflac_core.modules import metadata as meta
+        from spoflac_core.modules.url_resolver import URLResolver
 
         audio = mutagen.File(filepath, easy=True)
         if audio is None:
