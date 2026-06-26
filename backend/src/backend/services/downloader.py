@@ -100,7 +100,7 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
     and optionally converts to the requested format.
     """
     try:
-        from spoflac_core.modules import (
+        from backend.spoflac_core.modules import (
             amazon,
             metadata,
             qobuz,
@@ -253,7 +253,7 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
 
         if needs_conversion:
             try:
-                from spoflac_core.modules.audio_converter import AudioConverter
+                from backend.spoflac_core.modules.audio_converter import AudioConverter
 
                 converted_filename = os.path.splitext(os.path.basename(output_path))[0] + f".{req_format}"
                 converted_path = os.path.join(os.path.dirname(output_path), converted_filename)
@@ -289,7 +289,7 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
                 if req_format == 'mp3' and track_metadata.get('lyrics-eng'):
                     try:
                         print(" Re-embedding lyrics-eng into MP3...")
-                        from spoflac_core.modules import metadata as meta_module
+                        from backend.spoflac_core.modules import metadata as meta_module
                         meta_module.embed_mp3_metadata(output_path, track_metadata, cover_path=None)
                         print(" ✓ Lyrics-eng re-embedded into MP3")
                     except Exception as re_embed_exc:
@@ -447,7 +447,7 @@ def download_with_proxy_api(url: str, title: str, download_id: str, advanced_opt
 
                     if needs_conversion:
                         try:
-                            from spoflac_core.modules.audio_converter import AudioConverter
+                            from backend.spoflac_core.modules.audio_converter import AudioConverter
 
                             converted_filename = os.path.splitext(os.path.basename(local_path))[0] + f".{req_format}"
                             converted_path = os.path.join(download_dir, converted_filename)
@@ -562,7 +562,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
     Progress is written into ``state.download_status[download_id]`` in
     real-time.
     """
-    from core.state import active_processes, download_status, save_download_status
+    from backend.core.state import active_processes, download_status, save_download_status
 
     platform = _detect_spoflac_platform(url)
 
@@ -951,8 +951,8 @@ def _embed_lyrics_for_file(filepath: str) -> None:
     """
     try:
         import mutagen
-        from spoflac_core.modules import metadata as meta
-        from spoflac_core.modules.url_resolver import URLResolver
+        from backend.spoflac_core.modules import metadata as meta
+        from backend.spoflac_core.modules.url_resolver import URLResolver
 
         audio = mutagen.File(filepath, easy=True)
         if audio is None:
@@ -1002,7 +1002,7 @@ def _finalise_success(
     download_id, url, title, safe, download_dir,
     completed_files, total_files, has_progress, advanced_options,
 ):
-    from core.state import download_status, save_download_status
+    from backend.core.state import download_status, save_download_status
 
     try:
         files = os.listdir(download_dir)

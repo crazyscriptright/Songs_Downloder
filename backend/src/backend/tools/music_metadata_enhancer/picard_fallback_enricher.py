@@ -42,7 +42,7 @@ except ImportError:
         HAS_ACOUSTID = False
 
 try:
-    from utils.shared_api_client import query_musicbrainz_by_id, query_musicbrainz_fuzzy
+    from backend.utils.shared_api_client import query_musicbrainz_by_id, query_musicbrainz_fuzzy
 except Exception:
     try:
         from music_metadata_enhancer.standalone_compat import (

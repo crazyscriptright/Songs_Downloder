@@ -84,14 +84,14 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from spoflac_core.modules.metadata import embed_metadata, has_timestamps
-    from spoflac_core.modules.platform_metadata import (
+    from backend.spoflac_core.modules.metadata import embed_metadata, has_timestamps
+    from backend.spoflac_core.modules.platform_metadata import (
         _detect_version_type,
         _extract_featured_artists,
         _extract_tags_from_text,
         _fetch_lyrics_with_fallbacks,
     )
-    from spoflac_core.modules.url_resolver import _detect_script, _romanize_lrc_lyrics
+    from backend.spoflac_core.modules.url_resolver import _detect_script, _romanize_lrc_lyrics
 except Exception:
     try:
         from music_metadata_enhancer.standalone_compat import (

@@ -8,12 +8,12 @@ Usage
 -----
 Simple overwrite::
 
-    from utils.atomic_write import atomic_json_write
+    from backend.utils.atomic_write import atomic_json_write
     atomic_json_write("cache.json", {"key": "value"})
 
 Safe read-modify-write (preserves other keys in a shared cache file)::
 
-    from utils.atomic_write import atomic_json_read_modify_write
+    from backend.utils.atomic_write import atomic_json_read_modify_write
 
     def _updater(data: dict) -> dict:
         data["my_section"] = {"token": "xyz", "ts": "2026-01-01T00:00:00"}

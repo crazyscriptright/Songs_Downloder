@@ -57,7 +57,7 @@ class YouTubeMusicVideoAPI:
     def save_cache(self, tokens):
         """Save tokens to unified cache file (atomic, race-condition-safe)."""
         try:
-            from utils.atomic_write import atomic_json_read_modify_write
+            from backend.utils.atomic_write import atomic_json_read_modify_write
 
             def _updater(cache_data: dict) -> dict:
                 cache_data['ytmusic_videos'] = {
@@ -350,7 +350,7 @@ if __name__ == "__main__":
         print(f"\n Found {len(videos)} videos")
 
         # Save results (use /tmp on Heroku)
-        from utils.atomic_write import atomic_json_write
+        from backend.utils.atomic_write import atomic_json_write
         output_file = "/tmp/video_search_results.json" if os.getenv('DYNO') else "video_search_results.json"
         atomic_json_write(output_file, videos, ensure_ascii=False)
         print(f" Results saved to {output_file}")

@@ -55,7 +55,7 @@ def load_cache():
 def save_cache(client_id, app_version="1761662631", user_id=""):
     """Save cache to unified cache file (atomic, race-condition-safe)."""
     try:
-        from utils.atomic_write import atomic_json_read_modify_write
+        from backend.utils.atomic_write import atomic_json_read_modify_write
 
         sc_entry = {
             "client_id": client_id,

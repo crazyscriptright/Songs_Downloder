@@ -27,10 +27,10 @@ _jiosaavn_api = None
 
 def get_apis():
     global _ytmusic_api, _ytvideo_api, _jiosaavn_api
-    from core import config
-    from integrations.jiosaavn_search import JioSaavnAPI
-    from integrations.ytmusic_dynamic_tokens import YouTubeMusicAPI
-    from integrations.ytmusic_dynamic_video_tokens import YouTubeMusicVideoAPI
+    from backend.core import config
+    from backend.integrations.jiosaavn_search import JioSaavnAPI
+    from backend.integrations.ytmusic_dynamic_tokens import YouTubeMusicAPI
+    from backend.integrations.ytmusic_dynamic_video_tokens import YouTubeMusicVideoAPI
 
     if not _ytmusic_api:
         _ytmusic_api = YouTubeMusicAPI(
@@ -122,12 +122,12 @@ _spotify_client = None
 def get_spotify_client():
     global _spotify_client
     if not _spotify_client:
-        from spoflac_core.modules.spotify import SpotifyClient
+        from backend.spoflac_core.modules.spotify import SpotifyClient
         _spotify_client = SpotifyClient()
     return _spotify_client
 
 def search_soundcloud(query):
-    from integrations import soundcloud
+    from backend.integrations import soundcloud
     results = []
     try:
         tracks = soundcloud.soundcloud_search(query, limit=20)
@@ -274,7 +274,7 @@ def _yt_suggestions(query):
 
 def _jiosaavn_suggestions(query):
     try:
-        from integrations.jiosaavn_search import JioSaavnAPI
+        from backend.integrations.jiosaavn_search import JioSaavnAPI
         api = JioSaavnAPI()
         results = api.search_songs(query, limit=3)
         if results and "data" in results:

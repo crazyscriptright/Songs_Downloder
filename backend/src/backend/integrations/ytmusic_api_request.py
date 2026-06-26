@@ -64,7 +64,7 @@ def main():
             print(f" Found {len(songs)} songs")
             print(f"{'='*70}")
 
-            from utils.atomic_write import atomic_json_write
+            from backend.utils.atomic_write import atomic_json_write
             # Save results to file
             output_file = "search_results.json"
             atomic_json_write(output_file, songs, ensure_ascii=False)

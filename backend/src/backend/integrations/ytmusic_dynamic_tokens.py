@@ -57,7 +57,7 @@ class YouTubeMusicAPI:
     def save_cache(self, tokens):
         """Save tokens to unified cache file (atomic, race-condition-safe)."""
         try:
-            from utils.atomic_write import atomic_json_read_modify_write
+            from backend.utils.atomic_write import atomic_json_read_modify_write
 
             def _updater(cache_data: dict) -> dict:
                 cache_data['ytmusic_songs'] = {

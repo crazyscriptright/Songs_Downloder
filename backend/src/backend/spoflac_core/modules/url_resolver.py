@@ -363,7 +363,7 @@ class URLResolver:
         Includes lyrics-eng fetching via lrclib.net.
         Fallback when Spotify metadata is unavailable.
         """
-        from spoflac_core.modules.platform_metadata import (
+        from backend.spoflac_core.modules.platform_metadata import (
             extract_jiosaavn_metadata,
             extract_soundcloud_metadata,
             extract_youtube_metadata,
@@ -393,7 +393,7 @@ class URLResolver:
             elif platform == 'jiosaavn':
                 # Extract metadata from JioSaavn
                 try:
-                    from integrations.jiosaavn_search import JioSaavnAPI
+                    from backend.integrations.jiosaavn_search import JioSaavnAPI
                     api = JioSaavnAPI()
 
                     # Extract song ID from URL (e.g., /song/{id}/)

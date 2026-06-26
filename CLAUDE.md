@@ -205,18 +205,28 @@ Backend follows standard Python conventions: snake_case for files, functions, va
 - Use descriptive function names — avoid abbreviations.
 - Do not mutate function parameters.
 
-### Import Rules (Frontend)
+### Import Rules
 
-Always use `@` alias imports — never relative imports that traverse up directories.
+**All imports must be at the top of the file** — never inside functions, conditionals, or try/except blocks. Inline imports hide dependencies, hurt readability, and cause confusing import errors.
 
-**Allowed:**
-```ts
-import { SearchBox } from "@/components/SearchBox";
-import { ApiService } from "@/services/ApiService";
-```
+**Allowed patterns:**
+- Top-level imports only (module/file scope)
+- Standard library → third-party → project modules, grouped with a blank line separator
 
 **Forbidden:**
+- Imports inside functions or methods
+- Imports inside conditionals or try/except
+- Conditional imports (use top-level type-checking blocks with `TYPE_CHECKING` for circular dependency cases instead)
+
+**Frontend specifics:**
+- Always use `@` alias imports — never relative imports that traverse up directories.
+
 ```ts
+// Allowed
+import { SearchBox } from "@/components/SearchBox";
+import { ApiService } from "@/services/ApiService";
+
+// Forbidden
 import { SearchBox } from "../../../components/SearchBox";
 ```
 

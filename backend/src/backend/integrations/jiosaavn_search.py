@@ -358,7 +358,7 @@ def main():
             print(f" Total songs found: {len(songs)}")
             print(f"{'='*70}")
 
-            from utils.atomic_write import atomic_json_write
+            from backend.utils.atomic_write import atomic_json_write
             # Save results to file (use /tmp on Heroku)
             output_file = "/tmp/jiosaavn_search_results.json" if os.getenv('DYNO') else "jiosaavn_search_results.json"
             atomic_json_write(output_file, songs, ensure_ascii=False)
@@ -387,7 +387,7 @@ def main():
 
                         # Save details (use /tmp on Heroku)
                         details_file = f"/tmp/song_details_{song_id}.json" if os.getenv('DYNO') else f"song_details_{song_id}.json"
-                        from utils.atomic_write import atomic_json_write
+                        from backend.utils.atomic_write import atomic_json_write
                         atomic_json_write(details_file, details, ensure_ascii=False)
                         print(f"\n Details saved to {details_file}")
                 else:
