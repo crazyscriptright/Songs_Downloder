@@ -377,7 +377,7 @@ export class DownloadService {
       } else if (data.status === "downloading") {
         const progress = data.progress || 0;
         button.className = "download-btn downloading";
-        button.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;"><div>⏳ ${Math.round(progress)}%</div><div style="font-size:0.75em;opacity:0.8;">${data.speed || "N/A"} • ETA ${data.eta || "N/A"}</div></div>`;
+        button.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;"><div>⏳ ${Math.round(progress)}%</div><div style="font-size:0.75em;opacity:0.8;">${data.speed || "N/A"}</div></div>`;
         setTimeout(
           () => this.pollStatus(downloadId, button, title, url, attemptCount + 1),
           POLL_INTERVAL,

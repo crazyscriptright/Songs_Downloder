@@ -328,6 +328,25 @@ When touching code:
 
 Separate feature work from refactoring.
 
+### Commit Messages
+
+Use Conventional Commits format:
+
+```
+type(scope): short description
+```
+
+Types: `feat`, `fix`, `refactor`, `docs`, `style`, `test`, `chore`, `perf`.
+Scope is optional but encouraged — the module or area being changed.
+
+Examples:
+```
+feat(auth): add Google login
+fix(api): handle null response
+refactor(ui): simplify navbar component
+docs(readme): update setup steps
+```
+
 ## Quality Assurance
 
 ### Self Review

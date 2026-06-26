@@ -172,7 +172,7 @@ export class DownloadManager {
           const statusText = dl.statusText || "";
           const speed = dl.speed || "0 KB/s";
           const eta = dl.eta || "Unknown";
-          timeInfo = statusText || `${speed} \u2022 ETA: ${eta}`;
+          timeInfo = statusText || `${speed} • ETA: ${eta}`;
         } else if (dl.status === "queued") {
           const pos = downloadId.startsWith("queue_")
             ? parseInt(downloadId.split("_")[1]) + 1

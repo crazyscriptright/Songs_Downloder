@@ -560,43 +560,6 @@
   border-color: var(--success-color);
 }
 
-/* ── Download status on song cards ─────────────────────────────────────── */
-.download-status {
-  margin: 6px 0 8px;
-  font-size: 0.82em;
-  line-height: 1.4;
-}
-.download-status .ds-progress-bar {
-  width: 100%;
-  height: 4px;
-  background: var(--border-color);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 4px;
-}
-.download-status .ds-progress-fill {
-  height: 100%;
-  background: var(--warning-color);
-  transition: width 0.4s ease;
-  border-radius: 2px;
-}
-.download-status .ds-meta {
-  display: flex;
-  gap: 10px;
-  color: var(--text-secondary);
-  font-size: 0.85em;
-}
-.download-status .ds-label {
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-.download-status.complete .ds-label {
-  color: var(--success-color);
-}
-.download-status.error .ds-label {
-  color: var(--error-color);
-}
-
 .advanced-btn:hover {
   background: var(--primary-color) !important;
   transform: scale(1.05);
