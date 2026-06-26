@@ -131,6 +131,7 @@ export function createSongCard(
     <div class="song-title">${song.title}</div>
     <div class="song-artist">${artistDisplay}</div>
     ${metadataHTML}
+    <div class="download-status" style="display:none;"></div>
     <div class="song-actions" style="display: flex; gap: 5px;">
       <button id="${buttonId}" class="download-btn" style="flex: 1;"
         data-song-url="${song.url}" data-song-title="${song.title}">

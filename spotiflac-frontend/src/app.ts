@@ -1,5 +1,6 @@
 import type { SearchType, Song, SourceId } from "@/types";
 import { initLazyLoading } from "@/utils/lazyLoader";
+import { syncSongCardStates } from "@/utils/syncDownloadStates";
 import { isMusicUrl } from "@/utils/urlDetector";
 
 import { DownloadService } from "@/services/DownloadService";
@@ -45,7 +46,10 @@ export class App {
     this.downloadMgr = new DownloadManager();
 
     this.downloadService = new DownloadService(
-      () => this.downloadMgr.render(),
+      () => {
+        this.downloadMgr.render();
+        syncSongCardStates(this.downloadService.allDownloads);
+      },
       (t, title, msg, dur) => this.toast.show(t, title, msg, dur),
     );
     this.downloadMgr.setService(this.downloadService);
@@ -213,6 +217,7 @@ export class App {
       if (data.status === "complete") {
         if (data.query_type === "url" && data.direct_url && data.direct_url.length > 0) {
           await this.results.displayDirectUrl(data.direct_url[0]);
+          setTimeout(() => syncSongCardStates(this.downloadService.allDownloads), 0);
         } else {
           this.results.displayResults({
             jiosaavn: data.jiosaavn || [],
@@ -220,6 +225,7 @@ export class App {
             ytmusic: data.ytmusic || [],
             ytvideo: data.ytvideo || [],
           });
+          setTimeout(() => syncSongCardStates(this.downloadService.allDownloads), 0);
         }
 
         const total =
@@ -305,6 +311,7 @@ export class App {
           `${completed}/${total} sources completed`,
         );
         this.results.displayResults({ ...allResults });
+        setTimeout(() => syncSongCardStates(this.downloadService.allDownloads), 0);
       }
 
       if (completed >= total) {
