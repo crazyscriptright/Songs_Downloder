@@ -318,7 +318,8 @@ def search_jiosaavn_endpoint():
         results = search_jiosaavn(query)
         return success({"results": results, "count": len(results), "query": query}, f"Found {len(results)} results on JioSaavn", {"source": "jiosaavn"})
     except Exception as e:
-        return error(str(e), 500, {"results": [], "count": 0, "query": query})
+        logger.warning("JioSaavn search error: %s", e)
+        return error("Search failed. Please try again.", 500, {"results": [], "count": 0, "query": query})
 
 @search_bp.route("/search/soundcloud", methods=["POST"])
 def search_soundcloud_endpoint():
@@ -330,7 +331,8 @@ def search_soundcloud_endpoint():
         results = search_soundcloud(query)
         return success({"results": results, "count": len(results), "query": query}, f"Found {len(results)} results on SoundCloud", {"source": "soundcloud"})
     except Exception as e:
-        return error(str(e), 500, {"results": [], "count": 0, "query": query})
+        logger.warning("SoundCloud search error: %s", e)
+        return error("Search failed. Please try again.", 500, {"results": [], "count": 0, "query": query})
 
 @search_bp.route("/search/ytmusic", methods=["POST"])
 def search_ytmusic_endpoint():
@@ -342,7 +344,8 @@ def search_ytmusic_endpoint():
         results = search_ytmusic(query)
         return success({"results": results, "count": len(results), "query": query}, f"Found {len(results)} results on YouTube Music", {"source": "ytmusic"})
     except Exception as e:
-        return error(str(e), 500, {"results": [], "count": 0, "query": query})
+        logger.warning("Search error: %s", e)
+        return error("Search failed. Please try again.", 500, {"results": [], "count": 0, "query": query})
 
 @search_bp.route("/search/ytvideo", methods=["POST"])
 def search_ytvideo_endpoint():
@@ -354,7 +357,8 @@ def search_ytvideo_endpoint():
         results = search_ytvideo(query)
         return success({"results": results, "count": len(results), "query": query}, f"Found {len(results)} results on YouTube", {"source": "ytvideo"})
     except Exception as e:
-        return error(str(e), 500, {"results": [], "count": 0, "query": query})
+        logger.warning("YouTube video search error: %s", e)
+        return error("Search failed. Please try again.", 500, {"results": [], "count": 0, "query": query})
 
 @search_bp.route("/suggestions")
 def get_suggestions():
@@ -417,4 +421,4 @@ def spotify_search():
 
     except Exception as e:
         logger.warning("Spotify search error: %s", e)
-        return error(str(e), 500)
+        return error("Spotify search failed. Please try again.", 500)

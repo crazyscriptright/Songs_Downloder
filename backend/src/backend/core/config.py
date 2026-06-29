@@ -110,3 +110,23 @@ TOTP_SECRET_V61: list[int] = [
 DEFAULT_OUTPUT_DIR: str = str(DOWNLOAD_FOLDER)   # reuse existing path
 DEFAULT_SERVICE:    str = "auto"                  # auto | tidal | qobuz | amazon | soundcloud
 DEFAULT_QUALITY:    str = "HI_RES"
+
+# ── User-friendly download error messages ──────────────────────────────────
+# Maps yt-dlp error message patterns to user-facing strings.
+# Keys are matched case-insensitively against the raw error.
+USER_ERROR_MAP: dict[str, str] = {
+    "requested format is not available": "This song's format is not available. Try a different song or source.",
+    "video unavailable": "This video is no longer available.",
+    "private video": "This video is private and cannot be downloaded.",
+    "this video is not available": "This video is not available for download.",
+    "unable to download": "Unable to download this content. It may be restricted.",
+    "http error": "A server error occurred. Please try again later.",
+    "is not a valid url": "The provided URL is not valid.",
+    "unsupported url": "This URL is not supported for download.",
+    "no suitable formats": "No suitable formats found for this content.",
+    "sign in to confirm": "This content requires authentication and cannot be downloaded.",
+    "members-only content": "This is members-only content and cannot be downloaded.",
+    "not supported": "This content is not supported for download.",
+    "unsupported site": "This website is not supported for download.",
+    "no video formats found": "No video formats found for this content.",
+}

@@ -5,6 +5,7 @@ All functions here run in background threads started from the download routes.
 State mutations go through the shared ``state`` module.
 """
 
+import logging
 import os
 import re
 import shlex
@@ -17,6 +18,8 @@ from pathlib import Path
 
 import requests
 from backend.core import config, state
+
+logger = logging.getLogger(__name__)
 from backend.services import api_metadata_enricher
 from backend.services.post_download_enricher import run_post_download_enrichment
 
@@ -92,6 +95,13 @@ def _converter_quality_kwargs(audio_format: str, audio_quality: str) -> dict:
     if fmt in ("flac", "wav"):
         return {}
     return {"bitrate": "320k"}
+
+def _user_friendly_error(raw_error: str) -> str:
+    raw_lower = raw_error.lower()
+    for pattern, friendly in config.USER_ERROR_MAP.items():
+        if pattern in raw_lower:
+            return friendly
+    return "Download failed. Please try again later."
 
 def download_with_spoflac(url: str, title: str, download_id: str, advanced_options=None) -> None:
     """
@@ -767,9 +777,11 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
             return
 
         if error_messages:
+            raw_error = " | ".join(error_messages[:3])
+            logger.error("Download failed [%s]: %s", download_id, raw_error)
             download_status[download_id].update(
                 status="error", progress=0,
-                error=" | ".join(error_messages[:3]),
+                error=_user_friendly_error(raw_error),
                 speed="0 KB/s", eta="N/A",
                 failed_at=datetime.now().isoformat(),
             )
@@ -782,7 +794,10 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
                 completed_files, total_files, has_progress, advanced_options,
             )
         else:
-            error_text = " | ".join(error_messages[:3]) if error_messages else "Download failed"
+            raw_error = " | ".join(error_messages[:3]) if error_messages else ""
+            if raw_error:
+                logger.error("Download failed [%s]: %s", download_id, raw_error)
+            error_text = _user_friendly_error(raw_error) if raw_error else "Download failed. Please try again later."
             download_status[download_id].update(
                 status="error", progress=0, error=error_text,
                 speed="0 KB/s", eta="N/A",
@@ -798,8 +813,10 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
                     pass
 
     except Exception as exc:
+        logger.error("Download exception [%s]: %s", download_id, exc)
         state.download_status[download_id].update(
-            status="error", progress=0, error=str(exc),
+            status="error", progress=0,
+            error="An unexpected error occurred. Please try again.",
             speed="0 KB/s", eta="N/A",
             failed_at=datetime.now().isoformat(),
         )

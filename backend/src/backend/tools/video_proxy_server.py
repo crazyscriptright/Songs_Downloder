@@ -1,9 +1,12 @@
+import logging
 import os
 
 import requests
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
@@ -54,7 +57,8 @@ def proxy_download():
 
         return jsonify(response_data), response.status_code
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Proxy download error: %s", e)
+        return jsonify({'error': 'Download request failed.'}), 500
 
 @app.route('/proxy/progress', methods=['GET'])
 def proxy_progress():
@@ -73,7 +77,8 @@ def proxy_progress():
 
         return jsonify(response_data), response.status_code
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Proxy progress error: %s", e)
+        return jsonify({'error': 'Failed to check download progress.'}), 500
 
 @app.route('/proxy/file', methods=['GET'])
 def proxy_file():
@@ -108,7 +113,8 @@ def proxy_file():
             }
         )
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Proxy file error: %s", e)
+        return jsonify({'error': 'Failed to download file.'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

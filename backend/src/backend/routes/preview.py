@@ -350,7 +350,7 @@ def preview_url():
 
     except Exception as e:
         logger.error("Preview URL error: %s", e)
-        return error(str(e), 500)
+        return error("Failed to extract preview information.", 500)
 
 @preview_bp.route("/preview", methods=["GET"])
 def audio_preview():
@@ -508,7 +508,8 @@ def extract_jiosaavn_pid():
             return success({"pid": meta["pid"], "metadata": meta}, "PID extracted")
         return error("Could not extract PID", 404)
     except Exception as e:
-        return error(str(e), 500)
+        logger.error("JioSaavn PID extraction error: %s", e)
+        return error("Failed to extract song information.", 500)
 
 @preview_bp.route("/extract_playlist", methods=["POST"])
 def extract_playlist():
@@ -537,4 +538,5 @@ def extract_playlist():
     except subprocess.TimeoutExpired:
         return error("Playlist extraction timed out", 408)
     except Exception as e:
-        return error(str(e), 500)
+        logger.error("Playlist extraction error: %s", e)
+        return error("Failed to extract playlist.", 500)

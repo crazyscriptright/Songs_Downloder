@@ -370,7 +370,7 @@ def get_video_info():
 
     except Exception as e:
         logger.error(f"Error: {e}")
-        return error(str(e), 500, {"url": TEST_YOUTUBE_URL})
+        return error("Failed to retrieve video information.", 500, {"url": TEST_YOUTUBE_URL})
 
 
 @ytdlp_bp.route('/download', methods=['POST'])
@@ -420,7 +420,7 @@ def download_video():
 
     except Exception as e:
         logger.error(f"Download error: {e}")
-        return error(str(e), 500)
+        return error("Video download failed.", 500)
 
 
 @ytdlp_bp.route('/test', methods=['GET', 'POST'])
@@ -442,7 +442,7 @@ def test_hardcoded():
 
     except Exception as e:
         logger.error(f"Test error: {e}")
-        return error(str(e), 500)
+        return error("yt-dlp test failed.", 500)
 
 
 @ytdlp_bp.route('/status', methods=['GET'])
@@ -474,4 +474,5 @@ def check_status():
         }, "yt-dlp is ready")
 
     except Exception as e:
-        return error(str(e), 500)
+        logger.error("Status check error: %s", e)
+        return error("Status check failed.", 500)

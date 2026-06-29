@@ -260,4 +260,4 @@ def get_file(download_id, filename):
         return error("File not found", 404)
     except Exception as e:
         logger.error("Error serving file: %s", e)
-        return error(str(e), 500)
+        return error("Failed to serve file. Please try again.", 500)

@@ -3,6 +3,7 @@ Proxy Blueprint
 Routes: /proxy/download, /proxy/progress, /proxy/file, /api/proxy-image
 """
 
+import logging
 import os
 
 import requests
@@ -10,6 +11,8 @@ from backend.core import config
 from backend.utils.image import get_responsive_image_url
 from backend.utils.response import error, success
 from flask import Blueprint, Response, request
+
+logger = logging.getLogger(__name__)
 
 proxy_bp = Blueprint("proxy", __name__)
 
@@ -39,7 +42,8 @@ def proxy_download():
         data.pop("message", None)
         return success(data, "Proxy download initiated", status=resp.status_code)
     except Exception as e:
-        return error(str(e), 500)
+        logger.error("Proxy error: %s", e)
+        return error("Download request failed. Please try again.", 500)
 
 
 @proxy_bp.route("/proxy/progress", methods=["GET"])
@@ -54,7 +58,8 @@ def proxy_progress():
         data.pop("message", None)
         return success(data, "Progress fetched", status=resp.status_code)
     except Exception as e:
-        return error(str(e), 500)
+        logger.error("Progress check error: %s", e)
+        return error("Failed to check download progress.", 500)
 
 
 @proxy_bp.route("/proxy/file", methods=["GET"])
@@ -86,7 +91,8 @@ def proxy_file():
             },
         )
     except Exception as e:
-        return error(str(e), 500)
+        logger.error("File proxy error: %s", e)
+        return error("Failed to download file from remote source.", 500)
 
 
 @proxy_bp.route("/api/proxy-image", methods=["GET"])
@@ -132,4 +138,5 @@ def proxy_image():
             )
         return error("Failed to fetch image", resp.status_code)
     except Exception as e:
-        return error(str(e), 500)
+        logger.error("Image proxy error: %s", e)
+        return error("Failed to fetch image.", 500)
