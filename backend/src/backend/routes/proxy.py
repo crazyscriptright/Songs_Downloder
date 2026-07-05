@@ -119,7 +119,7 @@ def proxy_image():
         }
 
         proxies = None
-        purl = os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")
+        purl = config.HTTP_PROXY or config.HTTPS_PROXY
         if purl:
             proxies = {"http": purl, "https": purl}
 

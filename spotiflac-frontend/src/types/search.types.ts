@@ -1,7 +1,15 @@
-import { DirectUrlInfo, Song } from "./song";
+import { DirectUrlInfo, Song } from "./song.types";
 
 export type SearchType = "music" | "video" | "all" | "spotify";
 export type SourceId = "jiosaavn" | "soundcloud" | "ytmusic" | "ytvideo" | "spotify";
+
+/** Runtime guard: returns the value if it's a valid SearchType, otherwise the fallback ("music"). */
+export function parseSearchType(value: string, fallback: SearchType = "music"): SearchType {
+  for (const t of ["music", "video", "all", "spotify"] as const) {
+    if (t === value) return t;
+  }
+  return fallback;
+}
 
 export interface SearchResults {
   jiosaavn: Song[];

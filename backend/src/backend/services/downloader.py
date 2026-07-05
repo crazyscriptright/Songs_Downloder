@@ -20,8 +20,20 @@ import requests
 from backend.core import config, state
 
 logger = logging.getLogger(__name__)
+import mutagen
+from backend.core.state import active_processes, download_status, save_download_status
 from backend.services import api_metadata_enricher
 from backend.services.post_download_enricher import run_post_download_enrichment
+from backend.spoflac_core.modules import (
+    amazon,
+    metadata as spoflac_metadata,
+    qobuz,
+    soundcloud,
+    tidal,
+    url_resolver,
+    utils,
+)
+from backend.spoflac_core.modules.audio_converter import AudioConverter
 
 
 def _safe_title(title: str) -> str:
@@ -110,16 +122,6 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
     and optionally converts to the requested format.
     """
     try:
-        from backend.spoflac_core.modules import (
-            amazon,
-            metadata,
-            qobuz,
-            soundcloud,
-            tidal,
-            url_resolver,
-            utils,
-        )
-
         state.download_status[download_id].update(
             status="downloading",
             progress=5,
@@ -263,8 +265,6 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
 
         if needs_conversion:
             try:
-                from backend.spoflac_core.modules.audio_converter import AudioConverter
-
                 converted_filename = os.path.splitext(os.path.basename(output_path))[0] + f".{req_format}"
                 converted_path = os.path.join(os.path.dirname(output_path), converted_filename)
 
@@ -290,8 +290,8 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
 
                 try:
                     os.remove(output_path)
-                except OSError:
-                    pass
+                except OSError as rm_exc:
+                    logger.warning("Could not remove intermediate file %s: %s", output_path, rm_exc)
 
                 output_path = converted_path
                 print(f" Converted → {os.path.basename(output_path)}")
@@ -299,8 +299,7 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
                 if req_format == 'mp3' and track_metadata.get('lyrics-eng'):
                     try:
                         print(" Re-embedding lyrics-eng into MP3...")
-                        from backend.spoflac_core.modules import metadata as meta_module
-                        meta_module.embed_mp3_metadata(output_path, track_metadata, cover_path=None)
+                        spoflac_metadata.embed_mp3_metadata(output_path, track_metadata, cover_path=None)
                         print(" ✓ Lyrics-eng re-embedded into MP3")
                     except Exception as re_embed_exc:
                         print(f"  (Lyrics re-embed failed: {re_embed_exc})")
@@ -457,8 +456,6 @@ def download_with_proxy_api(url: str, title: str, download_id: str, advanced_opt
 
                     if needs_conversion:
                         try:
-                            from backend.spoflac_core.modules.audio_converter import AudioConverter
-
                             converted_filename = os.path.splitext(os.path.basename(local_path))[0] + f".{req_format}"
                             converted_path = os.path.join(download_dir, converted_filename)
 
@@ -478,8 +475,8 @@ def download_with_proxy_api(url: str, title: str, download_id: str, advanced_opt
 
                             try:
                                 os.remove(local_path)
-                            except OSError:
-                                pass
+                            except OSError as rm_exc:
+                                logger.warning("Could not remove intermediate file %s: %s", local_path, rm_exc)
 
                             local_path = converted_path
                             filename = converted_filename
@@ -558,6 +555,39 @@ def _detect_spoflac_platform(url: str) -> str | None:
 
     return 'unknown'
 
+def _get_download_method(url: str) -> str:
+    """
+    Return the download method for a given URL: ``'YT-DLP'`` or ``'PROXY'``.
+
+    Resolution order (first match wins):
+      1. ``config.FORCE_PROXY_API`` → all sources use PROXY
+      2. Per-source ``SOURCE_YOUTUBE`` / ``SOURCE_SOUNDCLOUD`` / ``SOURCE_JIOSAAVN``
+      3. Default: ``'YT-DLP'``
+    """
+    if config.FORCE_PROXY_API:
+        return "PROXY"
+
+    url_lower = url.lower()
+    if 'youtube.com' in url_lower or 'youtu.be' in url_lower or 'music.youtube.com' in url_lower:
+        return config.SOURCE_DOWNLOAD_METHOD.get("youtube", "YT-DLP")
+    if 'soundcloud.com' in url_lower:
+        return config.SOURCE_DOWNLOAD_METHOD.get("soundcloud", "YT-DLP")
+    if 'jiosaavn.com' in url_lower or 'saavn.com' in url_lower:
+        return config.SOURCE_DOWNLOAD_METHOD.get("jiosaavn", "YT-DLP")
+
+    return "YT-DLP"
+
+def _source_supports_proxy(url: str) -> bool:
+    """Return True if this source URL can use the proxy API as a fallback."""
+    url_lower = url.lower()
+    if 'youtube.com' in url_lower or 'youtu.be' in url_lower or 'music.youtube.com' in url_lower:
+        return True
+    if 'soundcloud.com' in url_lower:
+        return True
+    if 'jiosaavn.com' in url_lower or 'saavn.com' in url_lower:
+        return True
+    return False
+
 def download_song(url: str, title: str, download_id: str, advanced_options=None) -> None:
     """
     Download *url* to disk.
@@ -567,13 +597,18 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
             → SpotiFLAC only (internal fallback: Tidal→Qobuz→Amazon→SoundCloud)
             → NO yt-dlp fallback
       - YouTube / YouTube Music / SoundCloud / JioSaavn
-            → yt-dlp directly (unchanged original behaviour)
+            → Per-source method from config (yt-dlp primary OR proxy primary)
+            → yt-dlp primary: falls back to proxy API on failure
+
+    Per-source priority is controlled via env vars:
+      SOURCE_YOUTUBE=YT-DLP|PROXY
+      SOURCE_SOUNDCLOUD=YT-DLP|PROXY
+      SOURCE_JIOSAAVN=YT-DLP|PROXY
+      FORCE_PROXY_API=true    ← overrides all to PROXY
 
     Progress is written into ``state.download_status[download_id]`` in
     real-time.
     """
-    from backend.core.state import active_processes, download_status, save_download_status
-
     platform = _detect_spoflac_platform(url)
 
     if platform is not None:
@@ -611,7 +646,11 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
             save_download_status()
         return
 
-    if config.FORCE_PROXY_API and ("youtube.com" in url or "youtu.be" in url):
+    # ── Per-source download method check ──
+    # If the source is configured to use PROXY, skip yt-dlp entirely.
+    # Controlled via SOURCE_YOUTUBE / SOURCE_SOUNDCLOUD / SOURCE_JIOSAAVN env vars
+    # (or FORCE_PROXY_API=true to override all sources).
+    if _get_download_method(url) == "PROXY":
         download_status[download_id] = _initial_status(title, url, advanced_options, "downloading")
         download_status[download_id]["eta"] = "Initiating proxy download…"
         save_download_status()
@@ -665,8 +704,8 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
         if os.name != "nt":
             try:
                 os.setpriority(os.PRIO_PROCESS, process.pid, 10)
-            except Exception:
-                pass
+            except Exception as prio_exc:
+                logger.debug("Could not set process priority: %s", prio_exc)
 
         error_messages: list[str] = []
         has_progress = False
@@ -738,8 +777,8 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
                                     completed_files.append({"download_id": fid, "title": ftitle, "file": fname})
                                     download_status[download_id]["file_downloads"] = completed_files.copy()
                                     save_download_status()
-                        except Exception:
-                            pass
+                        except Exception as file_err:
+                            logger.warning("Failed to track completed file in progress: %s", file_err)
 
                     if total_files > 0:
                         progress = ((len(completed_files) + progress / 100) / total_files) * 100
@@ -765,8 +804,8 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
                         "advanced_options": advanced_options,
                     }
                     save_download_status()
-                except Exception:
-                    pass
+                except Exception as prog_err:
+                    logger.debug("Failed to parse download progress line: %s", prog_err)
 
         if download_id in active_processes:
             del active_processes[download_id]
@@ -805,12 +844,13 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
             )
             save_download_status()
 
-            if "youtube.com" in url or "youtu.be" in url:
+            if _source_supports_proxy(url):
                 try:
+                    logger.info("yt-dlp failed, falling back to proxy API for %s", url)
                     download_with_proxy_api(url, title, download_id, advanced_options)
                     return
-                except Exception:
-                    pass
+                except Exception as proxy_exc:
+                    logger.warning("Proxy API fallback also failed: %s", proxy_exc)
 
     except Exception as exc:
         logger.error("Download exception [%s]: %s", download_id, exc)
@@ -954,8 +994,8 @@ def _build_cmd(url: str, advanced_options) -> list[str]:
                         cmd.append(parsed[i + 1])
                         i += 1
                 i += 1
-        except Exception:
-            pass
+        except Exception as args_err:
+            logger.warning("Failed to parse custom args: %s", args_err)
 
     return cmd
 
@@ -967,10 +1007,6 @@ def _embed_lyrics_for_file(filepath: str) -> None:
     Non-fatal — all exceptions are silently swallowed.
     """
     try:
-        import mutagen
-        from backend.spoflac_core.modules import metadata as meta
-        from backend.spoflac_core.modules.url_resolver import URLResolver
-
         audio = mutagen.File(filepath, easy=True)
         if audio is None:
             return
@@ -1006,21 +1042,19 @@ def _embed_lyrics_for_file(filepath: str) -> None:
         ext = os.path.splitext(filepath)[1].lower()
         tag_meta = {'lyrics-eng': lyrics}
         if ext == '.flac':
-            meta.embed_flac_metadata(filepath, tag_meta)
+            spoflac_metadata.embed_flac_metadata(filepath, tag_meta)
         elif ext == '.mp3':
-            meta.embed_mp3_metadata(filepath, tag_meta)
+            spoflac_metadata.embed_mp3_metadata(filepath, tag_meta)
         elif ext in ('.m4a', '.aac'):
-            meta.embed_m4a_metadata(filepath, tag_meta)
+            spoflac_metadata.embed_m4a_metadata(filepath, tag_meta)
 
-    except Exception:
-        pass
+    except Exception as embed_exc:
+        logger.debug("Lyrics embedding skipped for %s: %s", filepath, embed_exc)
 
 def _finalise_success(
     download_id, url, title, safe, download_dir,
     completed_files, total_files, has_progress, advanced_options,
 ):
-    from backend.core.state import download_status, save_download_status
-
     try:
         files = os.listdir(download_dir)
     except FileNotFoundError:

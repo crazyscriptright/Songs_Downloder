@@ -21,17 +21,8 @@ import logging
 import time
 from typing import Any, Dict, Optional
 
-try:
-    import requests
-    HAS_REQUESTS = True
-except ImportError:
-    HAS_REQUESTS = False
-
-try:
-    import musicbrainzngs as mb
-    HAS_MUSICBRAINZ = True
-except ImportError:
-    HAS_MUSICBRAINZ = False
+import requests
+import musicbrainzngs as mb
 
 from backend.utils.shared_language_utils import (
     map_jiosaavn_language,
@@ -73,7 +64,7 @@ def query_jiosaavn_track(title: str, artist: str = '') -> Optional[Dict[str, Any
         }
         Or None if not found
     """
-    if not HAS_REQUESTS or not title:
+    if not title:
         return None
 
     try:
@@ -132,7 +123,7 @@ def query_jiosaavn_album(album: str, artist: str = '') -> Optional[Dict[str, Any
     Returns:
         Dict with language and metadata, or None if not found
     """
-    if not HAS_REQUESTS or not album:
+    if not album:
         return None
 
     try:
@@ -194,9 +185,6 @@ def query_musicbrainz_by_id(mbid: str) -> Optional[Dict[str, Any]]:
         Dict with genre, release_date, track_number, album, etc.
         Or None if not found
     """
-    if not HAS_MUSICBRAINZ:
-        return None
-
     try:
         mb.set_useragent('SpotiFLAC', '1.0')
 
@@ -295,9 +283,6 @@ def query_musicbrainz_fuzzy(title: str, artist: str = '') -> Optional[Dict[str, 
     Returns:
         Dict with metadata, or None if not found
     """
-    if not HAS_MUSICBRAINZ:
-        return None
-
     try:
         mb.set_useragent('SpotiFLAC', '1.0')
 
@@ -347,7 +332,7 @@ def query_musicbrainz_recording_language(title: str, artist: str = '') -> Option
     Returns:
         Language name (e.g., 'Hindi'), or None if not found
     """
-    if not HAS_REQUESTS or not title:
+    if not title:
         return None
 
     try:

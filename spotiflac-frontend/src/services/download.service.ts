@@ -4,7 +4,8 @@ import {
   MAX_POLL_ATTEMPTS,
   POLL_INTERVAL,
 } from "@/config";
-import { ApiService } from "@/services/ApiService";
+import { ApiService } from "@/services/api.service";
+import { parseSearchType } from "@/types/search.types";
 import type {
   AdvancedOptions,
   ApiResponse,
@@ -14,8 +15,8 @@ import type {
   QueueItem,
   SearchType,
 } from "@/types";
-import { StorageService } from "./StorageService";
-import { YouTubeService } from "./YouTubeService";
+import { StorageService } from "@/services/storage.service";
+import { YouTubeService } from "@/services/youtube.service";
 
 export type DownloadEventCallback = () => void;
 export type ToastFn = (
@@ -274,12 +275,10 @@ export class DownloadService {
       let searchType: SearchType = "music";
       const activeBtn = document.querySelector(".type-btn.active") as HTMLElement | null;
       if (activeBtn) {
-        searchType = (activeBtn.dataset.type as SearchType) || "music";
+        searchType = parseSearchType(activeBtn.dataset.type ?? "");
       }
 
       requestBody.advancedOptions = this.buildAdvancedOptions(url, useAdvanced, searchType);
-
-      console.log("Download Request Payload:", JSON.stringify(requestBody, null, 2));
 
       const data = await ApiService.post<{ download_id: string }>("/download", requestBody);
 

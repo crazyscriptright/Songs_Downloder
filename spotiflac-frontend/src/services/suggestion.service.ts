@@ -1,4 +1,4 @@
-import { ApiService } from "@/services/ApiService";
+import { ApiService } from "@/services/api.service";
 
 /**
  * Manages search suggestion fetching from the backend.

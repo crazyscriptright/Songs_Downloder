@@ -1,8 +1,17 @@
 import { getApiBaseUrl } from "@/config";
-import type { DownloadService } from "@/services/DownloadService";
+import type { DownloadService } from "@/services/download.service";
 import type { DownloadItem, QueueItem } from "@/types";
 
 type DownloadFilter = "all" | "downloading" | "queued" | "complete" | "error";
+
+const DOWNLOAD_FILTERS: readonly DownloadFilter[] = ["all", "downloading", "queued", "complete", "error"];
+
+function parseDownloadFilter(value: string): DownloadFilter {
+  for (const f of DOWNLOAD_FILTERS) {
+    if (f === value) return f;
+  }
+  return "all";
+}
 
 const STATUS_ICONS: Record<string, string> = {
   queued:
@@ -38,7 +47,7 @@ export class DownloadManager {
     this.toggleBtn = document.getElementById("downloadToggle") as HTMLElement;
 
     this.filterSelect?.addEventListener("change", () => {
-      this.currentFilter = this.filterSelect.value as DownloadFilter;
+      this.currentFilter = parseDownloadFilter(this.filterSelect.value);
       this.render();
     });
 

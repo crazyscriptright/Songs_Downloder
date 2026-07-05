@@ -82,12 +82,12 @@ def main():
     print(f" Downloads : {config.DOWNLOAD_FOLDER}")
     print(f" Cache file: {config.UNIFIED_CACHE_FILE}")
     print(f" Status    : {config.DOWNLOAD_STATUS_FILE}")
-    if os.getenv("DYNO"):
+    if config.IS_HEROKU:
         print("  Running on Heroku (ephemeral /tmp storage)")
 
     state.load_persistent_data()
     state.cleanup_old_downloads()
-    if os.getenv("DYNO"):
+    if config.IS_HEROKU:
         state.cleanup_tmp_directory()
 
     port = config.PORT

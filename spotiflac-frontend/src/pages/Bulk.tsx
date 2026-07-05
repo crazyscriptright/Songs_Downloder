@@ -2,7 +2,7 @@ import {
   BulkDownloadService,
   type BulkAdvancedOptions,
   type BulkDownloadItem,
-} from "@/services/BulkDownloadService";
+} from "@/services/bulk-download.service";
 import "@/styles/bulk.css";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { IoMusicalNote, IoVideocam } from "react-icons/io5";

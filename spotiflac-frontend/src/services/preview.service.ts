@@ -11,7 +11,7 @@
  *      action buttons, so only one preview is active at a time.
  *
  * Usage (from SongCard.ts):
- *   import { PreviewService } from "@/services/PreviewService";
+ *   import { PreviewService } from "@/services/preview.service";
  *   PreviewService.play(song.url, song.title, cardElement, previewButton);
  */
 
@@ -108,7 +108,7 @@ export function play(
   if (_active && _active.url === songUrl) {
     if (_active.audioEl) {
       if (_active.audioEl.paused) {
-        _active.audioEl.play().catch(() => {});
+        _active.audioEl.play().catch((err) => console.warn("Preview playback failed:", err));
         _setButtonPlaying(btnEl);
       } else {
         _active.audioEl.pause();
@@ -190,7 +190,7 @@ export function play(
   audioEl.addEventListener(
     "canplay",
     () => {
-      audioEl.play().catch(() => {});
+      audioEl.play().catch((err) => console.warn("Preview playback failed:", err));
       _setButtonPlaying(btnEl);
     },
     { once: true },

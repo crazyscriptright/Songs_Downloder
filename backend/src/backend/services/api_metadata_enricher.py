@@ -28,14 +28,13 @@ Usage:
     # Returns: enriched dict with language, lyrics, featured_artists, etc.
 """
 
+import logging
 import re
 from typing import Any, Dict, Optional
 
-try:
-    from langdetect import LangDetectException, detect, detect_langs
-    HAS_LANGDETECT = True
-except ImportError:
-    HAS_LANGDETECT = False
+from langdetect import LangDetectException, detect, detect_langs
+
+logger = logging.getLogger(__name__)
 
 from backend.spoflac_core.modules.platform_metadata import (
     _detect_version_type,
@@ -99,7 +98,7 @@ def _detect_language_musicbrainz(title: str, artist: str) -> Dict[str, Any]:
 
 def _detect_language_from_keywords(text: str) -> Optional[str]:
     """Detect language from transliterated text using language-specific keywords."""
-    if not text or not HAS_LANGDETECT:
+    if not text:
         return None
 
     text_lower = text.lower()
@@ -120,7 +119,7 @@ def _detect_language_from_keywords(text: str) -> Optional[str]:
 
 def _detect_language_from_lyrics(lyrics: str) -> Dict[str, Any]:
     """Detect language from lyrics using langdetect and keyword matching."""
-    if not lyrics or not HAS_LANGDETECT:
+    if not lyrics:
         return {'language': None, 'confidence': 0.0}
 
     # Remove timestamps
@@ -396,8 +395,8 @@ def enrich_for_download(
         enriched['language_detected_from'] = lang_result.get('detected_from', 'api')
         enriched['language_confidence'] = lang_result.get('confidence', 0.0)
 
-    except Exception:
-        # On any error, just use English as default
+    except Exception as lang_err:
+        logger.warning("Language detection failed, defaulting to English: %s", lang_err)
         enriched['language'] = 'English'
         enriched['language_detected_from'] = 'default'
         enriched['language_confidence'] = 0.0

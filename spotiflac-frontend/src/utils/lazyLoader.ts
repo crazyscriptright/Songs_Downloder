@@ -1,4 +1,4 @@
-import { MUSIC_PLACEHOLDER_SVG } from "./imageUtils";
+import { MUSIC_PLACEHOLDER_SVG } from "@/utils/imageUtils";
 
 let imageObserver: IntersectionObserver | null = null;
 

@@ -1,6 +1,6 @@
-import { PreviewService } from "@/services/PreviewService";
-import { SearchService } from "@/services/SearchService";
-import { YouTubeService } from "@/services/YouTubeService";
+import { PreviewService } from "@/services/preview.service";
+import { SearchService } from "@/services/search.service";
+import { YouTubeService } from "@/services/youtube.service";
 import type {
   DirectUrlInfo,
   PreviewData,
@@ -12,9 +12,9 @@ import type {
 } from "@/types";
 import { initLazyLoadingForNewImages } from "@/utils/lazyLoader";
 import { convertYouTubeMusicUrl } from "@/utils/urlDetector";
-import { PreviewCard, previewSupported } from "./PreviewCard";
-import { createSourceSection, type AdvancedCallback, type DownloadCallback } from "./SongCard";
-import { SourceNavigation } from "./SourceNavigation";
+import { PreviewCard, previewSupported } from "@/components/PreviewCard";
+import { createSourceSection, type AdvancedCallback, type DownloadCallback } from "@/components/SongCard";
+import { SourceNavigation } from "@/components/SourceNavigation";
 
 const PREVIEW_ICON_PLAY =
   '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>';

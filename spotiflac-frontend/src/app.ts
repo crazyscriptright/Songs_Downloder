@@ -1,10 +1,11 @@
+import { parseSearchType } from "@/types/search.types";
 import type { SearchType, Song, SourceId } from "@/types";
 import { initLazyLoading } from "@/utils/lazyLoader";
-import { syncSongCardStates } from "@/utils/syncDownloadStates";
+import { syncSongCardStates } from "@/utils/sync-download-states";
 import { isMusicUrl } from "@/utils/urlDetector";
 
-import { DownloadService } from "@/services/DownloadService";
-import { SearchService } from "@/services/SearchService";
+import { DownloadService } from "@/services/download.service";
+import { SearchService } from "@/services/search.service";
 
 import { DownloadManager } from "@/components/DownloadManager";
 import { ResultsContainer } from "@/components/ResultsContainer";
@@ -352,7 +353,7 @@ export class App {
     if (q) {
       this.searchBox.query = decodeURIComponent(q);
       if (t) {
-        this.searchType = t as SearchType;
+        this.searchType = parseSearchType(t);
         this.searchBox.selectSearchType(this.searchType);
         this.results.setSearchType(this.searchType);
       }

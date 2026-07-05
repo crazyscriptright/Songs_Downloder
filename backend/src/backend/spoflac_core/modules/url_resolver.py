@@ -29,6 +29,13 @@ import unicodedata
 from typing import Optional
 
 import requests
+import yt_dlp
+from backend.integrations.jiosaavn_search import JioSaavnAPI
+from backend.spoflac_core.modules.platform_metadata import (
+    extract_jiosaavn_metadata,
+    extract_soundcloud_metadata,
+    extract_youtube_metadata,
+)
 from backend.spoflac_core.modules.songlink import SongLinkClient
 from backend.spoflac_core.modules.spotify import SpotifyClient
 from backend.spoflac_core.modules.url_detector import URLDetector
@@ -363,17 +370,10 @@ class URLResolver:
         Includes lyrics-eng fetching via lrclib.net.
         Fallback when Spotify metadata is unavailable.
         """
-        from backend.spoflac_core.modules.platform_metadata import (
-            extract_jiosaavn_metadata,
-            extract_soundcloud_metadata,
-            extract_youtube_metadata,
-        )
-
         try:
             if platform == 'youtube':
                 # Extract metadata from YouTube using yt-dlp
                 try:
-                    import yt_dlp
                     ydl_opts = {
                         'quiet': True,
                         'no_warnings': True,
@@ -393,7 +393,6 @@ class URLResolver:
             elif platform == 'jiosaavn':
                 # Extract metadata from JioSaavn
                 try:
-                    from backend.integrations.jiosaavn_search import JioSaavnAPI
                     api = JioSaavnAPI()
 
                     # Extract song ID from URL (e.g., /song/{id}/)

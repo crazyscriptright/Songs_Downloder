@@ -18,9 +18,10 @@ from typing import Optional
 from urllib.parse import quote_plus
 
 import requests
+from backend.core import config
 
 _PREVIEW_TMP_DIR = os.path.join(
-    os.environ.get("TMPDIR", tempfile.gettempdir()),
+    config.TMPDIR,
     "spotiflac_previews",
 )
 _PREVIEW_FILE_MAX_AGE = 600

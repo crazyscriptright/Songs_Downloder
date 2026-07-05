@@ -1,7 +1,7 @@
 import type { SearchType, Song, SourceId } from "@/types";
 import { createLazyImageHTML } from "@/utils/imageUtils";
 import { initLazyLoadingForNewImages } from "@/utils/lazyLoader";
-import { PreviewService } from "@/services/PreviewService";
+import { PreviewService } from "@/services/preview.service";
 
 export type DownloadCallback = (
   url: string,

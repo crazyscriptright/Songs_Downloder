@@ -1,6 +1,7 @@
 """Spotify metadata fetcher using TOTP authentication"""
 import base64
 import json
+import logging
 import os
 import re
 from datetime import datetime, timedelta
@@ -8,6 +9,7 @@ from datetime import datetime, timedelta
 import pyotp
 import requests
 from backend.core.config import (
+    IS_HEROKU,
     SPOTIFY_CLIENT_TOKEN_URL,
     SPOTIFY_GRAPHQL_URL,
     SPOTIFY_HOME_URL,
@@ -17,10 +19,12 @@ from backend.core.config import (
     USER_AGENT,
 )
 
+logger = logging.getLogger(__name__)
+
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _CACHE_FILENAME = "music_api_cache.json"
 
-if os.getenv("DYNO"):
+if IS_HEROKU:
     CACHE_FILE = f"/tmp/{_CACHE_FILENAME}"
 else:
     CACHE_FILE = os.path.join(_BACKEND_DIR, _CACHE_FILENAME)
@@ -77,7 +81,7 @@ class SpotifyClient:
                 with open(CACHE_FILE, 'w', encoding='utf-8') as f:
                     json.dump(cache_data, f, ensure_ascii=False, indent=2)
         except Exception:
-            pass
+            logger.warning("Failed to clear Spotify token cache", exc_info=True)
         self.access_token = None
         self.client_token = None
         self.client_id = None

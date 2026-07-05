@@ -12,9 +12,14 @@ import urllib.parse
 from datetime import datetime
 
 import requests
-from backend.core import state
+from backend.core import config, state
 from backend.utils.response import error, success
 from backend.utils.url_utils import is_url, validate_url_simple
+from backend.integrations import soundcloud
+from backend.integrations.jiosaavn_search import JioSaavnAPI
+from backend.integrations.ytmusic_dynamic_tokens import YouTubeMusicAPI
+from backend.integrations.ytmusic_dynamic_video_tokens import YouTubeMusicVideoAPI
+from backend.spoflac_core.modules.spotify import SpotifyClient
 from flask import Blueprint, render_template, request
 
 logger = logging.getLogger(__name__)
@@ -27,10 +32,6 @@ _jiosaavn_api = None
 
 def get_apis():
     global _ytmusic_api, _ytvideo_api, _jiosaavn_api
-    from backend.core import config
-    from backend.integrations.jiosaavn_search import JioSaavnAPI
-    from backend.integrations.ytmusic_dynamic_tokens import YouTubeMusicAPI
-    from backend.integrations.ytmusic_dynamic_video_tokens import YouTubeMusicVideoAPI
 
     if not _ytmusic_api:
         _ytmusic_api = YouTubeMusicAPI(
@@ -122,12 +123,10 @@ _spotify_client = None
 def get_spotify_client():
     global _spotify_client
     if not _spotify_client:
-        from backend.spoflac_core.modules.spotify import SpotifyClient
         _spotify_client = SpotifyClient()
     return _spotify_client
 
 def search_soundcloud(query):
-    from backend.integrations import soundcloud
     results = []
     try:
         tracks = soundcloud.soundcloud_search(query, limit=20)
@@ -232,7 +231,7 @@ def _yt_suggestions(query):
             "DNT": "1",
         }
         px = {}
-        purl = os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")
+        purl = config.HTTP_PROXY or config.HTTPS_PROXY
         if purl:
             px = {"http": purl, "https": purl}
 
@@ -274,7 +273,6 @@ def _yt_suggestions(query):
 
 def _jiosaavn_suggestions(query):
     try:
-        from backend.integrations.jiosaavn_search import JioSaavnAPI
         api = JioSaavnAPI()
         results = api.search_songs(query, limit=3)
         if results and "data" in results:
@@ -290,11 +288,10 @@ def _jiosaavn_suggestions(query):
 def index():
     query = request.args.get("q", "").strip()
     search_type = request.args.get("type", "music")
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5000")
     return render_template("index.html",
                            initial_query=query,
                            initial_type=search_type,
-                           frontend_url=frontend_url)
+                           frontend_url=config.FRONTEND_URL)
 
 @search_bp.route("/search", methods=["POST"])
 def search():

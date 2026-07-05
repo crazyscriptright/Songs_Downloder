@@ -387,32 +387,46 @@
 
       function tryReconnect() {
         document.getElementById("reconnecting").style.display = "block";
-        // Probe the root to see if we're back online
-        fetch("/?_sw_check=" + Date.now(), { cache: "no-store" })
-          .then(function (r) {
-            if (r.ok || r.status === 304) {
-              window.location.replace("/");
-            } else {
-              showStillOffline();
-            }
-          })
-          .catch(function () {
-            showStillOffline();
-          });
+        probeServer(function (reachable) {
+          if (reachable) {
+            window.location.replace("/");
+          } else {
+            document.getElementById("reconnecting").style.display = "none";
+          }
+        });
       }
 
-      function showStillOffline() {
-        document.getElementById("reconnecting").style.display = "none";
+      // Probe the server to check if it's actually reachable
+      function probeServer(callback) {
+        document.getElementById("reconnecting").style.display = "block";
+        fetch("/?_sw_check=" + Date.now(), { cache: "no-store" })
+          .then(function (r) {
+            document.getElementById("reconnecting").style.display = "none";
+            callback(r.ok || r.status === 304);
+          })
+          .catch(function () {
+            document.getElementById("reconnecting").style.display = "none";
+            callback(false);
+          });
       }
 
       // Auto-detect when browser goes back online
       window.addEventListener("online", function () {
         document.getElementById("card").classList.add("online");
         document.getElementById("statusLabel").textContent =
-          "Back online — reloading...";
-        setTimeout(function () {
-          window.location.replace("/");
-        }, 1200);
+          "Back online — checking server...";
+        probeServer(function (reachable) {
+          if (reachable) {
+            document.getElementById("statusLabel").textContent =
+              "Back online — reloading...";
+            window.location.replace("/");
+          } else {
+            document.getElementById("card").classList.remove("online");
+            document.getElementById("statusLabel").textContent =
+              "Connected but server unreachable";
+            document.getElementById("reconnecting").style.display = "none";
+          }
+        });
       });
 
       window.addEventListener("offline", function () {
@@ -420,9 +434,19 @@
         document.getElementById("statusLabel").textContent = "No connection";
       });
 
-      // If already online when page loads (e.g. cached navigation)
+      // If already online when page loads, probe server first — don't blindly reload
       if (navigator.onLine) {
-        window.location.replace("/");
+        document.getElementById("statusLabel").textContent =
+          "Checking server...";
+        probeServer(function (reachable) {
+          if (reachable) {
+            window.location.replace("/");
+          } else {
+            document.getElementById("card").classList.remove("online");
+            document.getElementById("statusLabel").textContent =
+              "Network detected but server unreachable";
+          }
+        });
       }
     </script>
   </body>

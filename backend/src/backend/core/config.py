@@ -33,7 +33,25 @@ PORT: int = int(os.getenv("PORT", 5000))
 
 # ── Feature flags ──────────────────────────────────────────────────────────────
 # Set FORCE_PROXY_API=true in .env to always use proxy API instead of yt-dlp
+# Overrides all per-source SOURCE_* settings when true.
 FORCE_PROXY_API: bool = os.getenv("FORCE_PROXY_API", "false").lower() == "true"
+
+# Per-source download method priority.
+# Each controls whether that source uses yt-dlp locally or the proxy API (p.savenow.to).
+# Valid values: "YT-DLP" | "PROXY"
+SOURCE_DOWNLOAD_METHOD: dict[str, str] = {
+    "youtube":    os.getenv("SOURCE_YOUTUBE",    "YT-DLP").upper(),
+    "soundcloud": os.getenv("SOURCE_SOUNDCLOUD", "YT-DLP").upper(),
+    "jiosaavn":   os.getenv("SOURCE_JIOSAAVN",   "YT-DLP").upper(),
+}
+
+# ── Proxy settings ────────────────────────────────────────────────────────────
+HTTP_PROXY: str | None = os.getenv("HTTP_PROXY") or None
+HTTPS_PROXY: str | None = os.getenv("HTTPS_PROXY") or None
+JIOSAAVN_PROXY: str | None = os.getenv("JIOSAAVN_PROXY") or None
+
+# ── Temporary directory ───────────────────────────────────────────────────────
+TMPDIR: str = os.getenv("TMPDIR", "/tmp")
 
 # ── API keys ───────────────────────────────────────────────────────────────────
 VIDEO_DOWNLOAD_API_KEY: str = os.getenv("VIDEO_DOWNLOAD_API_KEY", "")

@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any
 
 from backend.core import config
+from backend.utils.atomic_write import atomic_json_write
 
 # ── In-memory stores ───────────────────────────────────────────────────────────
 download_status: dict[str, Any] = {}
@@ -29,7 +30,6 @@ preview_cache: dict[str, tuple[str, float]] = {}
 def save_download_status() -> None:
     """Persist download_status to disk (atomic, race-condition-safe)."""
     try:
-        from backend.utils.atomic_write import atomic_json_write
         atomic_json_write(config.DOWNLOAD_STATUS_FILE, download_status)
     except (IOError, OSError, PermissionError) as exc:
         print(f"Warning: Could not save download status: {exc}")

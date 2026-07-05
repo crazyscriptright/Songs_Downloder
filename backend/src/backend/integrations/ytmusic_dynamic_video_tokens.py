@@ -5,6 +5,8 @@ import time
 from datetime import datetime, timedelta
 
 import requests
+from backend.core import config
+from backend.utils.atomic_write import atomic_json_read_modify_write, atomic_json_write
 
 
 class YouTubeMusicVideoAPI:
@@ -13,7 +15,7 @@ class YouTubeMusicVideoAPI:
         self.context = None
         self.base_url = "https://music.youtube.com"
         # Use /tmp on Heroku for writable storage
-        if os.getenv('DYNO'):
+        if config.IS_HEROKU:
             self.cache_file = f"/tmp/{os.path.basename(cache_file)}"
         else:
             self.cache_file = cache_file
@@ -57,8 +59,6 @@ class YouTubeMusicVideoAPI:
     def save_cache(self, tokens):
         """Save tokens to unified cache file (atomic, race-condition-safe)."""
         try:
-            from backend.utils.atomic_write import atomic_json_read_modify_write
-
             def _updater(cache_data: dict) -> dict:
                 cache_data['ytmusic_videos'] = {
                     'timestamp': datetime.now().isoformat(),
@@ -350,8 +350,7 @@ if __name__ == "__main__":
         print(f"\n Found {len(videos)} videos")
 
         # Save results (use /tmp on Heroku)
-        from backend.utils.atomic_write import atomic_json_write
-        output_file = "/tmp/video_search_results.json" if os.getenv('DYNO') else "video_search_results.json"
+        output_file = "/tmp/video_search_results.json" if config.IS_HEROKU else "video_search_results.json"
         atomic_json_write(output_file, videos, ensure_ascii=False)
         print(f" Results saved to {output_file}")
 

@@ -6,9 +6,11 @@ from datetime import datetime, timedelta
 from urllib.parse import quote_plus
 
 import requests
+from backend.core import config
+from backend.utils.atomic_write import atomic_json_read_modify_write
 
 # Use /tmp on Heroku for writable storage
-if os.getenv('DYNO'):
+if config.IS_HEROKU:
     CACHE_FILE = "/tmp/music_api_cache.json"
 else:
     CACHE_FILE = "music_api_cache.json"  # Unified cache file
@@ -55,8 +57,6 @@ def load_cache():
 def save_cache(client_id, app_version="1761662631", user_id=""):
     """Save cache to unified cache file (atomic, race-condition-safe)."""
     try:
-        from backend.utils.atomic_write import atomic_json_read_modify_write
-
         sc_entry = {
             "client_id": client_id,
             "app_version": app_version,

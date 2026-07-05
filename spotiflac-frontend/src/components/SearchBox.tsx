@@ -1,5 +1,6 @@
 import { SUGGESTION_DEBOUNCE } from "@/config";
-import { SuggestionService } from "@/services/SuggestionService";
+import { SuggestionService } from "@/services/suggestion.service";
+import { parseSearchType } from "@/types/search.types";
 import type { SearchType } from "@/types";
 import { debounce } from "@/utils/debounce";
 import { isAnyUrl, isMusicUrl } from "@/utils/urlDetector";
@@ -107,7 +108,7 @@ export class SearchBox {
 
     document.querySelectorAll<HTMLButtonElement>(".type-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const type = btn.dataset.type as SearchType;
+        const type = parseSearchType(btn.dataset.type ?? "");
         this.selectSearchType(type);
       });
     });

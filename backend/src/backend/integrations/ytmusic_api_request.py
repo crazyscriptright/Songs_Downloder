@@ -10,6 +10,7 @@ Usage:
 
 
 from .ytmusic_dynamic_tokens import YouTubeMusicAPI
+from backend.utils.atomic_write import atomic_json_write
 
 
 def main():
@@ -64,7 +65,6 @@ def main():
             print(f" Found {len(songs)} songs")
             print(f"{'='*70}")
 
-            from backend.utils.atomic_write import atomic_json_write
             # Save results to file
             output_file = "search_results.json"
             atomic_json_write(output_file, songs, ensure_ascii=False)

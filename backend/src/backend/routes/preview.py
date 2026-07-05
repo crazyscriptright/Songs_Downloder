@@ -21,6 +21,9 @@ from backend.services.preview import (
 )
 from backend.utils.response import error, success
 from bs4 import BeautifulSoup
+from backend.integrations import soundcloud
+from backend.integrations.jiosaavn_suggestions_simple import JioSaavnSuggestions
+from backend.routes.search import get_apis, get_spotify_client
 from flask import Blueprint, Response, request, send_file
 
 logger = logging.getLogger(__name__)
@@ -264,7 +267,6 @@ def preview_url():
             vid = _extract_video_id(url)
             if not vid:
                 return error("Invalid YouTube URL", 400)
-            from backend.routes.search import get_apis
             try:
                 _, ytvideo, _ = get_apis()
                 data_yt = ytvideo.search_videos(vid, use_fresh_tokens=True, retry_on_error=False)
@@ -282,7 +284,7 @@ def preview_url():
                             "source": "YouTube",
                         }, "YouTube preview", {"source": "YouTube"})
             except Exception:
-                pass
+                logger.warning("YouTube preview extraction failed for video %s", vid)
             return success({
                 "title": "YouTube Video", "uploader": "Unknown Channel", "channel": "Unknown Channel",
                 "thumbnail": f"https://img.youtube.com/vi/{vid}/maxresdefault.jpg",
@@ -327,7 +329,6 @@ def preview_url():
             if not m:
                 return error("Invalid Spotify track URL", 400)
             track_id = m.group(1)
-            from backend.routes.search import get_spotify_client
             spotify_client = get_spotify_client()
             track = spotify_client.get_track_metadata(track_id)
             dur_ms = track.get("duration_ms", 0)
@@ -400,7 +401,6 @@ def audio_preview():
         if not file_path:
             if "soundcloud.com" in url_lower:
                 try:
-                    from backend.integrations import soundcloud
                     client_id = soundcloud.get_valid_client_id()
                     cdn_url = get_soundcloud_stream_fast(url, client_id)
                 except Exception as e:
@@ -482,7 +482,6 @@ def get_jiosaavn_suggestions_by_pid(pid):
     method_used = "api"
 
     try:
-        from backend.integrations.jiosaavn_suggestions_simple import JioSaavnSuggestions
         scraper = JioSaavnSuggestions()
         suggestions = scraper.get_suggestions(pid, language, max_results=10)
         if suggestions:

@@ -5,10 +5,11 @@ from datetime import datetime, timedelta
 from urllib.parse import quote_plus
 
 import requests
+from backend.core import config
 from backend.utils.atomic_write import atomic_json_read_modify_write
 
 # Use unified music_api_cache.json like ytmusic and spotify
-CACHE_FILE = "/tmp/music_api_cache.json" if os.getenv("DYNO") else "music_api_cache.json"
+CACHE_FILE = "/tmp/music_api_cache.json" if config.IS_HEROKU else "music_api_cache.json"
 CACHE_DURATION_HOURS = 24  # 24 hours cache validity
 
 

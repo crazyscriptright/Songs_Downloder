@@ -23,6 +23,8 @@ import warnings
 from urllib.parse import quote_plus
 
 import requests
+from backend.core import config
+from backend.utils.atomic_write import atomic_json_write
 
 # Suppress SSL warnings (for private/self-signed certs)
 warnings.filterwarnings('ignore', message='Unverified HTTPS request')
@@ -67,7 +69,7 @@ class JioSaavnAPI:
 
         self.session = requests.Session()
         self.session.headers.update(self.headers)
-        self.proxy = proxy or os.getenv("JIOSAAVN_PROXY")
+        self.proxy = proxy or config.JIOSAAVN_PROXY
         self.max_retries = 3
         self.retry_delay = 1  # Start with 1 second
 
@@ -358,14 +360,13 @@ def main():
             print(f" Total songs found: {len(songs)}")
             print(f"{'='*70}")
 
-            from backend.utils.atomic_write import atomic_json_write
             # Save results to file (use /tmp on Heroku)
-            output_file = "/tmp/jiosaavn_search_results.json" if os.getenv('DYNO') else "jiosaavn_search_results.json"
+            output_file = "/tmp/jiosaavn_search_results.json" if config.IS_HEROKU else "jiosaavn_search_results.json"
             atomic_json_write(output_file, songs, ensure_ascii=False)
             print(f" Results saved to {output_file}")
 
             # Save full response (use /tmp on Heroku)
-            full_response_file = "/tmp/jiosaavn_full_response.json" if os.getenv('DYNO') else "jiosaavn_full_response.json"
+            full_response_file = "/tmp/jiosaavn_full_response.json" if config.IS_HEROKU else "jiosaavn_full_response.json"
             atomic_json_write(full_response_file, results, ensure_ascii=False)
             print(f" Full response saved to {full_response_file}")
 
@@ -386,8 +387,7 @@ def main():
                         print(json.dumps(details, indent=2))
 
                         # Save details (use /tmp on Heroku)
-                        details_file = f"/tmp/song_details_{song_id}.json" if os.getenv('DYNO') else f"song_details_{song_id}.json"
-                        from backend.utils.atomic_write import atomic_json_write
+                        details_file = f"/tmp/song_details_{song_id}.json" if config.IS_HEROKU else f"song_details_{song_id}.json"
                         atomic_json_write(details_file, details, ensure_ascii=False)
                         print(f"\n Details saved to {details_file}")
                 else:
