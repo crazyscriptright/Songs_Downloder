@@ -33,7 +33,7 @@ Priorities (in order):
 ### Backend
 ```bash
 cd backend
-uv sync                         # Install deps (pyproject.toml at project root)
+uv sync                         # Install deps (pyproject.toml in backend/)
 uv run src/backend/app.py       # Start on http://localhost:5000
 # or: uvicorn backend.app:app --reload
 ```
@@ -65,8 +65,8 @@ React Frontend → REST API → Flask Routes → Services → Integrations / Spo
 ### Project structure
 
 ```
-├── pyproject.toml                  ← Python project config (uv / setuptools)
 ├── backend/
+│   ├── pyproject.toml              ← Python project config (uv / setuptools)
 │   ├── src/backend/               ← Python package root (import `backend.xxx`)
 │   │   ├── app.py                  ← Flask app factory / entry point
 │   │   ├── core/config.py          ← All env vars, constants, API endpoints, feature flags (no direct os.getenv)

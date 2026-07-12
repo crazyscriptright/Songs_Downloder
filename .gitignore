@@ -7,7 +7,7 @@ __pycache__
 backend/.env
 spotiflac-frontend/.env
 spotiflac-frontend/.env.local
-
+backend/src/universal_music_downloader.egg-info
 # Virtual environments
 venv/
 env/

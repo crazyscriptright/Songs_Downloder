@@ -8,7 +8,7 @@ new_venv/
 __pycache__/
 *.py[cod]
 *.pyc
-
+src/universal_music_downloader.egg-info
 # Environment files
 .env
 
