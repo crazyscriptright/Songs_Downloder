@@ -714,38 +714,52 @@ def fetch_lyrics_for_platform(title: str, artist: str, album: str = '',
                             duration_ms: int = 0, platform: str = '') -> str | None:
     """
     Fetch lyrics for any platform using multiple APIs with fallback.
-    
+
+    All sources are queried IN PARALLEL for maximum speed.
     Priority:
-    1. Try all APIs for SYNCED (timestamp-based) lyrics first
-    2. Fall back to plain text lyrics only if no synced found
-    
+    1. Synced/timestamped lyrics (any source)
+    2. Plain text lyrics (any source)
+
     Returns synced/plain lyrics string or None.
     """
+    import concurrent.futures
 
-    # First pass: Try each API for timestamped/synced lyrics
-    print(f" [lyrics/{platform}] Searching for synced lyrics...")
-
-    sources_to_try = [
+    sources: list[tuple[str, object]] = [
+        ('Lyrica',     _fetch_lyrics_lyrica),
         ('lrclib.net', _fetch_lyrics_lrclib_internal),
-        ('Genius', _fetch_lyrics_genius),
+        ('Genius',     _fetch_lyrics_genius),
     ]
 
-    # Try each source for synced lyrics first
-    for source_name, fetch_func in sources_to_try:
-        lyrics = fetch_func(title, artist, album, duration_ms)
+    # ── Phase 1: Fire all source requests in PARALLEL ──
+    results: dict[str, str | None] = {}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(sources)) as pool:
+        fut_map = {
+            pool.submit(fn, title, artist, album, duration_ms): name
+            for name, fn in sources
+        }
+        for fut in concurrent.futures.as_completed(fut_map):
+            name = fut_map[fut]
+            try:
+                results[name] = fut.result()
+            except Exception:
+                results[name] = None
+
+    # ── Phase 2: Analyse results — prefer synced/timestamped ──
+    for name in results:
+        lyrics = results[name]
         if lyrics and has_timestamps(lyrics):
-            print(f" [lyrics/{platform}] ✅ Got synced lyrics from {source_name} ({len(lyrics)} chars)")
+            print(f" [lyrics/{platform}] Got synced lyrics from {name} ({len(lyrics)} chars)")
             return lyrics
 
-    # Second pass: Fall back to plain text if no synced found
-    print(f" [lyrics/{platform}] No synced lyrics found, trying plain text...")
-    for source_name, fetch_func in sources_to_try:
-        lyrics = fetch_func(title, artist, album, duration_ms)
+    # ── Phase 3: Fallback — accept any plain text ──
+    for name in results:
+        lyrics = results[name]
         if lyrics:
-            print(f" [lyrics/{platform}] ✅ Got plain lyrics from {source_name} ({len(lyrics)} chars)")
+            print(f" [lyrics/{platform}] Got plain lyrics from {name} ({len(lyrics)} chars)")
             return lyrics
 
-    print(f" [lyrics/{platform}] ❌ No lyrics found from any source")
+    print(f" [lyrics/{platform}] No lyrics found from any source")
     return None
 
 
@@ -899,5 +913,57 @@ def _fetch_lyrics_lrclib_internal(title: str, artist: str, album: str = '',
 
         return None
 
+    except Exception:
+        return None
+
+def _fetch_lyrics_lyrica(title: str, artist: str, album: str = '',
+                         duration_ms: int = 0) -> str | None:
+    """
+    Fetch lyrics from Lyrica (wilooper-lyrica.hf.space).
+
+    Returns LRC-formatted lyrics with timestamps when available, or plain text.
+    Rate-limited to 15 requests/minute per IP — caller should handle 429.
+    """
+    import requests
+
+    _LYRICA_API = "https://wilooper-lyrica.hf.space/lyrics/"
+
+    params: dict = {
+        'artist': artist,
+        'song': title,
+        'timestamps': 'true',
+    }
+
+    try:
+        resp = requests.get(
+            _LYRICA_API, params=params, timeout=15,
+            headers={'User-Agent': 'spotiflac/1.0'},
+        )
+
+        if resp.status_code == 429:
+            logger.warning("Lyrica rate-limited (429), skipping")
+            return None
+        if resp.status_code != 200:
+            return None
+
+        body = resp.json()
+
+        # Error response from Lyrica
+        if body.get('status') != 'success':
+            return None
+
+        data = body.get('data') or {}
+
+        # Lyrica returns LRC-formatted text in the "lyrics" field when
+        # timestamps=true — this is our preferred format.
+        lyrics = (data.get('lyrics') or '').strip()
+        if lyrics:
+            return lyrics
+
+        return None
+
+    except requests.Timeout:
+        logger.debug("Lyrica timed out")
+        return None
     except Exception:
         return None

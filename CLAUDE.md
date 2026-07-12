@@ -172,6 +172,97 @@ Before creating a file:
 
 Avoid creating files for trivial logic.
 
+### Comments
+
+#### General Principles
+
+1. **Do NOT add comments for obvious or self-explanatory code.**
+
+2. **Write comments only when they explain:**
+   - Business rules or domain logic.
+   - Complex algorithms or non-obvious implementation details.
+   - Important assumptions or constraints.
+   - Edge cases being handled.
+   - Security, performance, or reliability considerations.
+   - Workarounds for framework, library, language, platform, or external service limitations.
+
+3. **Always explain WHY, not WHAT.**
+   If the code, configuration, or file is already clear from its structure or naming, do not add a comment.
+
+   ❌ Bad
+   ```ts
+   // Increment counter
+   counter++;
+   ```
+
+   ✅ Good
+   ```ts
+   // Increment only after successful payment confirmation to avoid duplicate processing.
+   counter++;
+   ```
+
+4. **Prefer expressive names over comments.**
+   Improve function names, variable names, constants, types, and file organization before adding comments.
+
+5. Keep comments concise, precise, and directly relevant.
+
+6. Update comments whenever the related implementation changes.
+
+7. Remove outdated or misleading comments immediately.
+
+8. Never leave commented-out code. Use version control (Git) instead.
+
+9. Do not add `TODO`, `FIXME`, `HACK`, `NOTE`, `BUG`, or `XXX` comments unless explicitly requested.
+
+10. Public functions, exported APIs, and reusable modules should include documentation comments **only when they expose behavior, constraints, side effects, assumptions, or usage that cannot be inferred from their names, types, or signatures**. Do not generate boilerplate documentation that merely restates the function name or parameters.
+
+11. Private or internal functions should only have comments when the implementation is genuinely difficult to understand.
+
+12. **Never add decorative comment banners or section separators.**
+    ```ts
+    // ❌ Avoid
+    // =====================
+    // User Service
+    // =====================
+    ```
+
+13. Never use comments solely to separate sections such as: routes, controllers, services, helpers, utilities, models, schemas, middleware, configuration, constants, types.
+
+14. If the code can be refactored to eliminate the need for a comment, refactor the code and remove the comment.
+
+#### Configuration Files
+
+15. Apply the same commenting principles to configuration files.
+
+16. **Every configuration option should have a short single-line comment immediately above it explaining its purpose or operational impact**, unless the configuration format does not support comments (e.g., JSON).
+    ```yaml
+    # Maximum number of concurrent worker processes.
+    workers: 4
+
+    # Enable hot reloading during local development.
+    hotReload: true
+
+    # Database connection timeout in milliseconds.
+    connectionTimeout: 30000
+    ```
+
+17. Configuration comments should explain the purpose, expected usage, or important constraints of each setting. Avoid repeating the option name.
+
+18. If the configuration format does not support comments (such as JSON), do not introduce pseudo-comments. Document those settings in separate documentation if needed.
+
+#### Validation Rule
+
+19. **Every comment must answer at least one of the following questions:**
+    - Why is this necessary?
+    - What business rule is being enforced?
+    - What assumption or constraint exists?
+    - What edge case is being handled?
+    - What security, performance, or reliability concern does this address?
+    - What external limitation or dependency requires this behavior?
+    - For configuration: What is the purpose or operational impact of this setting?
+
+    **If a comment answers none of these questions, do not write it.**
+
 ### Naming Conventions (Frontend)
 
 | What | Convention | Example |

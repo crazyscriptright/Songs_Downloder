@@ -21,9 +21,10 @@ from backend.core import config, state
 
 logger = logging.getLogger(__name__)
 import mutagen
-from backend.core.state import active_processes, download_status, save_download_status
+from backend.core.state import active_processes, save_download_status
 from backend.services import api_metadata_enricher
 from backend.services.post_download_enricher import run_post_download_enrichment
+from backend.services.proxy_downloader import download_with_proxy_fallback
 from backend.spoflac_core.modules import (
     amazon,
     metadata as spoflac_metadata,
@@ -355,165 +356,120 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
 
 def download_with_proxy_api(url: str, title: str, download_id: str, advanced_options=None) -> None:
     """
-    Fallback download via p.savenow.to when yt-dlp fails.
+    Fallback download via proxy API when yt-dlp fails.
     Audio: Always downloads FLAC (lossless source), then converts to requested format/quality.
     Video: Downloads video directly in requested format.
+
+    Delegates HTTP-level provider fallback to ``download_with_proxy_fallback()``
+    in ``proxy_downloader.py`` (multi-provider chain: SaveNow → dubs.io).
     """
-    try:
-        print(f" Proxy API fallback for: {title}")
-        if not config.VIDEO_DOWNLOAD_API_KEY:
-            raise Exception("Proxy API key not configured")
+    print(f" Proxy API fallback for: {title}")
+    if not config.VIDEO_DOWNLOAD_API_KEY:
+        raise Exception("Proxy API key not configured")
 
+    is_video = bool(advanced_options and advanced_options.get("keepVideo", False))
+    download_dir = os.path.join(config.DOWNLOAD_FOLDER, download_id)
+    os.makedirs(download_dir, exist_ok=True)
+
+    if is_video:
+        format_type = advanced_options.get("videoQuality", "1080")
+        file_extension = "mp4"
+    else:
+        format_type = "flac"
+        file_extension = "flac"
+
+    def _on_progress(s: dict) -> None:
         state.download_status[download_id].update(
-            status="downloading", progress=0,
-            eta="Initiating proxy download…", speed="0 KB/s",
+            status=s.get("status", "downloading"),
+            progress=s.get("progress", 0),
+            eta=s.get("eta", ""),
+            speed=s.get("speed", "0 KB/s"),
         )
         state.save_download_status()
 
-        is_video = advanced_options and advanced_options.get("keepVideo", False)
-        download_dir = os.path.join(config.DOWNLOAD_FOLDER, download_id)
-        os.makedirs(download_dir, exist_ok=True)
+    result = download_with_proxy_fallback(
+        target_url=url,
+        format_type=format_type,
+        api_key=config.VIDEO_DOWNLOAD_API_KEY,
+        progress_callback=_on_progress,
+    )
 
-        if is_video:
-            video_quality = advanced_options.get("videoQuality", "1080")
-            format_type = video_quality
-            file_extension = "mp4"
-        else:
-            format_type = "flac"
-            file_extension = "flac"
+    if not result["success"]:
+        raise Exception(result.get("error", "Proxy download failed"))
 
-        params: dict = {
-            "copyright": "0",
-            "allow_extended_duration": "1",
-            "format": format_type,
-            "url": url,
-            "api": config.VIDEO_DOWNLOAD_API_KEY,
-            "add_info": "1",
-        }
+    dl_url: str = result["download_url"]  # type: ignore[assignment]
 
-        api_url = "https://p.savenow.to/ajax/download.php"
-        print(" Calling proxy API:", api_url + "?" + urllib.parse.urlencode(params))
+    filename = f"{_safe_title(title)}.{file_extension}"
+    local_path = os.path.join(download_dir, filename)
 
-        response = requests.get(api_url, params=params, timeout=30)
-        response.raise_for_status()
-        data = response.json()
+    print(f" Proxy download completed remotely, saving local file: {filename}")
+    with requests.get(dl_url, stream=True, timeout=120) as file_resp:
+        file_resp.raise_for_status()
+        with open(local_path, 'wb') as out_file:
+            for chunk in file_resp.iter_content(chunk_size=1024 * 128):
+                if chunk:
+                    out_file.write(chunk)
 
-        if not data.get("success"):
-            raise Exception(data.get("message", "Failed to initiate download"))
+    if not is_video:
+        audio_format = ((advanced_options or {}).get("audioFormat") or "flac").lower()
+        req_quality = str((advanced_options or {}).get("audioQuality", "0"))
 
-        job_id = data.get("id")
-        if not job_id:
-            raise Exception("No job ID returned from API")
+        req_format = "opus" if audio_format == "best" else audio_format
 
-        print(f" Proxy job ID: {job_id}")
+        state.download_status[download_id].update(
+            progress=85,
+            eta=f"Converting to {req_format.upper()}...",
+            speed="Converting",
+        )
+        state.save_download_status()
 
-        for _ in range(60):
-            prog_resp = requests.get(f"https://p.savenow.to/api/progress?id={job_id}", timeout=10)
-            prog_data = prog_resp.json()
-            pct = round((prog_data.get("progress", 0) / 1000) * 100)
-            text = prog_data.get("text", "Processing")
+        _SUPPORTED_CONVERT_FMTS = {"mp3", "aac", "m4a", "ogg", "opus", "flac", "wav"}
+        needs_conversion = req_format in _SUPPORTED_CONVERT_FMTS and req_format != "flac"
 
-            state.download_status[download_id].update(
-                status="downloading", progress=pct, eta=f"{text}…", speed="Proxy API",
-            )
-            state.save_download_status()
+        if needs_conversion:
+            try:
+                converted_filename = os.path.splitext(os.path.basename(local_path))[0] + f".{req_format}"
+                converted_path = os.path.join(download_dir, converted_filename)
 
-            if prog_data.get("success") == 1 and prog_data.get("progress") == 1000:
-                dl_url = prog_data.get("download_url")
-                if not dl_url:
-                    raise Exception("No download URL in completed response")
+                quality_kwargs = _converter_quality_kwargs(req_format, req_quality)
 
-                filename = f"{_safe_title(title)}.{file_extension}"
-                local_path = os.path.join(download_dir, filename)
+                print(f" Converting {file_extension.upper()} → {req_format.upper()} (quality={req_quality})")
 
-                print(f" Proxy download completed remotely, saving local file: {filename}")
-                with requests.get(dl_url, stream=True, timeout=120) as file_resp:
-                    file_resp.raise_for_status()
-                    with open(local_path, 'wb') as out_file:
-                        for chunk in file_resp.iter_content(chunk_size=1024 * 128):
-                            if chunk:
-                                out_file.write(chunk)
-
-                if not is_video:
-                    audio_format = ((advanced_options or {}).get("audioFormat") or "flac").lower()
-                    req_quality = str((advanced_options or {}).get("audioQuality", "0"))
-
-                    # If user selected "best" quality, prefer opus codec
-                    if audio_format == "best":
-                        req_format = "opus"
-                    else:
-                        req_format = audio_format
-
-                    state.download_status[download_id].update(
-                        progress=85,
-                        eta=f"Converting to {req_format.upper()}...",
-                        speed="Converting",
-                    )
-                    state.save_download_status()
-
-                    _SUPPORTED_CONVERT_FMTS = {"mp3", "aac", "m4a", "ogg", "opus", "flac", "wav"}
-                    needs_conversion = req_format in _SUPPORTED_CONVERT_FMTS and req_format != "flac"
-
-                    if needs_conversion:
-                        try:
-                            converted_filename = os.path.splitext(os.path.basename(local_path))[0] + f".{req_format}"
-                            converted_path = os.path.join(download_dir, converted_filename)
-
-                            quality_kwargs = _converter_quality_kwargs(req_format, req_quality)
-
-                            print(f" Converting {file_extension.upper()} → {req_format.upper()} (quality={req_quality})")
-
-                            converter = AudioConverter()
-                            converter.convert(
-                                local_path,
-                                converted_path,
-                                req_format,
-                                preserve_metadata=True,
-                                overwrite=True,
-                                **quality_kwargs,
-                            )
-
-                            try:
-                                os.remove(local_path)
-                            except OSError as rm_exc:
-                                logger.warning("Could not remove intermediate file %s: %s", local_path, rm_exc)
-
-                            local_path = converted_path
-                            filename = converted_filename
-                            print(f" Converted → {os.path.basename(local_path)}")
-
-                        except Exception as conv_exc:
-                            print(f" Conversion to {req_format.upper()} failed: {conv_exc} — keeping FLAC")
-
-                    _run_cli_music_hardening(local_path)
-
-                state.download_status[download_id].update(
-                    status="complete", progress=100, file=filename,
-                    speed="Complete", eta="0:00",
-                    completed_at=datetime.now().isoformat(),
-                    downloaded_via="proxy_api",
-                    download_url=f"/get_file/{download_id}/{filename}",
-                    source_download_url=dl_url,
-                    alternative_download_urls=prog_data.get("alternative_download_urls", []),
+                AudioConverter().convert(
+                    local_path,
+                    converted_path,
+                    req_format,
+                    preserve_metadata=True,
+                    overwrite=True,
+                    **quality_kwargs,
                 )
-                state.save_download_status()
-                print(f" Proxy download complete (local): {local_path}")
-                return
 
-            time.sleep(2)
+                try:
+                    os.remove(local_path)
+                except OSError as rm_exc:
+                    logger.warning("Could not remove intermediate file %s: %s", local_path, rm_exc)
 
-        raise Exception("Download timeout — took too long to process")
+                local_path = converted_path
+                filename = converted_filename
+                print(f" Converted → {os.path.basename(local_path)}")
 
-    except Exception as exc:
-        print(f" Proxy API failed: {exc}")
-        state.download_status[download_id].update(
-            status="error", progress=0,
-            error=f"Both yt-dlp and proxy API failed. Last error: {exc}",
-            speed="0 KB/s", eta="N/A",
-            failed_at=datetime.now().isoformat(),
-        )
-        state.save_download_status()
-        raise
+            except Exception as conv_exc:
+                print(f" Conversion to {req_format.upper()} failed: {conv_exc} — keeping FLAC")
+
+        _run_cli_music_hardening(local_path)
+
+    state.download_status[download_id].update(
+        status="complete", progress=100, file=filename,
+        speed="Complete", eta="0:00",
+        completed_at=datetime.now().isoformat(),
+        downloaded_via="proxy_api",
+        download_url=f"/get_file/{download_id}/{filename}",
+        source_download_url=dl_url,
+        alternative_download_urls=result.get("alternative_download_urls", []),
+        downloaded_from=result.get("provider", "proxy"),
+    )
+    state.save_download_status()
+    print(f" Proxy download complete (local): {local_path}")
 
 def _detect_spoflac_platform(url: str) -> str | None:
     """
@@ -628,14 +584,14 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
         label = _PLATFORM_LABELS.get(platform, platform)
         print(f" SpotiFLAC route: {label} | format={audio_format}")
 
-        download_status[download_id] = _initial_status(title, url, advanced_options, "downloading")
+        state.download_status[download_id] = _initial_status(title, url, advanced_options, "downloading")
         save_download_status()
 
         try:
             download_with_spoflac(url, title, download_id, advanced_options)
         except Exception as exc:
             print(f"⚠️  SpotiFLAC failed for {label}: {exc}")
-            download_status[download_id].update(
+            state.download_status[download_id].update(
                 status="error",
                 progress=0,
                 error=f"SpotiFLAC failed: {exc}",
@@ -651,14 +607,14 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
     # Controlled via SOURCE_YOUTUBE / SOURCE_SOUNDCLOUD / SOURCE_JIOSAAVN env vars
     # (or FORCE_PROXY_API=true to override all sources).
     if _get_download_method(url) == "PROXY":
-        download_status[download_id] = _initial_status(title, url, advanced_options, "downloading")
-        download_status[download_id]["eta"] = "Initiating proxy download…"
+        state.download_status[download_id] = _initial_status(title, url, advanced_options, "downloading")
+        state.download_status[download_id]["eta"] = "Initiating proxy download…"
         save_download_status()
         try:
             download_with_proxy_api(url, title, download_id, advanced_options)
             return
         except Exception as exc:
-            download_status[download_id].update(
+            state.download_status[download_id].update(
                 status="error", progress=0,
                 error=f"Proxy API failed: {exc}",
                 speed="0 KB/s", eta="N/A",
@@ -669,7 +625,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
 
     state.cleanup_tmp_directory()
 
-    download_status[download_id] = _initial_status(title, url, advanced_options, "downloading")
+    state.download_status[download_id] = _initial_status(title, url, advanced_options, "downloading")
     save_download_status()
 
     try:
@@ -723,7 +679,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
         )
 
         for raw_line in process.stdout:
-            if download_status.get(download_id, {}).get("status") == "cancelled":
+            if state.download_status.get(download_id, {}).get("status") == "cancelled":
                 process.terminate()
                 break
 
@@ -733,7 +689,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
             if pm:
                 current_idx = int(pm.group(1))
                 total_files = int(pm.group(2))
-                download_status[download_id]["title"] = f"Downloading {current_idx}/{total_files}"
+                state.download_status[download_id]["title"] = f"Downloading {current_idx}/{total_files}"
                 save_download_status()
 
             if "ERROR:" in line:
@@ -763,11 +719,11 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
                                 if fname not in {f["file"] for f in completed_files}:
                                     fid = f"{download_id}_file_{len(completed_files)}"
                                     ftitle = os.path.splitext(fname)[0]
-                                    download_status[fid] = {
+                                    state.download_status[fid] = {
                                         "status": "complete", "progress": 100,
                                         "title": ftitle, "url": url, "file": fname,
                                         "speed": "Complete", "eta": "0:00",
-                                        "timestamp": download_status[download_id]["timestamp"],
+                                        "timestamp": state.download_status[download_id]["timestamp"],
                                         "completed_at": datetime.now().isoformat(),
                                         "advanced_options": advanced_options,
                                         "parent_download_id": download_id,
@@ -775,7 +731,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
                                         "total_files": total_files,
                                     }
                                     completed_files.append({"download_id": fid, "title": ftitle, "file": fname})
-                                    download_status[download_id]["file_downloads"] = completed_files.copy()
+                                    state.download_status[download_id]["file_downloads"] = completed_files.copy()
                                     save_download_status()
                         except Exception as file_err:
                             logger.warning("Failed to track completed file in progress: %s", file_err)
@@ -790,7 +746,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
                     if total_files > 0:
                         display_title = f"Downloading {current_idx}/{total_files}: {title}"
 
-                    download_status[download_id] = {
+                    state.download_status[download_id] = {
                         "status": "downloading",
                         "progress": min(progress, 99),
                         "title": display_title,
@@ -800,7 +756,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
                         "current_file": current_idx if total_files > 0 else None,
                         "total_files": total_files if total_files > 0 else None,
                         "file_downloads": completed_files.copy() if completed_files else None,
-                        "timestamp": download_status[download_id]["timestamp"],
+                        "timestamp": state.download_status[download_id]["timestamp"],
                         "advanced_options": advanced_options,
                     }
                     save_download_status()
@@ -812,13 +768,13 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
 
         process.wait()
 
-        if download_status.get(download_id, {}).get("status") == "cancelled":
+        if state.download_status.get(download_id, {}).get("status") == "cancelled":
             return
 
         if error_messages:
             raw_error = " | ".join(error_messages[:3])
             logger.error("Download failed [%s]: %s", download_id, raw_error)
-            download_status[download_id].update(
+            state.download_status[download_id].update(
                 status="error", progress=0,
                 error=_user_friendly_error(raw_error),
                 speed="0 KB/s", eta="N/A",
@@ -837,7 +793,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
             if raw_error:
                 logger.error("Download failed [%s]: %s", download_id, raw_error)
             error_text = _user_friendly_error(raw_error) if raw_error else "Download failed. Please try again later."
-            download_status[download_id].update(
+            state.download_status[download_id].update(
                 status="error", progress=0, error=error_text,
                 speed="0 KB/s", eta="N/A",
                 failed_at=datetime.now().isoformat(),
@@ -1061,7 +1017,7 @@ def _finalise_success(
         files = []
 
     if not has_progress and not files:
-        download_status[download_id].update(
+        state.download_status[download_id].update(
             status="error", progress=0,
             error="No download progress detected. URL may be invalid or unavailable.",
             speed="0 KB/s", eta="N/A",
@@ -1090,11 +1046,11 @@ def _finalise_success(
                 bname = os.path.basename(fname)
                 ftitle = os.path.splitext(bname)[0]
                 fid = f"{download_id}_file_{idx}"
-                download_status[fid] = {
+                state.download_status[fid] = {
                     "status": "complete", "progress": 100,
                     "title": ftitle, "url": url, "file": bname,
                     "speed": "Complete", "eta": "0:00",
-                    "timestamp": download_status[download_id]["timestamp"],
+                    "timestamp": state.download_status[download_id]["timestamp"],
                     "completed_at": datetime.now().isoformat(),
                     "advanced_options": advanced_options,
                     "parent_download_id": download_id,
@@ -1103,12 +1059,12 @@ def _finalise_success(
                 fds.append({"download_id": fid, "title": ftitle, "file": bname})
 
         first_title = fds[0]["title"] if fds else "Playlist"
-        download_status[download_id] = {
+        state.download_status[download_id] = {
             "status": "complete", "progress": 100,
             "title": f"{first_title} (+{len(files)-1} more)",
             "url": url, "file_count": len(files), "file_downloads": fds,
             "speed": "Complete", "eta": "0:00",
-            "timestamp": download_status[download_id]["timestamp"],
+            "timestamp": state.download_status[download_id]["timestamp"],
             "completed_at": datetime.now().isoformat(),
             "advanced_options": advanced_options,
         }
@@ -1130,13 +1086,13 @@ def _finalise_success(
                 print(f" Post-process skipped for {fname}: {post_exc}")
             _run_cli_music_hardening(target_path)
 
-        download_status[download_id] = {
+        state.download_status[download_id] = {
             "status": "complete", "progress": 100,
             "title": os.path.splitext(fname)[0] if fname else title,
             "url": url,
             "file": fname or f"{safe}.mp3",
             "speed": "Complete", "eta": "0:00",
-            "timestamp": download_status[download_id]["timestamp"],
+            "timestamp": state.download_status[download_id]["timestamp"],
             "completed_at": datetime.now().isoformat(),
             "advanced_options": advanced_options,
         }
