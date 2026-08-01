@@ -103,6 +103,11 @@ def proxy_image():
     if not image_url:
         return error("URL parameter required", 400)
 
+    # Normalise JSON-escaped unicode sequences (/ → /) that come through
+    # when the URL was serialised (e.g. JioSaavn API responses).
+    if "\\u002F" in image_url or "\\/" in image_url:
+        image_url = image_url.encode().decode("unicode_escape")
+
     try:
         responsive_url = get_responsive_image_url(image_url, size)
 

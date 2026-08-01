@@ -39,6 +39,10 @@ def create_app() -> Flask:
 
     register_blueprints(flask_app)
 
+    # Load persisted state at startup for crash recovery across dyno restarts.
+    state.load_persistent_data()
+    state.cleanup_old_downloads()
+
     return flask_app
 
 

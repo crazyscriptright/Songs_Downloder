@@ -49,6 +49,11 @@ export class DownloadService {
 
     this.allDownloads = {};
     for (const [id, download] of Object.entries(loaded)) {
+      // Stale in-progress statuses from a previous session: the background
+      // download thread is dead, so treat them as non-existent.
+      if (download.status === "downloading" || download.status === "queued") {
+        continue;
+      }
       this.allDownloads[id] = {
         ...download,
         timestamp: download.timestamp || Date.now(),

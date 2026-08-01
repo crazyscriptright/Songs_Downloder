@@ -250,8 +250,6 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
         metadata.embed_metadata(output_path, track_metadata)
 
         req_format   = ((advanced_options or {}).get("audioFormat") or "flac").lower()
-        if req_format == "best":
-            req_format = "opus"
         req_quality  = str((advanced_options or {}).get("audioQuality", "0"))
         embed_thumb  = (advanced_options or {}).get("embedThumbnail", True)
         downloaded_ext = os.path.splitext(output_path)[1].lstrip(".").lower()
@@ -414,19 +412,19 @@ def download_with_proxy_api(url: str, title: str, download_id: str, advanced_opt
         audio_format = ((advanced_options or {}).get("audioFormat") or "flac").lower()
         req_quality = str((advanced_options or {}).get("audioQuality", "0"))
 
-        req_format = "opus" if audio_format == "best" else audio_format
-
-        state.download_status[download_id].update(
-            progress=85,
-            eta=f"Converting to {req_format.upper()}...",
-            speed="Converting",
-        )
-        state.save_download_status()
+        req_format = audio_format
 
         _SUPPORTED_CONVERT_FMTS = {"mp3", "aac", "m4a", "ogg", "opus", "flac", "wav"}
         needs_conversion = req_format in _SUPPORTED_CONVERT_FMTS and req_format != "flac"
 
         if needs_conversion:
+            state.download_status[download_id].update(
+                progress=85,
+                eta=f"Converting to {req_format.upper()}...",
+                speed="Converting",
+            )
+            state.save_download_status()
+
             try:
                 converted_filename = os.path.splitext(os.path.basename(local_path))[0] + f".{req_format}"
                 converted_path = os.path.join(download_dir, converted_filename)
@@ -569,8 +567,6 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
 
     if platform is not None:
         audio_format = (advanced_options or {}).get("audioFormat", "flac")
-        if audio_format == "best":
-            audio_format = "opus"
 
         _PLATFORM_LABELS = {
             'spotify':    'Spotify',
@@ -903,8 +899,8 @@ def _build_cmd(url: str, advanced_options) -> list[str]:
         url_lower = (url or "").lower()
         if any(host in url_lower for host in ("music.youtube.com", "youtube.com", "youtu.be")):
             if audio_fmt == "best":
-                cmd.extend(["-f", "bestaudio[acodec=opus][abr>=96]/bestaudio"])
-                cmd.extend(["-x", "--audio-format", "opus", "--audio-quality", aq])
+                cmd.extend(["-f", "bestaudio"])
+                cmd.extend(["-x", "--audio-format", "best", "--audio-quality", aq])
             else:
                 cmd.extend(["-x", "--audio-format", audio_fmt, "--audio-quality", aq])
         else:
