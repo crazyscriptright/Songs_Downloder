@@ -42,6 +42,7 @@ def download():
         advanced_options = {k: v for k, v in advanced_options.items() if k != "customArgs"}
     else:
         advanced_options = None
+    thumbnail_url = data.get("thumbnailUrl") or None
 
     logger.info("Download request received — URL: %s, Title: %s", url, title)
 
@@ -59,9 +60,10 @@ def download():
         "eta": "Initializing…", "speed": "0 KB/s",
         "timestamp": datetime.now().isoformat(),
         "advanced_options": advanced_options,
+        "thumbnail_url": thumbnail_url,
     }
     state.save_download_status()
-    threading.Thread(target=download_song, args=(url, title, download_id, advanced_options)).start()
+    threading.Thread(target=download_song, args=(url, title, download_id, advanced_options, thumbnail_url)).start()
     return success({"download_id": download_id, "status": "started"}, "Download queued")
 
 @download_bp.route("/download_status/<download_id>")

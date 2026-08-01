@@ -75,11 +75,12 @@ export class DownloadService {
   }
 
   /** Add a download to the queue. If slots are available, start immediately. */
-  queueDownload(url: string, title: string, button: HTMLButtonElement, useAdvanced = false): void {
+  queueDownload(url: string, title: string, button: HTMLButtonElement, useAdvanced = false, thumbnailUrl?: string): void {
     const item: QueueItem = {
       url,
       title,
       useAdvanced,
+      thumbnailUrl,
       status: "queued",
       timestamp: Date.now(),
       buttonId: button.id || `btn_${Date.now()}`,
@@ -113,7 +114,7 @@ export class DownloadService {
         button.innerHTML = '<div class="spinner"></div> Starting...';
       }
       this.activeDownloads++;
-      this.startDownload(item.url, item.title, item.useAdvanced, button);
+      this.startDownload(item.url, item.title, item.useAdvanced, button, item.thumbnailUrl);
       this.onChange();
     }
   }
@@ -121,13 +122,13 @@ export class DownloadService {
   /**
    * Entry point: download a song. Queues if too many concurrent downloads.
    */
-  downloadSong(url: string, title: string, button: HTMLButtonElement, useAdvanced = false): void {
+  downloadSong(url: string, title: string, button: HTMLButtonElement, useAdvanced = false, thumbnailUrl?: string): void {
     if (this.activeDownloads >= MAX_CONCURRENT_DOWNLOADS) {
-      this.queueDownload(url, title, button, useAdvanced);
+      this.queueDownload(url, title, button, useAdvanced, thumbnailUrl);
       return;
     }
     this.activeDownloads++;
-    this.startDownload(url, title, useAdvanced, button);
+    this.startDownload(url, title, useAdvanced, button, thumbnailUrl);
   }
 
   /** Cancel a queued (not-yet-started) download. */
@@ -263,6 +264,7 @@ export class DownloadService {
     title: string,
     useAdvanced: boolean,
     button: HTMLButtonElement | null,
+    thumbnailUrl?: string,
   ): Promise<void> {
     const downloadKey = `${url}|${title}`;
     if (this.ongoingDownloads.has(downloadKey)) return;
@@ -275,7 +277,7 @@ export class DownloadService {
     }
 
     try {
-      const requestBody: DownloadRequestBody = { url, title };
+      const requestBody: DownloadRequestBody = { url, title, thumbnailUrl };
 
       let searchType: SearchType = "music";
       const activeBtn = document.querySelector(".type-btn.active") as HTMLElement | null;

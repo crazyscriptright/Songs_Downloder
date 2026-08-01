@@ -8,6 +8,7 @@ export type DownloadCallback = (
   title: string,
   button: HTMLButtonElement,
   useAdvanced?: boolean,
+  thumbnailUrl?: string,
 ) => void;
 export type AdvancedCallback = (url: string, title: string, button: HTMLButtonElement) => void;
 
@@ -150,7 +151,7 @@ export function createSongCard(
     const dlBtn = document.getElementById(buttonId) as HTMLButtonElement | null;
     if (dlBtn) {
       dlBtn.addEventListener("click", () => {
-        onDownload(song.url, song.title, dlBtn);
+        onDownload(song.url, song.title, dlBtn, undefined, song.thumbnail);
       });
     }
     const previewBtn = document.getElementById(previewBtnId) as HTMLButtonElement | null;

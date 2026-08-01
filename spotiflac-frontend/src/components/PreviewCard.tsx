@@ -141,6 +141,7 @@ export class PreviewCard {
             <div style="display:flex;gap:6px;">
               <button class="download-btn rec-download" id="${btnId}"
                 data-url="${track.url}" data-title="${safeTitle}"
+                data-thumbnail="${track.thumbnail || ''}"
                 style="padding:6px 10px;font-size:0.85em;">Download</button>
               ${
                 showPreview

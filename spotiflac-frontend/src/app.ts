@@ -66,8 +66,8 @@ export class App {
       this.results.setSearchType(type);
     };
 
-    this.results.onDownload = (url, title, btn, adv) =>
-      this.downloadService.downloadSong(url, title, btn, adv);
+    this.results.onDownload = (url, title, btn, adv, thumbnailUrl) =>
+      this.downloadService.downloadSong(url, title, btn, adv, thumbnailUrl);
     this.results.onAdvanced = (url: string) => {
       this.searchBox.query = url;
       this.searchBox.selectSearchType(this.searchType);

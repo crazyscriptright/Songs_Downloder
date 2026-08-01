@@ -14,6 +14,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+import requests
+
 logger = logging.getLogger(__name__)
 
 SUPPORTED_AUDIO_EXTENSIONS = {".mp3", ".flac", ".m4a", ".mp4", ".aac", ".wav"}
@@ -82,26 +84,42 @@ def run_post_download_enrichment(file_path: str | Path, metadata_context: dict[s
         result["errors"].append(f"metadata_enrichment_failed: {exc}")
 
     try:
-        from tools.music_metadata_enhancer.fix_album_art import (
-            _get_tag,
-            embed_artwork_to_file,
-            fetch_artwork_from_apis,
-            get_artwork_from_file,
-            is_square_artwork,
-            resize_artwork_to_square,
-        )
+        embed_thumbnail = (metadata_context or {}).get("_embed_thumbnail", True)
+        thumbnail_url = (metadata_context or {}).get("_thumbnail_url")
 
-        artwork_bytes, _ = get_artwork_from_file(path)
-        needs_artwork = (not artwork_bytes) or (not is_square_artwork(artwork_bytes, tolerance=0.05))
+        if not embed_thumbnail:
+            result["artwork_updated"] = False
+        else:
+            from tools.music_metadata_enhancer.fix_album_art import (
+                _get_tag,
+                embed_artwork_to_file,
+                fetch_artwork_from_apis,
+                get_artwork_from_file,
+                is_square_artwork,
+                resize_artwork_to_square,
+            )
 
-        if needs_artwork:
-            title = _get_tag(path, "title") or path.stem
-            artist = _get_tag(path, "artist") or ""
-            album = _get_tag(path, "album") or ""
+            artwork_bytes = None
 
-            fresh_artwork = fetch_artwork_from_apis(title=title, artist=artist, album=album)
-            if fresh_artwork:
-                square_artwork = resize_artwork_to_square(fresh_artwork, target_size=1080)
+            if thumbnail_url:
+                try:
+                    resp = requests.get(thumbnail_url, timeout=15)
+                    resp.raise_for_status()
+                    artwork_bytes = resp.content
+                except Exception as thumb_err:
+                    result["errors"].append(f"thumbnail_url_fetch_failed: {thumb_err}")
+
+            if artwork_bytes is None:
+                existing_artwork, _ = get_artwork_from_file(path)
+                needs_artwork = (not existing_artwork) or (not is_square_artwork(existing_artwork, tolerance=0.05))
+                if needs_artwork:
+                    title = _get_tag(path, "title") or path.stem
+                    artist = _get_tag(path, "artist") or ""
+                    album = _get_tag(path, "album") or ""
+                    artwork_bytes = fetch_artwork_from_apis(title=title, artist=artist, album=album)
+
+            if artwork_bytes:
+                square_artwork = resize_artwork_to_square(artwork_bytes, target_size=1080)
                 if square_artwork:
                     result["artwork_updated"] = bool(embed_artwork_to_file(path, square_artwork))
     except Exception as exc:

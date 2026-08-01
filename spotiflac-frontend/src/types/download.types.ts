@@ -10,6 +10,7 @@ export interface DownloadItem {
   id: string;
   title: string;
   url: string;
+  thumbnailUrl?: string;
   status: DownloadStatus;
   progress: number;
   error?: string | null;
@@ -27,6 +28,7 @@ export interface QueueItem {
   url: string;
   title: string;
   useAdvanced: boolean;
+  thumbnailUrl?: string;
   status: "queued";
   timestamp: number;
   buttonId: string;
@@ -35,6 +37,7 @@ export interface QueueItem {
 export interface DownloadRequestBody {
   url: string;
   title: string;
+  thumbnailUrl?: string;
   advancedOptions?: AdvancedOptions;
 }
 

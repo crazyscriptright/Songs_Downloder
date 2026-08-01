@@ -49,6 +49,14 @@ SOURCE_DOWNLOAD_METHOD: dict[str, str] = {
     "jiosaavn":   os.getenv("SOURCE_JIOSAAVN",   "YT-DLP").upper(),
 }
 
+# Per-source thumbnail embedding flag. False → skip artwork during post-processing.
+THUMBNAIL_SOURCES: dict[str, bool] = {
+    "youtube":    os.getenv("THUMBNAIL_YOUTUBE",    "true").lower() == "true",
+    "soundcloud": os.getenv("THUMBNAIL_SOUNDCLOUD", "true").lower() == "true",
+    "jiosaavn":   os.getenv("THUMBNAIL_JIOSAAVN",   "false").lower() == "true",
+    "spotify":    os.getenv("THUMBNAIL_SPOTIFY",    "true").lower() == "true",
+}
+
 # Outbound HTTP proxy for general API requests.
 HTTP_PROXY: str | None = os.getenv("HTTP_PROXY") or None
 # Outbound HTTPS proxy for general API requests.

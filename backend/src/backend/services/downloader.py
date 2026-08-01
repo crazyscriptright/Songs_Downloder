@@ -116,7 +116,7 @@ def _user_friendly_error(raw_error: str) -> str:
             return friendly
     return "Download failed. Please try again later."
 
-def download_with_spoflac(url: str, title: str, download_id: str, advanced_options=None) -> None:
+def download_with_spoflac(url: str, title: str, download_id: str, advanced_options=None, thumbnail_url=None, embed_thumbnail=True) -> None:
     """
     Download via spoflac_core (Tidal/Qobuz/Amazon/SoundCloud fallback chain).
     Resolves URL, fetches metadata + lyrics, downloads FLAC, embeds tags,
@@ -314,6 +314,9 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
             speed="Post-processing",
         )
         state.save_download_status()
+
+        track_metadata["_thumbnail_url"] = thumbnail_url
+        track_metadata["_embed_thumbnail"] = embed_thumbnail
 
         try:
             enrichment_result = run_post_download_enrichment(output_path, metadata_context=track_metadata)
@@ -531,6 +534,17 @@ def _get_download_method(url: str) -> str:
 
     return "YT-DLP"
 
+def _resolve_thumbnail_enabled(url: str) -> bool:
+    """Return whether thumbnail embedding is enabled for this URL's source."""
+    url_lower = url.lower()
+    if 'youtube.com' in url_lower or 'youtu.be' in url_lower or 'music.youtube.com' in url_lower:
+        return config.THUMBNAIL_SOURCES.get("youtube", True)
+    if 'soundcloud.com' in url_lower:
+        return config.THUMBNAIL_SOURCES.get("soundcloud", True)
+    if 'jiosaavn.com' in url_lower or 'saavn.com' in url_lower:
+        return config.THUMBNAIL_SOURCES.get("jiosaavn", False)
+    return config.THUMBNAIL_SOURCES.get("spotify", True)
+
 def _source_supports_proxy(url: str) -> bool:
     """Return True if this source URL can use the proxy API as a fallback."""
     url_lower = url.lower()
@@ -542,7 +556,7 @@ def _source_supports_proxy(url: str) -> bool:
         return True
     return False
 
-def download_song(url: str, title: str, download_id: str, advanced_options=None) -> None:
+def download_song(url: str, title: str, download_id: str, advanced_options=None, thumbnail_url=None) -> None:
     """
     Download *url* to disk.
 
@@ -584,7 +598,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
         save_download_status()
 
         try:
-            download_with_spoflac(url, title, download_id, advanced_options)
+            download_with_spoflac(url, title, download_id, advanced_options, thumbnail_url, _resolve_thumbnail_enabled(url))
         except Exception as exc:
             print(f"⚠️  SpotiFLAC failed for {label}: {exc}")
             state.download_status[download_id].update(
@@ -783,6 +797,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
             _finalise_success(
                 download_id, url, title, safe, download_dir,
                 completed_files, total_files, has_progress, advanced_options,
+                thumbnail_url, _resolve_thumbnail_enabled(url),
             )
         else:
             raw_error = " | ".join(error_messages[:3]) if error_messages else ""
@@ -1006,6 +1021,7 @@ def _embed_lyrics_for_file(filepath: str) -> None:
 def _finalise_success(
     download_id, url, title, safe, download_dir,
     completed_files, total_files, has_progress, advanced_options,
+    thumbnail_url=None, embed_thumbnail=True,
 ):
     try:
         files = os.listdir(download_dir)
@@ -1027,7 +1043,7 @@ def _finalise_success(
             file_path = os.path.join(download_dir, fname)
             if os.path.isfile(file_path):
                 try:
-                    run_post_download_enrichment(file_path, metadata_context={"title": os.path.splitext(fname)[0]})
+                    run_post_download_enrichment(file_path, metadata_context={"title": os.path.splitext(fname)[0], "_thumbnail_url": thumbnail_url, "_embed_thumbnail": embed_thumbnail})
                 except Exception as post_exc:
                     print(f" Post-process skipped for {fname}: {post_exc}")
                 _run_cli_music_hardening(file_path)
@@ -1075,7 +1091,7 @@ def _finalise_success(
         if fname and not opts.get('keepVideo', False):
             target_path = os.path.join(download_dir, fname)
             try:
-                post_result = run_post_download_enrichment(target_path, metadata_context={"title": title})
+                post_result = run_post_download_enrichment(target_path, metadata_context={"title": title, "_thumbnail_url": thumbnail_url, "_embed_thumbnail": embed_thumbnail})
                 if not post_result.get("metadata_enriched"):
                     _embed_lyrics_for_file(target_path)
             except Exception as post_exc:

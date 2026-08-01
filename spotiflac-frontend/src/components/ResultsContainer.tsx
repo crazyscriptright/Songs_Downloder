@@ -209,7 +209,7 @@ export class ResultsContainer {
         btn.addEventListener("click", () => {
           const url = btn.dataset.url!;
           const title = btn.dataset.title!;
-          this.onDownload(url, title, btn, true);
+          this.onDownload(url, title, btn, true, previewData?.thumbnail);
         });
       }
 
