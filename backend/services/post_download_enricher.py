@@ -82,6 +82,7 @@ def run_post_download_enrichment(file_path: str | Path, metadata_context: dict[s
             _get_tag,
             embed_artwork_to_file,
             fetch_artwork_from_apis,
+            fetch_thumbnail_large,
             get_artwork_from_file,
             is_square_artwork,
             resize_artwork_to_square,
@@ -95,9 +96,19 @@ def run_post_download_enrichment(file_path: str | Path, metadata_context: dict[s
             artist = _get_tag(path, "artist") or ""
             album = _get_tag(path, "album") or ""
 
-            fresh_artwork = fetch_artwork_from_apis(title=title, artist=artist, album=album)
+            # YouTube / YT Music: prefer the client-supplied thumbnail (large variant)
+            # over the external artwork APIs when the embedded art isn't square.
+            thumbnail_url = (context or {}).get("thumbnail") or ""
+            source_url = (context or {}).get("url") or ""
+            is_youtube = "youtube.com" in source_url or "youtu.be" in source_url
+
+            if thumbnail_url and is_youtube:
+                fresh_artwork = fetch_thumbnail_large(thumbnail_url)
+            else:
+                fresh_artwork = fetch_artwork_from_apis(title=title, artist=artist, album=album)
+
             if fresh_artwork:
-                square_artwork = resize_artwork_to_square(fresh_artwork, target_size=1080)
+                square_artwork = resize_artwork_to_square(fresh_artwork, target_size=512)
                 if square_artwork:
                     result["artwork_updated"] = bool(embed_artwork_to_file(path, square_artwork))
     except Exception as exc:

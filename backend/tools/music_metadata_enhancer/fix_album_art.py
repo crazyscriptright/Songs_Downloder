@@ -33,6 +33,7 @@ Features:
 
 import sys
 import os
+import re
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple
 import logging
@@ -340,8 +341,54 @@ def fetch_artwork_from_apis(title: str, artist: str, album: str = '') -> Optiona
                 return artwork
         except Exception as e:
             logger.debug(f"   ✗ {source_name} failed: {e}")
-    
+
     logger.debug(f"   ✗ All sources failed for '{title}'")
+    return None
+
+
+def _upgrade_thumbnail_url(thumbnail_url: str) -> str:
+    """
+    Return the largest available variant of a thumbnail URL.
+
+    - YouTube video thumbs (i.ytimg.com / img.youtube.com /vi/<id>/<size>.jpg):
+      prefers maxresdefault, falling back to sddefault → hqdefault → original.
+    - YouTube Music / Google-hosted art (=wNNN-hNNN-…): request 1080x1080.
+    - Anything else is returned unchanged.
+    """
+    try:
+        m = re.search(
+            r"(https?://(?:i\.ytimg\.com|img\.youtube\.com)/vi/[^/]+/)([a-zA-Z0-9_]+)(\.jpg)",
+            thumbnail_url,
+        )
+        if m:
+            base, _, ext = m.groups()
+            for size in ("maxresdefault", "sddefault", "hqdefault", "mqdefault"):
+                candidate = f"{base}{size}{ext}"
+                try:
+                    if requests.get(candidate, timeout=10).status_code == 200:
+                        return candidate
+                except Exception:
+                    continue
+            return thumbnail_url
+
+        if "googleusercontent.com" in thumbnail_url and "=w" in thumbnail_url:
+            return re.sub(r"=w\d+-h\d+", "=w1080-h1080", thumbnail_url)
+    except Exception:
+        pass
+    return thumbnail_url
+
+
+def fetch_thumbnail_large(thumbnail_url: str) -> Optional[bytes]:
+    """Download the largest available version of *thumbnail_url* (best-effort)."""
+    if not thumbnail_url or not HAS_REQUESTS:
+        return None
+    url = _upgrade_thumbnail_url(thumbnail_url)
+    try:
+        response = requests.get(url, timeout=15)
+        if response.status_code == 200 and response.content:
+            return response.content
+    except Exception as e:
+        logger.debug(f"Thumbnail fetch failed: {e}")
     return None
 
 
@@ -349,37 +396,45 @@ def fetch_artwork_from_apis(title: str, artist: str, album: str = '') -> Optiona
 # ARTWORK PROCESSING
 # ============================================================================
 
-def resize_artwork_to_square(artwork_bytes: bytes, target_size: int = 1080) -> Optional[bytes]:
+def resize_artwork_to_square(artwork_bytes: bytes, target_size: int = 512) -> Optional[bytes]:
     """
     Resize artwork to square (1:1 ratio).
-    
+
     - If landscape: crop to square by removing sides
     - If portrait: crop to square by removing top/bottom
     - Resize to target_size x target_size
+
+    Output is JPEG, not PNG: album art is photographic, so PNG's lossless
+    encoding balloons the embedded size (a 512² PNG runs ~400 KB, 1080² ~1.5 MB)
+    while JPEG keeps visual quality at a fraction of the bytes.
     """
     try:
         img = Image.open(io.BytesIO(artwork_bytes))
-        
+
         # Get original dimensions
         width, height = img.size
-        
+
         # Crop to square (take middle portion)
         min_dim = min(width, height)
         left = (width - min_dim) // 2
         top = (height - min_dim) // 2
         right = left + min_dim
         bottom = top + min_dim
-        
+
         img = img.crop((left, top, right, bottom))
-        
+
         # Resize to target
         img = img.resize((target_size, target_size), Image.Resampling.LANCZOS)
-        
+
+        # JPEG has no alpha channel — flatten before saving
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGB")
+
         # Save to bytes with good quality
         output = io.BytesIO()
-        img.save(output, format='PNG', quality=95, optimize=True)
+        img.save(output, format='JPEG', quality=90, optimize=True, progressive=True)
         return output.getvalue()
-    
+
     except Exception as e:
         logger.debug(f"Error resizing artwork: {e}")
         return None
@@ -493,7 +548,7 @@ def _embed_artwork_mp3(file_path: Path, artwork_bytes: bytes) -> bool:
         # Add new artwork frame
         apic = APIC(
             encoding=3,  # UTF-8
-            mime='image/png',
+            mime='image/jpeg',
             type=3,  # Cover front (0=other, 1=icon, 3=cover front, etc)
             desc='Cover',
             data=artwork_bytes
@@ -526,7 +581,7 @@ def _embed_artwork_flac(file_path: Path, artwork_bytes: bytes) -> bool:
         pic = Picture()
         pic.data = artwork_bytes
         pic.type = 3  # Cover front
-        pic.mime = 'image/png'
+        pic.mime = 'image/jpeg'
         pic.desc = 'Cover'
         
         audio.add_picture(pic)
@@ -651,7 +706,7 @@ def process_single_file(file_path: Path, dry_run: bool = False, remove_mode: boo
         result['status'] = 'failed_fetch'
         return result
 
-    square_artwork = resize_artwork_to_square(new_artwork, target_size=1080)
+    square_artwork = resize_artwork_to_square(new_artwork, target_size=512)
     if not square_artwork:
         logger.warning("   ❌ Could not resize artwork")
         result['status'] = 'failed_resize'
@@ -770,7 +825,7 @@ def scan_missing_artwork(folder_path: Path, dry_run: bool = False, limit: Option
             
             # Resize to square
             logger.info(f"   📐 Resizing to square (1080x1080)...")
-            square_artwork = resize_artwork_to_square(artwork, target_size=1080)
+            square_artwork = resize_artwork_to_square(artwork, target_size=512)
             
             if not square_artwork:
                 logger.warning(f"   ✗ Failed to resize artwork")
@@ -933,7 +988,7 @@ def scan_and_report(folder_path: Path, dry_run: bool = False, remove_mode: bool 
                 
                 # Resize to square
                 logger.info(f"   📐 Resizing to square (1080x1080)...")
-                square_artwork = resize_artwork_to_square(new_artwork, target_size=1080)
+                square_artwork = resize_artwork_to_square(new_artwork, target_size=512)
                 
                 if not square_artwork:
                     logger.warning(f"   ✗ Failed to resize artwork")

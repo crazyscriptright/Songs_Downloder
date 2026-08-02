@@ -517,7 +517,7 @@ def _detect_spoflac_platform(url: str) -> str | None:
     return 'unknown'
 
 
-def download_song(url: str, title: str, download_id: str, advanced_options=None) -> None:
+def download_song(url: str, title: str, download_id: str, advanced_options=None, thumbnail=None) -> None:
     """
     Download *url* to disk.
 
@@ -591,6 +591,8 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
     state.cleanup_tmp_directory()
 
     download_status[download_id] = _initial_status(title, url, advanced_options, "downloading")
+    if thumbnail:
+        download_status[download_id]["thumbnail"] = thumbnail
     save_download_status()
 
     try:
@@ -720,6 +722,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
                         "progress": min(progress, 99),
                         "title": display_title,
                         "url": url,
+                        "thumbnail": thumbnail,
                         "speed": speed_m.group(1) if speed_m else "Unknown",
                         "eta": eta_m.group(1) if eta_m else "Unknown",
                         "current_file": current_idx if total_files > 0 else None,
@@ -754,6 +757,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None)
             _finalise_success(
                 download_id, url, title, safe, download_dir,
                 completed_files, total_files, has_progress, advanced_options,
+                thumbnail,
             )
         else:
             error_text = " | ".join(error_messages[:3]) if error_messages else "Download failed"
@@ -966,7 +970,7 @@ def _embed_lyrics_for_file(filepath: str) -> None:
 
 def _finalise_success(
     download_id, url, title, safe, download_dir,
-    completed_files, total_files, has_progress, advanced_options,
+    completed_files, total_files, has_progress, advanced_options, thumbnail=None,
 ):
     from core.state import download_status, save_download_status
 
@@ -990,7 +994,14 @@ def _finalise_success(
             file_path = os.path.join(download_dir, fname)
             if os.path.isfile(file_path):
                 try:
-                    run_post_download_enrichment(file_path, metadata_context={"title": os.path.splitext(fname)[0]})
+                    run_post_download_enrichment(
+                        file_path,
+                        metadata_context={
+                            "title": os.path.splitext(fname)[0],
+                            "url": url,
+                            "thumbnail": thumbnail,
+                        },
+                    )
                 except Exception as post_exc:
                     print(f" Post-process skipped for {fname}: {post_exc}")
                 _run_cli_music_hardening(file_path)
@@ -1023,6 +1034,7 @@ def _finalise_success(
             "status": "complete", "progress": 100,
             "title": f"{first_title} (+{len(files)-1} more)",
             "url": url, "file_count": len(files), "file_downloads": fds,
+            "thumbnail": thumbnail,
             "speed": "Complete", "eta": "0:00",
             "timestamp": download_status[download_id]["timestamp"],
             "completed_at": datetime.now().isoformat(),
@@ -1039,7 +1051,10 @@ def _finalise_success(
         if fname and not opts.get('keepVideo', False):
             target_path = os.path.join(download_dir, fname)
             try:
-                post_result = run_post_download_enrichment(target_path, metadata_context={"title": title})
+                post_result = run_post_download_enrichment(
+                    target_path,
+                    metadata_context={"title": title, "url": url, "thumbnail": thumbnail},
+                )
                 if not post_result.get("metadata_enriched"):
                     _embed_lyrics_for_file(target_path)
             except Exception as post_exc:
@@ -1050,6 +1065,7 @@ def _finalise_success(
             "status": "complete", "progress": 100,
             "title": os.path.splitext(fname)[0] if fname else title,
             "url": url,
+            "thumbnail": thumbnail,
             "file": fname or f"{safe}.mp3",
             "speed": "Complete", "eta": "0:00",
             "timestamp": download_status[download_id]["timestamp"],

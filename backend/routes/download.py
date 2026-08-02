@@ -25,6 +25,12 @@ def download():
     url = data.get("url")
     title = data.get("title")
     advanced_options = data.get("advancedOptions")
+    thumbnail = data.get("thumbnail")
+    if thumbnail is not None and (
+        not isinstance(thumbnail, str)
+        or not thumbnail.startswith(("http://", "https://"))
+    ):
+        thumbnail = None
 
     print(f"\n{'='*70}")
     print(f"📥 Download request received")
@@ -61,9 +67,13 @@ def download():
         "eta": "Initializing…", "speed": "0 KB/s",
         "timestamp": datetime.now().isoformat(),
         "advanced_options": advanced_options,
+        "thumbnail": thumbnail,
     }
     state.save_download_status()
-    threading.Thread(target=download_song, args=(url, title, download_id, advanced_options)).start()
+    threading.Thread(
+        target=download_song,
+        args=(url, title, download_id, advanced_options, thumbnail),
+    ).start()
     return jsonify({"download_id": download_id, "status": "started"})
 
 

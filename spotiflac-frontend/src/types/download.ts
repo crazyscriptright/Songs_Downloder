@@ -30,11 +30,13 @@ export interface QueueItem {
   status: "queued";
   timestamp: number;
   buttonId: string;
+  thumbnail?: string;
 }
 
 export interface DownloadRequestBody {
   url: string;
   title: string;
+  thumbnail?: string;
   advancedOptions?: AdvancedOptions;
 }
 

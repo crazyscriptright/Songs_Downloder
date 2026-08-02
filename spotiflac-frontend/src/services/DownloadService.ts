@@ -73,11 +73,13 @@ export class DownloadService {
     title: string,
     button: HTMLButtonElement,
     useAdvanced = false,
+    thumbnail?: string,
   ): void {
     const item: QueueItem = {
       url,
       title,
       useAdvanced,
+      thumbnail,
       status: "queued",
       timestamp: Date.now(),
       buttonId: button.id || `btn_${Date.now()}`,
@@ -116,7 +118,13 @@ export class DownloadService {
         button.innerHTML = '<div class=\"spinner\"></div> Starting...';
       }
       this.activeDownloads++;
-      this.startDownload(item.url, item.title, item.useAdvanced, button);
+      this.startDownload(
+        item.url,
+        item.title,
+        item.useAdvanced,
+        button,
+        item.thumbnail,
+      );
       this.onChange();
     }
   }
@@ -129,13 +137,14 @@ export class DownloadService {
     title: string,
     button: HTMLButtonElement,
     useAdvanced = false,
+    thumbnail?: string,
   ): void {
     if (this.activeDownloads >= MAX_CONCURRENT_DOWNLOADS) {
-      this.queueDownload(url, title, button, useAdvanced);
+      this.queueDownload(url, title, button, useAdvanced, thumbnail);
       return;
     }
     this.activeDownloads++;
-    this.startDownload(url, title, useAdvanced, button);
+    this.startDownload(url, title, useAdvanced, button, thumbnail);
   }
 
   /** Cancel a queued (not-yet-started) download. */
@@ -294,6 +303,7 @@ export class DownloadService {
     title: string,
     useAdvanced: boolean,
     button: HTMLButtonElement | null,
+    thumbnail?: string,
   ): Promise<void> {
     const downloadKey = `${url}|${title}`;
     if (this.ongoingDownloads.has(downloadKey)) return;
@@ -306,7 +316,7 @@ export class DownloadService {
     }
 
     try {
-      const requestBody: DownloadRequestBody = { url, title };
+      const requestBody: DownloadRequestBody = { url, title, thumbnail };
 
       // Determine the current searchType from the DOM active button
       let searchType: SearchType = "music";
