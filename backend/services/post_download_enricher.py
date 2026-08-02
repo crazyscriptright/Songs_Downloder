@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Any
 import logging
 
+from core import config
+
 logger = logging.getLogger(__name__)
 
 SUPPORTED_AUDIO_EXTENSIONS = {".mp3", ".flac", ".m4a", ".mp4", ".aac", ".wav"}
@@ -25,6 +27,19 @@ def _derive_title_artist_from_stem(path: Path) -> tuple[str, str]:
         artist, title = stem.split(" - ", 1)
         return title.strip(), artist.strip()
     return stem, ""
+
+
+def _detect_source(url: str) -> str:
+    """Map a download URL to the source key used in config.THUMBNAIL_SOURCES."""
+    if "youtube.com" in url or "youtu.be" in url:
+        return "youtube"
+    if "soundcloud.com" in url:
+        return "soundcloud"
+    if "jiosaavn.com" in url or "saavn.com" in url:
+        return "jiosaavn"
+    if "spotify.com" in url or "open.spotify.com" in url:
+        return "spotify"
+    return "unknown"
 
 
 def run_post_download_enrichment(file_path: str | Path, metadata_context: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -91,18 +106,24 @@ def run_post_download_enrichment(file_path: str | Path, metadata_context: dict[s
         artwork_bytes, _ = get_artwork_from_file(path)
         needs_artwork = (not artwork_bytes) or (not is_square_artwork(artwork_bytes, tolerance=0.05))
 
-        if needs_artwork:
+        source_url = (context or {}).get("url") or ""
+        source = _detect_source(source_url)
+        result["source"] = source
+
+        # Per-source flag: skip artwork refresh entirely when disabled.
+        if source in config.THUMBNAIL_SOURCES and not config.THUMBNAIL_SOURCES[source]:
+            result["artwork_skipped"] = f"thumbnail_disabled_for_{source}"
+        elif needs_artwork:
             title = _get_tag(path, "title") or path.stem
             artist = _get_tag(path, "artist") or ""
             album = _get_tag(path, "album") or ""
 
-            # YouTube / YT Music: prefer the client-supplied thumbnail (large variant)
-            # over the external artwork APIs when the embedded art isn't square.
+            # Prefer the client-supplied thumbnail URL (large variant) for any
+            # enabled source; fall back to the external artwork API chain when
+            # no thumbnail was passed.
             thumbnail_url = (context or {}).get("thumbnail") or ""
-            source_url = (context or {}).get("url") or ""
-            is_youtube = "youtube.com" in source_url or "youtu.be" in source_url
 
-            if thumbnail_url and is_youtube:
+            if thumbnail_url:
                 fresh_artwork = fetch_thumbnail_large(thumbnail_url)
             else:
                 fresh_artwork = fetch_artwork_from_apis(title=title, artist=artist, album=album)

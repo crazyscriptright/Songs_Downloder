@@ -34,6 +34,19 @@ PORT: int = int(os.getenv("PORT", 5000))
 # Set FORCE_PROXY_API=true in .env to always use proxy API instead of yt-dlp
 FORCE_PROXY_API: bool = os.getenv("FORCE_PROXY_API", "false").lower() == "true"
 
+# ── Per-source thumbnail embedding ─────────────────────────────────────────────
+# Controls whether post-download enrichment refreshes the artwork for each
+# source. When a source is disabled, its downloaded tracks keep the original
+# embedded art untouched. Override any entry via env var, e.g.
+#   ThumbnailYoutube=false   Thumbnailsavn=false
+#   ThumbnailSoundcloud=true ThumbnailSpotify=true
+THUMBNAIL_SOURCES: dict[str, bool] = {
+    "youtube": os.getenv("ThumbnailYoutube", "true").lower() == "true",
+    "soundcloud": os.getenv("ThumbnailSoundcloud", "false").lower() == "true",
+    "jiosaavn": os.getenv("Thumbnailsavn", "false").lower() == "true",
+    "spotify": os.getenv("ThumbnailSpotify", "false").lower() == "true",
+}
+
 # ── API keys ───────────────────────────────────────────────────────────────────
 VIDEO_DOWNLOAD_API_KEY: str = os.getenv("VIDEO_DOWNLOAD_API_KEY", "")
 

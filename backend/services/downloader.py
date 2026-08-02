@@ -357,7 +357,7 @@ def download_with_spoflac(url: str, title: str, download_id: str, advanced_optio
 
 # ── Proxy API fallback ─────────────────────────────────────────────────────────
 
-def download_with_proxy_api(url: str, title: str, download_id: str, advanced_options=None) -> None:
+def download_with_proxy_api(url: str, title: str, download_id: str, advanced_options=None, thumbnail=None) -> None:
     """Fallback download via p.savenow.to when yt-dlp fails."""
     try:
         print(f" Proxy API fallback for: {title}")
@@ -441,6 +441,13 @@ def download_with_proxy_api(url: str, title: str, download_id: str, advanced_opt
 
                 if not is_video:
                     _run_cli_music_hardening(local_path)
+                    try:
+                        run_post_download_enrichment(
+                            local_path,
+                            metadata_context={"title": title, "url": url, "thumbnail": thumbnail},
+                        )
+                    except Exception as post_exc:
+                        print(f" Proxy post-process skipped: {post_exc}")
 
                 state.download_status[download_id].update(
                     status="complete", progress=100, file=filename,
@@ -575,7 +582,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None,
         download_status[download_id]["eta"] = "Initiating proxy download…"
         save_download_status()
         try:
-            download_with_proxy_api(url, title, download_id, advanced_options)
+            download_with_proxy_api(url, title, download_id, advanced_options, thumbnail)
             return
         except Exception as exc:
             download_status[download_id].update(
@@ -770,7 +777,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None,
             # YouTube fallback
             if "youtube.com" in url or "youtu.be" in url:
                 try:
-                    download_with_proxy_api(url, title, download_id, advanced_options)
+                    download_with_proxy_api(url, title, download_id, advanced_options, thumbnail)
                     return
                 except Exception:
                     pass

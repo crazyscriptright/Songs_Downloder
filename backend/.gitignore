@@ -14,6 +14,7 @@ __pycache__/
 # Logs and temp
 *.log
 *.tmp
+src/universal_music_downloader.egg-info
 
 # Generated / cached files
 

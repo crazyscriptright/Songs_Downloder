@@ -21,6 +21,7 @@ backend/new_venv/
 backend/.DS_Store
 spotiflac-frontend/.DS_Store
 *.code-workspace
+backend/src/universal_music_downloader.egg-info
 
 # Logs / databases
 *.log
