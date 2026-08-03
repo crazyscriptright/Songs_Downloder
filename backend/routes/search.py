@@ -11,9 +11,10 @@ import urllib.parse
 from datetime import datetime
 
 import requests
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, render_template, request
 
 from core import state
+from utils.response import error, success
 from utils.url_utils import is_url, validate_url_simple
 
 search_bp = Blueprint("search", __name__)
@@ -299,65 +300,65 @@ def search():
     query = data.get("query", "").strip()
     search_type = data.get("type", "music")
     if not query:
-        return jsonify({"error": "Empty query"}), 400
+        return error("Empty query", 400)
     search_id = f"search_{datetime.now().timestamp()}"
     query_type = "url" if is_url(query) else "search"
     threading.Thread(target=search_all_sources, args=(query, search_id, search_type)).start()
-    return jsonify({"search_id": search_id, "status": "started", "query_type": query_type})
+    return success({"search_id": search_id, "status": "started", "query_type": query_type}, "Search started")
 
 @search_bp.route("/search/jiosaavn", methods=["POST"])
 def search_jiosaavn_endpoint():
     data = request.get_json()
     query = data.get("query", "").strip()
     if not query:
-        return jsonify({"error": "Query is required"}), 400
+        return error("Query is required", 400)
     try:
         results = search_jiosaavn(query)
-        return jsonify({"status": "complete", "source": "jiosaavn", "results": results, "count": len(results), "query": query})
+        return success({"status": "complete", "source": "jiosaavn", "results": results, "count": len(results), "query": query}, f"Found {len(results)} JioSaavn results")
     except Exception as e:
-        return jsonify({"status": "error", "source": "jiosaavn", "error": str(e), "results": [], "count": 0, "query": query})
+        return error(str(e), 500, data={"source": "jiosaavn", "results": [], "count": 0, "query": query})
 
 @search_bp.route("/search/soundcloud", methods=["POST"])
 def search_soundcloud_endpoint():
     data = request.get_json()
     query = data.get("query", "").strip()
     if not query:
-        return jsonify({"error": "Query is required"}), 400
+        return error("Query is required", 400)
     try:
         results = search_soundcloud(query)
-        return jsonify({"status": "complete", "source": "soundcloud", "results": results, "count": len(results), "query": query})
+        return success({"status": "complete", "source": "soundcloud", "results": results, "count": len(results), "query": query}, f"Found {len(results)} SoundCloud results")
     except Exception as e:
-        return jsonify({"status": "error", "source": "soundcloud", "error": str(e), "results": [], "count": 0, "query": query})
+        return error(str(e), 500, data={"source": "soundcloud", "results": [], "count": 0, "query": query})
 
 @search_bp.route("/search/ytmusic", methods=["POST"])
 def search_ytmusic_endpoint():
     data = request.get_json()
     query = data.get("query", "").strip()
     if not query:
-        return jsonify({"error": "Query is required"}), 400
+        return error("Query is required", 400)
     try:
         results = search_ytmusic(query)
-        return jsonify({"status": "complete", "source": "ytmusic", "results": results, "count": len(results), "query": query})
+        return success({"status": "complete", "source": "ytmusic", "results": results, "count": len(results), "query": query}, f"Found {len(results)} YouTube Music results")
     except Exception as e:
-        return jsonify({"status": "error", "source": "ytmusic", "error": str(e), "results": [], "count": 0, "query": query})
+        return error(str(e), 500, data={"source": "ytmusic", "results": [], "count": 0, "query": query})
 
 @search_bp.route("/search/ytvideo", methods=["POST"])
 def search_ytvideo_endpoint():
     data = request.get_json()
     query = data.get("query", "").strip()
     if not query:
-        return jsonify({"error": "Query is required"}), 400
+        return error("Query is required", 400)
     try:
         results = search_ytvideo(query)
-        return jsonify({"status": "complete", "source": "ytvideo", "results": results, "count": len(results), "query": query})
+        return success({"status": "complete", "source": "ytvideo", "results": results, "count": len(results), "query": query}, f"Found {len(results)} YouTube Video results")
     except Exception as e:
-        return jsonify({"status": "error", "source": "ytvideo", "error": str(e), "results": [], "count": 0, "query": query})
+        return error(str(e), 500, data={"source": "ytvideo", "results": [], "count": 0, "query": query})
 
 @search_bp.route("/suggestions")
 def get_suggestions():
     query = request.args.get("q", "").strip()
     if not query or len(query) < 2:
-        return jsonify({"suggestions": []})
+        return success({"suggestions": []}, "Query too short")
     try:
         combined = _yt_suggestions(query)[:4] + _jiosaavn_suggestions(query)[:2]
         seen = set()
@@ -367,16 +368,16 @@ def get_suggestions():
             if k not in seen and len(k) > 1:
                 seen.add(k)
                 unique.append(s)
-        return jsonify({"suggestions": unique[:6]})
+        return success({"suggestions": unique[:6]}, f"Found {len(unique[:6])} suggestions")
     except Exception as e:
         print(f"Suggestions error: {e}")
-        return jsonify({"suggestions": [f"{query} song", f"{query} music", f"{query} latest"]})
+        return success({"suggestions": [f"{query} song", f"{query} music", f"{query} latest"]}, "Default suggestions")
 
 @search_bp.route("/search_status/<search_id>")
 def search_status(search_id):
     if search_id in state.search_results:
-        return jsonify(state.search_results[search_id])
-    return jsonify({"status": "not_found"}), 404
+        return success(state.search_results[search_id], "Search results")
+    return success({"status": "not_found"}, "Search not found")
 
 @search_bp.route("/search/spotify", methods=["POST"])
 def spotify_search():
@@ -390,33 +391,30 @@ def spotify_search():
     #type=(body.get("type")or "music").strip().lower()
 
     if not query:
-        return jsonify({"error": "Missing 'query' in request body"}), 400
+        return error("Missing 'query' in request body", 400)
 
     try:
         client = get_spotify_client()
         resp_json = client.get_search_results(query)
 
         if not resp_json:
-            return jsonify({"error": "No response from Spotify"}), 502
+            return error("No response from Spotify", 502)
 
         errors = resp_json.get("errors")
         if errors:
-            return jsonify({
-                "error": errors[0].get("message", "Spotify search error"),
-                "details": errors,
-            }), 502
+            return error(errors[0].get("message", "Spotify search error"), 502)
 
         tracks, total, returned = client.parse_search_results(resp_json)
 
-        return jsonify({
+        return success({
             "query":   query,
             "total":   total,
             "count": returned,
             "results": tracks,
             "source": "spotify",
             "status": "complete"
-        })
+        }, f"Found {returned} Spotify results")
 
     except Exception as e:
         print(f"Spotify search error: {e}")
-        return jsonify({"error": str(e)}), 500
+        return error(str(e), 500)

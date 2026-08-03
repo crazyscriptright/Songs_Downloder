@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from '@/config';
+import { ApiService } from './ApiService';
 import type { SuggestionResponse } from '@/types';
 
 /**
@@ -10,17 +10,9 @@ export class SuggestionService {
     if (!query || query.length < 2) return [];
 
     try {
-      const apiUrl = getApiBaseUrl();
-      const response = await fetch(
-        `${apiUrl}/suggestions?q=${encodeURIComponent(query)}`,
+      const data = await ApiService.get<SuggestionResponse>(
+        `/suggestions?q=${encodeURIComponent(query)}`,
       );
-
-      if (!response.ok) {
-        console.error('Failed to fetch suggestions:', response.statusText);
-        return [];
-      }
-
-      const data: SuggestionResponse = await response.json();
       return data.suggestions || [];
     } catch (error) {
       console.error('Suggestions error:', error);

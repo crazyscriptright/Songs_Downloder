@@ -558,7 +558,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None,
         label = _PLATFORM_LABELS.get(platform, platform)
         print(f" SpotiFLAC route: {label} | format={audio_format}")
 
-        download_status[download_id] = _initial_status(title, url, advanced_options, "downloading")
+        download_status[download_id] = _initial_status(title, url, advanced_options, "downloading", thumbnail)
         save_download_status()
 
         try:
@@ -578,7 +578,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None,
 
     # ── Proxy-API-only mode (testing flag) ────────────────────────────────────
     if config.FORCE_PROXY_API and ("youtube.com" in url or "youtu.be" in url):
-        download_status[download_id] = _initial_status(title, url, advanced_options, "downloading")
+        download_status[download_id] = _initial_status(title, url, advanced_options, "downloading", thumbnail)
         download_status[download_id]["eta"] = "Initiating proxy download…"
         save_download_status()
         try:
@@ -597,7 +597,7 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None,
     # ── Normal yt-dlp path (YouTube / YT Music / SoundCloud / JioSaavn) ────────
     state.cleanup_tmp_directory()
 
-    download_status[download_id] = _initial_status(title, url, advanced_options, "downloading")
+    download_status[download_id] = _initial_status(title, url, advanced_options, "downloading", thumbnail)
     if thumbnail:
         download_status[download_id]["thumbnail"] = thumbnail
     save_download_status()
@@ -794,14 +794,20 @@ def download_song(url: str, title: str, download_id: str, advanced_options=None,
             del state.active_processes[download_id]
 
 
+from utils.dedupe import canonical_config_hash
+
+
 # ── Private helpers ────────────────────────────────────────────────────────────
 
-def _initial_status(title: str, url: str, advanced_options, status: str = "queued") -> dict:
+def _initial_status(title: str, url: str, advanced_options, status: str = "queued", thumbnail=None) -> dict:
+    config_hash = canonical_config_hash(advanced_options, thumbnail)
     return {
         "status": status, "progress": 0, "title": title, "url": url,
         "eta": "Calculating…", "speed": "0 KB/s",
         "timestamp": datetime.now().isoformat(),
         "advanced_options": advanced_options,
+        "config_hash": config_hash,
+        "thumbnail": thumbnail,
     }
 
 

@@ -15,6 +15,8 @@ from flask import Blueprint, current_app, jsonify, request, send_file
 from core import config
 from core import state
 from services.downloader import download_song
+from utils.response import error, success
+from utils.dedupe import find_duplicate_download
 
 download_bp = Blueprint("download", __name__)
 
@@ -40,17 +42,17 @@ def download():
     print(f"{'='*70}\n")
 
     if not url or not title:
-        return jsonify({"error": "Missing url or title"}), 400
+        return error("Missing url or title", 400)
     if not isinstance(url, str) or not url.startswith(("http://", "https://")):
-        return jsonify({"error": "Invalid URL format. Only HTTP/HTTPS URLs are allowed."}), 400
+        return error("Invalid URL format. Only HTTP/HTTPS URLs are allowed.", 400)
     if not isinstance(title, str):
-        return jsonify({"error": "Invalid title type"}), 400
+        return error("Invalid title type", 400)
     if ".." in title:
-        return jsonify({"error": "Invalid title: path traversal detected"}), 400
+        return error("Invalid title: path traversal detected", 400)
     if len(title) > 500:
         title = title[:500]
     if len(url) > 2048:
-        return jsonify({"error": "URL too long"}), 400
+        return error("URL too long", 400)
 
     if advanced_options and isinstance(advanced_options, dict):
         custom_args = advanced_options.get("customArgs", "")
@@ -58,7 +60,15 @@ def download():
             DANGEROUS = ["&&", "||", ";", "|", "`", "$", "\n", "\r"]
             for d in DANGEROUS:
                 if d in custom_args:
-                    return jsonify({"error": "Security: Dangerous character in custom arguments"}), 400
+                    return error("Security: Dangerous character in custom arguments", 400)
+
+    # Check for existing completed download with same URL and config
+    existing_id = find_duplicate_download(url, advanced_options, thumbnail)
+    if existing_id:
+        return success(
+            {"download_id": existing_id, "status": "complete", "duplicate": True},
+            "File already exists with identical settings",
+        )
 
     download_id = f"download_{datetime.now().timestamp()}"
     state.download_status[download_id] = {
@@ -74,13 +84,13 @@ def download():
         target=download_song,
         args=(url, title, download_id, advanced_options, thumbnail),
     ).start()
-    return jsonify({"download_id": download_id, "status": "started"})
+    return success({"download_id": download_id, "status": "started"}, "Download queued")
 
 
 @download_bp.route("/download_status/<download_id>")
 def download_status_check(download_id):
     if download_id not in state.download_status:
-        return jsonify({"status": "not_found"}), 404
+        return success({"status": "not_found"}, "Download not found")
 
     status = state.download_status[download_id].copy()
     if status["status"] == "complete" and "file" in status:
@@ -89,7 +99,7 @@ def download_status_check(download_id):
         elif status.get("downloaded_via") == "proxy_api":
             if status.get("alternative_download_urls"):
                 pass  # already has external URL
-    return jsonify(status)
+    return success(status, "Download status")
 
 
 @download_bp.route("/downloads")
@@ -114,7 +124,7 @@ def get_all_downloads():
         if status["status"] == "complete" and "file" in status and "download_url" not in status:
             status["download_url"] = f"/get_file/{did}/{status['file']}"
 
-    return jsonify(filtered)
+    return success(filtered, "Active downloads")
 
 
 @download_bp.route("/bulk_download", methods=["POST"])
@@ -124,11 +134,11 @@ def bulk_download():
     advanced_options = data.get("advancedOptions")
 
     if not urls or not isinstance(urls, list):
-        return jsonify({"error": "URLs list is required"}), 400
+        return error("URLs list is required", 400)
 
     valid_urls = [u.strip() for u in urls if isinstance(u, str) and u.startswith(("http://", "https://"))]
     if not valid_urls:
-        return jsonify({"error": "No valid URLs provided"}), 400
+        return error("No valid URLs provided", 400)
 
     bulk_id = f"bulk_{datetime.now().timestamp()}"
     bulk_downloads = []
@@ -199,13 +209,13 @@ def bulk_download():
         print(f"✅ Bulk complete: {state.download_status[bulk_id]['completed']}/{len(valid_urls)}")
 
     threading.Thread(target=process_bulk).start()
-    return jsonify({"bulk_id": bulk_id, "status": "started", "total": len(valid_urls)})
+    return success({"bulk_id": bulk_id, "status": "started", "total": len(valid_urls)}, f"Bulk download started with {len(valid_urls)} items")
 
 
 @download_bp.route("/bulk_status/<bulk_id>")
 def bulk_status_check(bulk_id):
     if bulk_id not in state.download_status:
-        return jsonify({"error": "Bulk download not found"}), 404
+        return success({"status": "not_found"}, "Bulk download not found")
 
     bulk_data = state.download_status[bulk_id].copy()
     if "downloads" in bulk_data:
@@ -221,28 +231,28 @@ def bulk_status_check(bulk_id):
                     bulk_data["downloads"][i]["file"] = ind["file"]
                     if not bulk_data["downloads"][i].get("title") or bulk_data["downloads"][i]["title"].startswith("Item "):
                         bulk_data["downloads"][i]["title"] = ind.get("title", bulk_data["downloads"][i]["title"])
-    return jsonify(bulk_data)
+    return success(bulk_data, "Bulk download status")
 
 
 @download_bp.route("/bulk_heartbeat/<bulk_id>", methods=["POST"])
 def bulk_heartbeat(bulk_id):
     if bulk_id in state.bulk_heartbeats:
         state.bulk_heartbeats[bulk_id]["last_heartbeat"] = datetime.now()
-        return jsonify({"status": "ok", "message": "Heartbeat received"})
+        return success({"status": "ok"}, message="Heartbeat received")
     elif bulk_id in state.download_status:
         bstatus = state.download_status[bulk_id].get("status", "unknown")
-        return jsonify({"status": "ended", "bulk_status": bstatus, "message": f"Bulk download already {bstatus}"})
-    return jsonify({"status": "not_found", "message": "Bulk download not found"}), 404
+        return error(f"Bulk download already {bstatus}", 404)
+    return error("Bulk download not found", 404)
 
 
 @download_bp.route("/cancel_download/<download_id>", methods=["POST"])
 def cancel_download(download_id):
     if download_id not in state.download_status:
-        return jsonify({"error": "Download not found"}), 404
+        return error("Download not found", 404)
 
     current = state.download_status[download_id]["status"]
     if current in ("complete", "error", "cancelled"):
-        return jsonify({"error": "Download already finished"}), 400
+        return error("Download already finished", 400)
 
     state.download_status[download_id].update(
         status="cancelled", cancelled_at=datetime.now().isoformat(),
@@ -256,7 +266,10 @@ def cancel_download(download_id):
             print(f"Warning: Could not terminate process: {e}")
 
     state.save_download_status()
-    return jsonify({"status": "cancelled", "message": f"Download cancelled: {state.download_status[download_id]['title']}"})
+    return success(
+        {"status": "cancelled"},
+        message=f"Download cancelled: {state.download_status[download_id]['title']}",
+    )
 
 
 @download_bp.route("/clear_downloads", methods=["POST"])
@@ -265,7 +278,10 @@ def clear_downloads():
     for did in to_remove:
         del state.download_status[did]
     state.save_download_status()
-    return jsonify({"message": f"Cleared {len(to_remove)} finished downloads", "cleared_count": len(to_remove)})
+    return success(
+        {"cleared_count": len(to_remove)},
+        message=f"Cleared {len(to_remove)} finished downloads",
+    )
 
 
 @download_bp.route("/get_file/<download_id>/<filename>")

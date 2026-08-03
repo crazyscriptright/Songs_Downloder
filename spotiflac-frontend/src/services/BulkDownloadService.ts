@@ -1,3 +1,4 @@
+import { ApiService } from "@/services/ApiService";
 import { getApiBaseUrl } from "@/config";
 
 export type BulkDownloadStatus =
@@ -259,29 +260,19 @@ export class BulkDownloadService {
     this.onChange();
 
     try {
-      const resp = await fetch(`${getApiBaseUrl()}/bulk_download`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ urls: validUrls, advancedOptions: options }),
-      });
-      const data = await resp.json();
+      const data = await ApiService.post<{ bulk_id: string }>(
+        "/bulk_download",
+        { urls: validUrls, advancedOptions: options },
+      );
 
-      if (data.bulk_id) {
-        this.showToast(
-          "success",
-          "Download Submitted",
-          `Successfully submitted ${validUrls.length} URL(s) for download.`,
-          4000,
-        );
-        this.pollBulkProgress(data.bulk_id);
-      } else {
-        this.showToast(
-          "error",
-          "Bulk Download Failed",
-          "Failed to start bulk download",
-        );
-        this.ongoingBulk = false;
-      }
+      const bulkId = data.bulk_id;
+      this.showToast(
+        "success",
+        "Download Submitted",
+        `Successfully submitted ${validUrls.length} URL(s) for download.`,
+        4000,
+      );
+      this.pollBulkProgress(bulkId);
     } catch (err: any) {
       console.error("Bulk download error:", err);
       this.showToast(
@@ -298,10 +289,7 @@ export class BulkDownloadService {
 
     this.heartbeatInterval = setInterval(async () => {
       try {
-        await fetch(`${getApiBaseUrl()}/bulk_heartbeat/${bulkId}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        });
+        await ApiService.post("/bulk_heartbeat/" + bulkId, {});
       } catch (e) {
         console.error("Heartbeat error:", e);
       }
@@ -309,11 +297,7 @@ export class BulkDownloadService {
 
     const poll = setInterval(async () => {
       try {
-        const resp = await fetch(`${getApiBaseUrl()}/bulk_status/${bulkId}`);
-        const data = await resp.json();
-
-        if (!resp.ok && data.error?.toLowerCase().includes("not found")) return;
-        if (data.error?.toLowerCase().includes("not found")) return;
+        const data = await ApiService.get<any>(`/bulk_status/${bulkId}`);
 
         if (data.status === "timeout") {
           clearInterval(poll);
@@ -462,14 +446,10 @@ export class BulkDownloadService {
     );
 
     try {
-      const extractResp = await fetch(`${getApiBaseUrl()}/extract_playlist`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: playlistUrl, playlistItems }),
-      });
-      const extractData = await extractResp.json();
-      if (!extractResp.ok || !extractData.success)
-        throw new Error(extractData.error || "Failed to extract playlist");
+      const extractData = await ApiService.post<{ videos: PlaylistVideo[] }>(
+        "/extract_playlist",
+        { url: playlistUrl, playlistItems },
+      );
 
       const videos: PlaylistVideo[] = extractData.videos;
       if (videos.length === 0) {

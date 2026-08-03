@@ -23,6 +23,7 @@ from services.preview import (
     get_jiosaavn_stream_fast,
     get_soundcloud_stream_fast,
 )
+from utils.response import error, success
 
 preview_bp = Blueprint("preview", __name__)
 
@@ -244,9 +245,9 @@ def preview_url():
     data = request.get_json()
     url = data.get("url")
     if not url:
-        return jsonify({"error": "Missing URL"}), 400
+        return error("Missing URL", 400)
     if not isinstance(url, str) or not url.startswith(("http://", "https://")):
-        return jsonify({"error": "Invalid URL format"}), 400
+        return error("Invalid URL format", 400)
 
     try:
         source = "Unknown"
@@ -262,7 +263,7 @@ def preview_url():
         if source == "YouTube":
             vid = _extract_video_id(url)
             if not vid:
-                return jsonify({"error": "Invalid YouTube URL"}), 400
+                return error("Invalid YouTube URL", 400)
             from routes.search import get_apis
             try:
                 _, ytvideo, _ = get_apis()
@@ -271,7 +272,7 @@ def preview_url():
                     videos = ytvideo.parse_video_results(data_yt)
                     if videos:
                         v = videos[0]
-                        return jsonify({
+                        return success({
                             "title": v.get("title", "Unknown Title"),
                             "uploader": v.get("metadata", "Unknown Channel"),
                             "channel": v.get("metadata", "Unknown Channel"),
@@ -279,22 +280,22 @@ def preview_url():
                             "video_id": vid,
                             "webpage_url": f"https://www.youtube.com/watch?v={vid}",
                             "source": "YouTube",
-                        })
+                        }, "YouTube video preview")
             except Exception:
                 pass
-            return jsonify({
+            return success({
                 "title": "YouTube Video", "uploader": "Unknown Channel", "channel": "Unknown Channel",
                 "thumbnail": f"https://img.youtube.com/vi/{vid}/maxresdefault.jpg",
                 "video_id": vid, "webpage_url": url, "source": "YouTube",
-            })
+            }, "YouTube video preview (fallback)")
 
         if source == "JioSaavn":
             meta = extract_jiosaavn_metadata(url)
             if not meta:
-                return jsonify({"error": "Invalid JioSaavn URL"}), 400
+                return error("Invalid JioSaavn URL", 400)
             artists_arr = meta.get("artists", [])
             artist_str = ", ".join(artists_arr) if artists_arr else "Unknown Artist"
-            return jsonify({
+            return success({
                 "title": meta.get("title", "JioSaavn Content"),
                 "uploader": artist_str, "channel": artist_str,
                 "artists": artists_arr,
@@ -303,14 +304,14 @@ def preview_url():
                 "pid": meta.get("pid", ""),
                 "language": meta.get("language", "hindi"),
                 "webpage_url": url, "source": source,
-            })
+            }, "JioSaavn track preview")
 
         if source == "SoundCloud":
             meta = extract_soundcloud_metadata_with_recommendations(url)
             if not meta or not meta.get("main_track"):
-                return jsonify({"error": "Invalid SoundCloud URL"}), 400
+                return error("Invalid SoundCloud URL", 400)
             mt = meta["main_track"]
-            return jsonify({
+            return success({
                 "title": mt.get("title", "SoundCloud Content"),
                 "uploader": mt.get("artist", source), "channel": mt.get("artist", source),
                 "thumbnail": mt.get("thumbnail", ""),
@@ -318,13 +319,13 @@ def preview_url():
                 "likes": mt.get("likes", 0), "genre": mt.get("genre", ""),
                 "webpage_url": url, "source": source,
                 "soundcloud_data": meta,
-            })
+            }, "SoundCloud track preview")
 
         if source == "Spotify":
             import re as _re
             m = _re.search(r"open\.spotify\.com/track/([A-Za-z0-9]+)", url)
             if not m:
-                return jsonify({"error": "Invalid Spotify track URL"}), 400
+                return error("Invalid Spotify track URL", 400)
             track_id = m.group(1)
             from routes.search import get_spotify_client
             spotify_client = get_spotify_client()
@@ -333,7 +334,7 @@ def preview_url():
             dur_ms = track.get("duration_ms", 0)
             total_sec = (dur_ms or 0) // 1000
             duration_str = f"{total_sec // 60}:{total_sec % 60:02d}"
-            return jsonify({
+            return success({
                 "title":       track.get("title", "Unknown Title"),
                 "uploader":    track.get("artist", "Unknown Artist"),
                 "channel":     track.get("album_artist", track.get("artist", "")),
@@ -344,13 +345,13 @@ def preview_url():
                 "isrc":        track.get("isrc", ""),
                 "webpage_url": url,
                 "source":      "Spotify",
-            })
+            }, "Spotify track preview")
 
-        return jsonify({"error": f"Invalid {source} URL — unable to extract information"}), 400
+        return error(f"Invalid {source} URL — unable to extract information", 400)
 
     except Exception as e:
         print(f"❌ Preview URL error: {e}")
-        return jsonify({"error": str(e)}), 500
+        return error(str(e), 500)
 
 @preview_bp.route("/preview", methods=["GET"])
 def audio_preview():
@@ -471,7 +472,7 @@ def audio_preview():
 @preview_bp.route("/jiosaavn_suggestions/<pid>")
 def get_jiosaavn_suggestions_by_pid(pid):
     if not pid or not re.match(r"^[a-zA-Z0-9_-]{1,20}$", pid):
-        return jsonify({"error": "Invalid PID format"}), 400
+        return error("Invalid PID format", 400)
 
     language = request.args.get("language", "english")
     ALLOWED_LANGS = ("english", "hindi", "telugu", "tamil", "punjabi", "bengali", "marathi", "gujarati", "kannada", "malayalam")
@@ -491,8 +492,8 @@ def get_jiosaavn_suggestions_by_pid(pid):
         print(f"JioSaavn suggestions error: {e}")
 
     if suggestions:
-        return jsonify({"success": True, "pid": pid, "language": language, "suggestions": suggestions, "count": len(suggestions), "method": method_used})
-    return jsonify({"success": False, "error": "No suggestions available", "pid": pid, "language": language, "suggestions": [], "count": 0, "method": method_used}), 404
+        return success({"pid": pid, "language": language, "suggestions": suggestions, "count": len(suggestions), "method": method_used}, f"Found {len(suggestions)} JioSaavn suggestions")
+    return error("No suggestions available", 404)
 
 @preview_bp.route("/extract_jiosaavn_pid", methods=["POST"])
 def extract_jiosaavn_pid():
@@ -500,15 +501,15 @@ def extract_jiosaavn_pid():
         data = request.get_json()
         url = data.get("url", "").strip()
         if not url:
-            return jsonify({"error": "URL is required"}), 400
+            return error("URL is required", 400)
         if "jiosaavn.com" not in url and "saavn.com" not in url:
-            return jsonify({"error": "Not a valid JioSaavn URL"}), 400
+            return error("Not a valid JioSaavn URL", 400)
         meta = extract_jiosaavn_metadata(url)
         if meta and "pid" in meta:
-            return jsonify({"success": True, "pid": meta["pid"], "metadata": meta})
-        return jsonify({"error": "Could not extract PID"}), 404
+            return success({"pid": meta["pid"], "metadata": meta}, "PID extracted")
+        return error("Could not extract PID", 404)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return error(str(e), 500)
 
 @preview_bp.route("/extract_playlist", methods=["POST"])
 def extract_playlist():
@@ -516,7 +517,7 @@ def extract_playlist():
     playlist_url = data.get("url")
     playlist_items = data.get("playlistItems", "")
     if not playlist_url:
-        return jsonify({"error": "No playlist URL provided"}), 400
+        return error("No playlist URL provided", 400)
     try:
         cmd = ["yt-dlp", "--flat-playlist", "--get-id", "--get-title"]
         if playlist_items:
@@ -526,15 +527,15 @@ def extract_playlist():
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=False)
         stdout, stderr = proc.communicate(timeout=30)
         if proc.returncode != 0:
-            return jsonify({"error": stderr.strip() or "Failed to extract playlist"}), 400
+            return error(stderr.strip() or "Failed to extract playlist", 400)
 
         lines = [ln.strip() for ln in stdout.strip().split("\n") if ln.strip()]
         videos = [
             {"title": lines[i], "url": f"https://www.youtube.com/watch?v={lines[i+1]}", "video_id": lines[i+1]}
             for i in range(0, len(lines) - 1, 2)
         ]
-        return jsonify({"success": True, "videos": videos, "count": len(videos)})
+        return success({"videos": videos, "count": len(videos)}, f"Extracted {len(videos)} videos from playlist")
     except subprocess.TimeoutExpired:
-        return jsonify({"error": "Playlist extraction timed out"}), 408
+        return error("Playlist extraction timed out", 408)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return error(str(e), 500)

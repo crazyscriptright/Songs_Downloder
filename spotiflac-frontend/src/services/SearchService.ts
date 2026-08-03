@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from "@/config";
+import { ApiService } from "@/services/ApiService";
 import type {
   JioSaavnSuggestion,
   PreviewData,
@@ -47,23 +47,15 @@ export class SearchService {
    * Initiate a URL-based search (single endpoint) and return the search_id for polling.
    */
   static async searchByUrl(query: string, type: SearchType): Promise<string> {
-    const response = await fetch(`${getApiBaseUrl()}/search`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, type }),
-    });
-    const data = await response.json();
-    return data.search_id as string;
+    const data = await ApiService.post<{ search_id: string }>("/search", { query, type });
+    return data.search_id;
   }
 
   /**
    * Poll the backend for URL search results.
    */
   static async pollSearchStatus(searchId: string): Promise<SearchResults> {
-    const response = await fetch(
-      `${getApiBaseUrl()}/search_status/${searchId}`,
-    );
-    return response.json();
+    return ApiService.get<SearchResults>(`/search_status/${searchId}`);
   }
 
   /**
@@ -99,12 +91,7 @@ export class SearchService {
 
     const promises = endpoints.map(async (source) => {
       try {
-        const response = await fetch(`${getApiBaseUrl()}/search/${source}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query, type }),
-        });
-        const data = await response.json();
+        const data = await ApiService.post<{ results: Song[] }>(`/search/${source}`, { query, type });
         if (source === "spotify") {
           allResults[source] = (data.results || []).map(mapSpotifyToSong);
         } else {
@@ -129,25 +116,8 @@ export class SearchService {
   /**
    * Fetch URL preview data from the backend.
    */
-  static async fetchPreview(url: string): Promise<PreviewData | null> {
-    try {
-      const response = await fetch(`${getApiBaseUrl()}/preview_url`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
-
-      if (response.ok) {
-        return response.json();
-      }
-      const errorData = await response.json();
-      if (errorData.error) {
-        throw new Error(errorData.error);
-      }
-      return null;
-    } catch (error) {
-      throw error;
-    }
+  static async fetchPreview(url: string): Promise<PreviewData> {
+    return ApiService.post<PreviewData>("/preview_url", { url });
   }
 
   /**
@@ -157,16 +127,9 @@ export class SearchService {
     pid: string,
     language = "hindi",
   ): Promise<JioSaavnSuggestion[]> {
-    const response = await fetch(
-      `${getApiBaseUrl()}/jiosaavn_suggestions/${pid}?language=${language}`,
+    const data = await ApiService.get<{ suggestions: JioSaavnSuggestion[] }>(
+      `/jiosaavn_suggestions/${pid}?language=${language}`,
     );
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error);
     return data.suggestions || [];
   }
 }

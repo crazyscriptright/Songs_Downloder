@@ -13,11 +13,11 @@ IS_HEROKU: bool = bool(os.getenv("DYNO"))
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 CACHE_DIR: str = "/tmp" if IS_HEROKU else "."
-
+BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOWNLOAD_FOLDER: str = (
     "/tmp/downloads"
     if IS_HEROKU
-    else os.path.join(os.path.expanduser("~"), "Downloads", "Music")
+    else os.path.join(BASE_DIR, "downloads")
 )
 
 UNIFIED_CACHE_FILE: str = os.path.join(CACHE_DIR, "music_api_cache.json")
@@ -104,7 +104,7 @@ SONGLINK_RETRY_DELAY: int = 15  # seconds on 429
 # Download defaults (used by routes/flac_download.py)
 DEFAULT_SERVICE:    str = "auto"        # auto | tidal | qobuz | amazon | soundcloud
 DEFAULT_QUALITY:    str = "HI_RES"      # HI_RES | LOSSLESS | 27 | 7 | 6
-DEFAULT_OUTPUT_DIR: str = os.path.join(os.path.expanduser("~"), "Downloads", "Music")
+DEFAULT_OUTPUT_DIR: str = str(DOWNLOAD_FOLDER)
 
 # Spotify (web-player token endpoint)
 SPOTIFY_TOKEN_URL:        str = "https://open.spotify.com/api/token"
